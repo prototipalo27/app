@@ -133,6 +133,41 @@ export type Database = {
           },
         ]
       }
+      project_items: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          quantity: number
+          completed: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          name: string
+          quantity?: number
+          completed?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          name?: string
+          quantity?: number
+          completed?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           assigned_printer: string | null
@@ -141,6 +176,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          holded_contact_id: string | null
           holded_invoice_id: string | null
           holded_proforma_id: string | null
           id: string
@@ -160,6 +196,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          holded_contact_id?: string | null
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
@@ -179,6 +216,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          holded_contact_id?: string | null
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string

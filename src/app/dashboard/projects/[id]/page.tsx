@@ -2,6 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { updateProjectStatus, deleteProject } from "../actions";
+import { getContact } from "@/lib/holded/api";
+import type { HoldedContact } from "@/lib/holded/types";
+import { ProjectItems } from "./project-items";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -62,6 +65,22 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
+  const { data: projectItems } = await supabase
+    .from("project_items")
+    .select("*")
+    .eq("project_id", id)
+    .order("created_at", { ascending: true });
+
+  // Fetch Holded contact if linked
+  let holdedContact: HoldedContact | null = null;
+  if (project.holded_contact_id) {
+    try {
+      holdedContact = await getContact(project.holded_contact_id);
+    } catch {
+      // Holded API unavailable — fall back to cached fields
+    }
+  }
+
   const currentStatusColor = STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
 
   return (
@@ -92,13 +111,50 @@ export default async function ProjectDetailPage({
         </span>
       </div>
 
+      {/* Items */}
+      <div className="mb-6">
+        <ProjectItems projectId={project.id} items={projectItems ?? []} />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Details */}
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Details</h2>
           <DetailRow label="Type" value={project.project_type === "upcoming" ? "Upcoming (proforma)" : "Confirmed (invoiced)"} />
-          <DetailRow label="Client" value={project.client_name} />
-          <DetailRow label="Email" value={project.client_email} />
+          {holdedContact ? (
+            <>
+              <DetailRow
+                label="Client"
+                value={
+                  <span className="flex items-center gap-1.5">
+                    {holdedContact.name}
+                    <span className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Holded
+                    </span>
+                  </span>
+                }
+              />
+              <DetailRow label="Email" value={holdedContact.email} />
+              <DetailRow label="Phone" value={holdedContact.phone || holdedContact.mobile} />
+              <DetailRow label="NIF/CIF" value={holdedContact.code} />
+              {holdedContact.billAddress?.address && (
+                <DetailRow
+                  label="Address"
+                  value={[
+                    holdedContact.billAddress.address,
+                    holdedContact.billAddress.postalCode,
+                    holdedContact.billAddress.city,
+                    holdedContact.billAddress.province,
+                  ].filter(Boolean).join(", ")}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <DetailRow label="Client" value={project.client_name} />
+              <DetailRow label="Email" value={project.client_email} />
+            </>
+          )}
           <DetailRow label="Material" value={project.material} />
           <DetailRow label="Printer" value={project.assigned_printer} />
           <DetailRow label="Print time" value={project.print_time_minutes ? formatMinutes(project.print_time_minutes) : null} />

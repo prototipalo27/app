@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     pathname === "/" ||
     pathname === "/login" ||
-    pathname.startsWith("/auth/");
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/");
 
   // Not authenticated + protected route → redirect to login
   if (!user && !isPublic) {

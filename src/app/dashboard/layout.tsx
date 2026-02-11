@@ -65,7 +65,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex flex-1 flex-col overflow-hidden p-8">
         {children}
       </main>
     </div>

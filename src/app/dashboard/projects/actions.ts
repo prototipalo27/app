@@ -24,6 +24,7 @@ export async function createProject(formData: FormData) {
     name: name.trim(),
     description: (formData.get("description") as string)?.trim() || null,
     project_type: (formData.get("project_type") as string) || "confirmed",
+    holded_contact_id: (formData.get("holded_contact_id") as string)?.trim() || null,
     client_name: (formData.get("client_name") as string)?.trim() || null,
     client_email: (formData.get("client_email") as string)?.trim() || null,
     price: price ? parseFloat(price) : null,
@@ -63,6 +64,26 @@ export async function updateProjectStatus(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/projects/${id}`);
+  revalidatePath("/dashboard");
+}
+
+export async function updateProjectStatusById(id: string, status: string) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ status })
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   revalidatePath("/dashboard");
 }
 

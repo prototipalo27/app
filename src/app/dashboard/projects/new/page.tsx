@@ -1,4 +1,5 @@
 import { createProject } from "../actions";
+import ContactSelector from "../contact-selector";
 import Link from "next/link";
 
 const MATERIALS = ["PLA", "PETG", "ASA", "ABS", "TPU", "Nylon", "PC", "Resin"];
@@ -63,31 +64,8 @@ export default function NewProjectPage() {
           </select>
         </div>
 
-        {/* Client info */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="client_name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Client name
-            </label>
-            <input
-              type="text"
-              id="client_name"
-              name="client_name"
-              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="client_email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Client email
-            </label>
-            <input
-              type="email"
-              id="client_email"
-              name="client_email"
-              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-          </div>
-        </div>
+        {/* Client info — Holded contact selector */}
+        <ContactSelector />
 
         {/* Production details */}
         <div className="grid gap-4 sm:grid-cols-3">
