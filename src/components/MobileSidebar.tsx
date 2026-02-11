@@ -1,0 +1,112 @@
+"use client";
+
+import { useState } from "react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+
+export default function MobileSidebar({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Close sidebar on navigation
+  const handleNavClick = () => setOpen(false);
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-zinc-900">
+        <Link href="/dashboard" className="text-lg font-bold text-zinc-900 dark:text-white">
+          Prototipalo
+        </Link>
+        <button
+          onClick={() => setOpen(!open)}
+          className="rounded-lg p-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {open ? (
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
+      </header>
+
+      {/* Mobile overlay */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Mobile sidebar drawer */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white transition-transform duration-200 ease-in-out md:hidden dark:bg-zinc-900 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="border-b border-zinc-200 p-5 dark:border-zinc-800">
+          <Link href="/dashboard" onClick={handleNavClick} className="text-lg font-bold text-zinc-900 dark:text-white">
+            Prototipalo
+          </Link>
+        </div>
+
+        <nav className="flex-1 space-y-1 p-3">
+          <Link
+            href="/dashboard"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname === "/dashboard"
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Projects
+          </Link>
+          <Link
+            href="/dashboard/shipments"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/shipments")
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Envios
+          </Link>
+          <Link
+            href="/dashboard/printers"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/printers")
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Printers
+          </Link>
+        </nav>
+
+        <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-200 p-3 dark:border-zinc-800">
+          {children}
+        </div>
+      </aside>
+    </>
+  );
+}

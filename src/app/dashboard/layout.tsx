@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import NotificationBell from "@/components/NotificationBell";
+import MobileSidebar from "@/components/MobileSidebar";
 
 export default async function DashboardLayout({
   children,
@@ -16,10 +17,33 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const bottomSection = (
+    <>
+      <p className="mb-2 truncate px-3 text-xs text-zinc-500 dark:text-zinc-400">
+        {data.user.email}
+      </p>
+      <NotificationBell />
+      <form action={signOut}>
+        <button
+          type="submit"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Sign out
+        </button>
+      </form>
+    </>
+  );
+
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-black">
-      {/* Sidebar */}
-      <aside className="flex w-64 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
+      {/* Mobile sidebar + top bar */}
+      <MobileSidebar>{bottomSection}</MobileSidebar>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden w-64 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 p-5 dark:border-zinc-800">
           <Link href="/dashboard" className="text-lg font-bold text-zinc-900 dark:text-white">
             Prototipalo
@@ -57,26 +81,12 @@ export default async function DashboardLayout({
         </nav>
 
         <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
-          <p className="mb-2 truncate px-3 text-xs text-zinc-500 dark:text-zinc-400">
-            {data.user.email}
-          </p>
-          <NotificationBell />
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Sign out
-            </button>
-          </form>
+          {bottomSection}
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex flex-1 flex-col overflow-hidden p-8">
+      <main className="flex flex-1 flex-col overflow-hidden p-4 md:p-8">
         {children}
       </main>
     </div>
