@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 /**
  * POST /api/packlink/webhook
@@ -54,6 +55,15 @@ export async function POST(request: NextRequest) {
       .from("shipping_info")
       .update(updates)
       .eq("id", shipping.id);
+  }
+
+  // Send push notification for shipment update
+  if (status) {
+    sendPushToAll({
+      title: "Envio actualizado",
+      body: `${reference} → ${status}`,
+      url: "/dashboard/shipments",
+    }).catch(() => {});
   }
 
   return NextResponse.json({ ok: true });

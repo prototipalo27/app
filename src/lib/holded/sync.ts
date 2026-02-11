@@ -4,6 +4,7 @@ import {
   getOrCreateClientFolder,
   createProjectFolder,
 } from "@/lib/google-drive/client";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 export interface SyncResult {
   newUpcoming: number;
@@ -62,6 +63,13 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     result.newUpcoming++;
+
+    // Notify about new project
+    sendPushToAll({
+      title: "Nuevo proyecto",
+      body: `${proforma.docNumber} — ${proforma.contactName}`,
+      url: "/dashboard",
+    }).catch(() => {});
 
     // Create Google Drive folder structure: Client / Project / subfolders
     const driveParentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;

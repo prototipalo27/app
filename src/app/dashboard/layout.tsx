@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
+import NotificationBell from "@/components/NotificationBell";
 
 export default async function DashboardLayout({
   children,
@@ -59,6 +60,7 @@ export default async function DashboardLayout({
           <p className="mb-2 truncate px-3 text-xs text-zinc-500 dark:text-zinc-400">
             {data.user.email}
           </p>
+          <NotificationBell />
           <form action={signOut}>
             <button
               type="submit"

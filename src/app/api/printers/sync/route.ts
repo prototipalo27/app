@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncPrinters } from "@/lib/bambu/mqtt-sync";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 /**
  * Shared sync logic used by both GET (Vercel Cron) and POST (manual trigger).
@@ -55,6 +56,16 @@ async function runSync() {
     if (error) {
       console.error("Supabase upsert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Send push notifications for printer errors
+    const printersWithErrors = results.filter((r) => r.print_error);
+    for (const printer of printersWithErrors) {
+      sendPushToAll({
+        title: "Alerta impresora",
+        body: `${printer.name}: error de impresion`,
+        url: "/dashboard/printers",
+      }).catch(() => {});
     }
 
     return NextResponse.json({ synced: results.length });
