@@ -10,7 +10,7 @@ import type {
   PacklinkTrackingHistory,
 } from "./types";
 
-const PACKLINK_API_BASE = "https://apisandbox.packlink.com/v1";
+const PACKLINK_API_BASE = process.env.PACKLINK_API_URL || "https://api.packlink.com/v1";
 
 function getApiKey(): string {
   const key = process.env.PACKLINK_API_KEY;
