@@ -31,12 +31,11 @@ export async function getServices(
   to: { zip: string; country: string },
   packages: PacklinkPackage[],
 ): Promise<PacklinkService[]> {
-  const params = new URLSearchParams({
-    from_zip: from.zip,
-    from_country: from.country,
-    to_zip: to.zip,
-    to_country: to.country,
-  });
+  const params = new URLSearchParams();
+  params.set("from[country]", from.country);
+  params.set("from[zip]", from.zip);
+  params.set("to[country]", to.country);
+  params.set("to[zip]", to.zip);
 
   packages.forEach((pkg, i) => {
     params.set(`packages[${i}][width]`, String(pkg.width));
