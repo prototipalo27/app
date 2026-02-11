@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_drive_folders: {
+        Row: {
+          id: string
+          holded_contact_id: string
+          client_name: string
+          drive_folder_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          holded_contact_id: string
+          client_name: string
+          drive_folder_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          holded_contact_id?: string
+          client_name?: string
+          drive_folder_id?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       printers: {
         Row: {
           bed_target: number | null
@@ -176,6 +200,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          google_drive_folder_id: string | null
           holded_contact_id: string | null
           holded_invoice_id: string | null
           holded_proforma_id: string | null
@@ -196,6 +221,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          google_drive_folder_id?: string | null
           holded_contact_id?: string | null
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
@@ -216,6 +242,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          google_drive_folder_id?: string | null
           holded_contact_id?: string | null
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null

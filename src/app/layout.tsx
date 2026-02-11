@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Prototipalo",
-  description: "Prototype and validate your ideas faster",
+  description: "Plataforma interna de gestión para taller de producción 3D",
 };
 
 export default function RootLayout({

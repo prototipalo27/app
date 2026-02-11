@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { listDocuments } from "./api";
+import {
+  getOrCreateClientFolder,
+  createProjectFolder,
+} from "@/lib/google-drive/client";
 
 export interface SyncResult {
   newUpcoming: number;
@@ -58,6 +62,50 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     result.newUpcoming++;
+
+    // Create Google Drive folder structure: Client / Project / subfolders
+    const driveParentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+    if (driveParentId && project && proforma.contact) {
+      try {
+        // Check if client already has a Drive folder
+        const { data: existing } = await supabase
+          .from("client_drive_folders")
+          .select("drive_folder_id")
+          .eq("holded_contact_id", proforma.contact)
+          .single();
+
+        let clientFolderId: string;
+
+        if (existing) {
+          clientFolderId = existing.drive_folder_id;
+        } else {
+          // Create client folder and save mapping
+          clientFolderId = await getOrCreateClientFolder(
+            proforma.contactName,
+            driveParentId,
+          );
+          await supabase.from("client_drive_folders").insert({
+            holded_contact_id: proforma.contact,
+            client_name: proforma.contactName,
+            drive_folder_id: clientFolderId,
+          });
+        }
+
+        // Create project folder inside client folder
+        const projectFolderId = await createProjectFolder(
+          proforma.docNumber,
+          clientFolderId,
+        );
+        await supabase
+          .from("projects")
+          .update({ google_drive_folder_id: projectFolderId })
+          .eq("id", project.id);
+      } catch (driveErr) {
+        result.errors.push(
+          `Drive folder for ${proforma.docNumber}: ${driveErr instanceof Error ? driveErr.message : "Unknown error"}`,
+        );
+      }
+    }
 
     // Create project_items from proforma products
     const products = proforma.products?.filter((p) => p.name?.trim());

@@ -5,6 +5,7 @@ import { updateProjectStatus, deleteProject } from "../actions";
 import { getContact } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
 import { ProjectItems } from "./project-items";
+import { ProjectDocuments } from "./project-documents";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -114,6 +115,14 @@ export default async function ProjectDetailPage({
       {/* Items */}
       <div className="mb-6">
         <ProjectItems projectId={project.id} items={projectItems ?? []} />
+      </div>
+
+      {/* Documents */}
+      <div className="mb-6">
+        <ProjectDocuments
+          folderId={project.google_drive_folder_id}
+          projectId={project.id}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
