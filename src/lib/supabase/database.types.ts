@@ -212,6 +212,7 @@ export type Database = {
           print_time_minutes: number | null
           project_type: string
           status: string
+          tracking_token: string
           updated_at: string
         }
         Insert: {
@@ -233,6 +234,7 @@ export type Database = {
           print_time_minutes?: number | null
           project_type?: string
           status?: string
+          tracking_token?: string
           updated_at?: string
         }
         Update: {
@@ -254,6 +256,7 @@ export type Database = {
           print_time_minutes?: number | null
           project_type?: string
           status?: string
+          tracking_token?: string
           updated_at?: string
         }
         Relationships: []

@@ -6,6 +6,7 @@ import { getContact } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
 import { ProjectItems } from "./project-items";
 import { ProjectDocuments } from "./project-documents";
+import { CopyTrackingLink } from "./copy-tracking-link";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -107,9 +108,12 @@ export default async function ProjectDetailPage({
             </p>
           )}
         </div>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
-          {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <CopyTrackingLink trackingToken={project.tracking_token} />
+          <span className={`rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
+            {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
+          </span>
+        </div>
       </div>
 
       {/* Items */}
