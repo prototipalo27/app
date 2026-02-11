@@ -16,25 +16,25 @@ export type Database = {
     Tables: {
       client_drive_folders: {
         Row: {
-          id: string
-          holded_contact_id: string
           client_name: string
-          drive_folder_id: string
           created_at: string | null
+          drive_folder_id: string
+          holded_contact_id: string
+          id: string
         }
         Insert: {
-          id?: string
-          holded_contact_id: string
           client_name: string
-          drive_folder_id: string
           created_at?: string | null
+          drive_folder_id: string
+          holded_contact_id: string
+          id?: string
         }
         Update: {
-          id?: string
-          holded_contact_id?: string
           client_name?: string
-          drive_folder_id?: string
           created_at?: string | null
+          drive_folder_id?: string
+          holded_contact_id?: string
+          id?: string
         }
         Relationships: []
       }
@@ -159,28 +159,28 @@ export type Database = {
       }
       project_items: {
         Row: {
-          id: string
-          project_id: string
-          name: string
-          quantity: number
           completed: number
           created_at: string
+          id: string
+          name: string
+          project_id: string
+          quantity: number
         }
         Insert: {
-          id?: string
-          project_id: string
-          name: string
-          quantity?: number
           completed?: number
           created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          quantity?: number
         }
         Update: {
-          id?: string
-          project_id?: string
-          name?: string
-          quantity?: number
           completed?: number
           created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          quantity?: number
         }
         Relationships: [
           {
@@ -269,9 +269,23 @@ export type Database = {
           country: string | null
           delivered_at: string | null
           id: string
+          label_url: string | null
           notes: string | null
+          package_height: number | null
+          package_length: number | null
+          package_weight: number | null
+          package_width: number | null
+          packlink_order_ref: string | null
+          packlink_shipment_ref: string | null
           postal_code: string | null
+          price: number | null
           project_id: string
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          service_id: number | null
+          service_name: string | null
+          shipment_status: string | null
           shipped_at: string | null
           tracking_number: string | null
         }
@@ -282,9 +296,23 @@ export type Database = {
           country?: string | null
           delivered_at?: string | null
           id?: string
+          label_url?: string | null
           notes?: string | null
+          package_height?: number | null
+          package_length?: number | null
+          package_weight?: number | null
+          package_width?: number | null
+          packlink_order_ref?: string | null
+          packlink_shipment_ref?: string | null
           postal_code?: string | null
+          price?: number | null
           project_id: string
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          service_id?: number | null
+          service_name?: string | null
+          shipment_status?: string | null
           shipped_at?: string | null
           tracking_number?: string | null
         }
@@ -295,9 +323,23 @@ export type Database = {
           country?: string | null
           delivered_at?: string | null
           id?: string
+          label_url?: string | null
           notes?: string | null
+          package_height?: number | null
+          package_length?: number | null
+          package_weight?: number | null
+          package_width?: number | null
+          packlink_order_ref?: string | null
+          packlink_shipment_ref?: string | null
           postal_code?: string | null
+          price?: number | null
           project_id?: string
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          service_id?: number | null
+          service_name?: string | null
+          shipment_status?: string | null
           shipped_at?: string | null
           tracking_number?: string | null
         }
@@ -443,3 +485,9 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

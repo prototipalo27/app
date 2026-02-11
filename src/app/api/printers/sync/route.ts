@@ -1,16 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncPrinters } from "@/lib/bambu/mqtt-sync";
 
 /**
- * POST /api/printers/sync
- *
- * Connects to Bambu Cloud MQTT, collects status from all printers,
- * and upserts results into the Supabase `printers` table.
- *
- * Uses the service role key to bypass RLS.
+ * Shared sync logic used by both GET (Vercel Cron) and POST (manual trigger).
  */
-export async function POST() {
+async function runSync() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -30,7 +25,6 @@ export async function POST() {
       return NextResponse.json({ synced: 0, message: "No printers found" });
     }
 
-    // Upsert all printer statuses (on conflict by serial_number)
     const { error } = await supabase.from("printers").upsert(
       results.map((r) => ({
         serial_number: r.serial_number,
@@ -69,4 +63,28 @@ export async function POST() {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+/**
+ * GET /api/printers/sync
+ *
+ * Called by Vercel Cron every 5 minutes.
+ * Protected by CRON_SECRET to prevent unauthorized access.
+ */
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return runSync();
+}
+
+/**
+ * POST /api/printers/sync
+ *
+ * Manual trigger from the dashboard (requires authenticated user).
+ */
+export async function POST() {
+  return runSync();
 }

@@ -2,6 +2,13 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { Metadata } from "next";
+import { getTracking } from "@/lib/packlink/api";
+
+interface TrackingEvent {
+  city: string;
+  description: string;
+  timestamp: string;
+}
 
 const STATUSES = [
   { value: "pending", label: "Pendiente" },
@@ -125,7 +132,7 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
   );
 }
 
-function ShippingCard({ shipping }: { shipping: Tables<"shipping_info"> }) {
+function ShippingCard({ shipping, trackingEvents }: { shipping: Tables<"shipping_info">; trackingEvents: TrackingEvent[] }) {
   const addressParts = [
     shipping.address_line,
     shipping.postal_code,
@@ -154,6 +161,14 @@ function ShippingCard({ shipping }: { shipping: Tables<"shipping_info"> }) {
             <span className="font-mono font-medium text-zinc-900 dark:text-white">{shipping.tracking_number}</span>
           </div>
         )}
+        {shipping.shipment_status && (
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500 dark:text-zinc-400">Estado</span>
+            <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
+              {shipping.shipment_status}
+            </span>
+          </div>
+        )}
         {addressParts.length > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">Dirección</span>
@@ -177,6 +192,30 @@ function ShippingCard({ shipping }: { shipping: Tables<"shipping_info"> }) {
           </div>
         )}
       </div>
+
+      {/* Tracking timeline */}
+      {trackingEvents.length > 0 && (
+        <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <p className="mb-3 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Seguimiento</p>
+          <div className="space-y-3">
+            {trackingEvents.map((event, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className={`h-2.5 w-2.5 rounded-full ${i === 0 ? "bg-cyan-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+                  {i < trackingEvents.length - 1 && <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
+                </div>
+                <div className="pb-3">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{event.description}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {event.city && `${event.city} · `}
+                    {new Date(event.timestamp).toLocaleString("es-ES")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -211,6 +250,17 @@ export default async function TrackingPage({
       .eq("project_id", project.id)
       .single(),
   ]);
+
+  // Fetch Packlink tracking events if a shipment exists
+  let trackingEvents: TrackingEvent[] = [];
+  if (shipping?.packlink_shipment_ref) {
+    try {
+      const trackingData = await getTracking(shipping.packlink_shipment_ref);
+      trackingEvents = trackingData.history ?? [];
+    } catch {
+      // Tracking may not be available
+    }
+  }
 
   const currentStatusColor =
     STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
@@ -299,7 +349,7 @@ export default async function TrackingPage({
         )}
 
         {/* Shipping */}
-        {shipping && <div className="mb-6">{<ShippingCard shipping={shipping} />}</div>}
+        {shipping && <div className="mb-6"><ShippingCard shipping={shipping} trackingEvents={trackingEvents} /></div>}
       </main>
 
       <footer className="border-t border-zinc-200 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">

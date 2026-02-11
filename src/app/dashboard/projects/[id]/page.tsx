@@ -6,6 +6,7 @@ import { getContact } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
 import { ProjectItems } from "./project-items";
 import { ProjectDocuments } from "./project-documents";
+import { ProjectShipping } from "./project-shipping";
 import { CopyTrackingLink } from "./copy-tracking-link";
 
 const STATUSES = [
@@ -83,6 +84,13 @@ export default async function ProjectDetailPage({
     }
   }
 
+  // Fetch shipping info
+  const { data: shippingInfo } = await supabase
+    .from("shipping_info")
+    .select("*")
+    .eq("project_id", id)
+    .single();
+
   const currentStatusColor = STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
 
   return (
@@ -126,6 +134,15 @@ export default async function ProjectDetailPage({
         <ProjectDocuments
           folderId={project.google_drive_folder_id}
           projectId={project.id}
+        />
+      </div>
+
+      {/* Shipping */}
+      <div className="mb-6">
+        <ProjectShipping
+          projectId={project.id}
+          shippingInfo={shippingInfo}
+          holdedContact={holdedContact}
         />
       </div>
 

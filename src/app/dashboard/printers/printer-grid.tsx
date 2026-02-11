@@ -7,7 +7,7 @@ import PrinterCard from "./printer-card";
 
 type Printer = Tables<"printers">;
 
-const SYNC_INTERVAL = 30_000; // 30 seconds
+const SYNC_INTERVAL = 5 * 60_000; // 5 minutes (matches Vercel Cron)
 
 export default function PrinterGrid({ initialPrinters }: { initialPrinters: Printer[] }) {
   const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
