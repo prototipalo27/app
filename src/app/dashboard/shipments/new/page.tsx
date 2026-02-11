@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { PacklinkService } from "@/lib/packlink/types";
 
 const SENDER_ADDRESS = {
   name: "Prototipalo",
-  street1: "",
-  city: "",
-  zip_code: "",
+  street1: "Calle Viriato 27",
+  city: "Madrid",
+  zip_code: "28010",
   country: "ES",
   email: "",
   phone: "",
@@ -17,6 +17,22 @@ const SENDER_ADDRESS = {
 interface ProjectOption {
   id: string;
   name: string;
+}
+
+interface HoldedContactResult {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  mobile: string;
+  billAddress?: {
+    address?: string;
+    city?: string;
+    postalCode?: string;
+    province?: string;
+    country?: string;
+    countryCode?: string;
+  };
 }
 
 export default function NewShipmentPage() {
@@ -31,6 +47,15 @@ export default function NewShipmentPage() {
   // Projects for optional linking
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  // Holded contact search
+  const [contactQuery, setContactQuery] = useState("");
+  const [contactResults, setContactResults] = useState<HoldedContactResult[]>([]);
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<HoldedContactResult | null>(null);
+  const contactWrapperRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Shipment info fields
   const [title, setTitle] = useState("");
@@ -61,6 +86,77 @@ export default function NewShipmentPage() {
       .then((data) => setProjects(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
+
+  // Close contact dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (contactWrapperRef.current && !contactWrapperRef.current.contains(e.target as Node)) {
+        setContactOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const fetchContacts = useCallback(async (search: string) => {
+    setContactLoading(true);
+    try {
+      const params = search ? `?search=${encodeURIComponent(search)}` : "";
+      const res = await fetch(`/api/holded/contacts${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setContactResults(data);
+        setContactOpen(true);
+      }
+    } catch {
+      setContactResults([]);
+    } finally {
+      setContactLoading(false);
+    }
+  }, []);
+
+  function handleContactInputChange(value: string) {
+    setContactQuery(value);
+    if (selectedContact) setSelectedContact(null);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.trim().length < 2) {
+      setContactResults([]);
+      setContactOpen(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      fetchContacts(value.trim());
+    }, 300);
+  }
+
+  function handleContactSelect(contact: HoldedContactResult) {
+    setSelectedContact(contact);
+    setContactQuery(contact.name);
+    setContactOpen(false);
+
+    // Auto-fill recipient fields
+    setRecipientName(contact.name || "");
+    setRecipientEmail(contact.email || "");
+    setRecipientPhone(contact.phone || contact.mobile || "");
+
+    // Auto-fill address from billAddress
+    if (contact.billAddress) {
+      setStreet(contact.billAddress.address || "");
+      setCity(contact.billAddress.city || "");
+      setPostalCode(contact.billAddress.postalCode || "");
+      setCountry(contact.billAddress.countryCode || "ES");
+    }
+  }
+
+  function handleContactClear() {
+    setSelectedContact(null);
+    setContactQuery("");
+    setContactResults([]);
+    setContactOpen(false);
+  }
 
   async function searchServices() {
     setLoading(true);
@@ -165,6 +261,74 @@ export default function NewShipmentPage() {
               {error}
             </div>
           )}
+
+          {/* Holded contact search */}
+          <div ref={contactWrapperRef}>
+            <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Holded contact</p>
+            <div className="relative">
+              <input
+                type="text"
+                value={contactQuery}
+                onChange={(e) => handleContactInputChange(e.target.value)}
+                onFocus={() => { if (contactResults.length > 0 && !selectedContact) setContactOpen(true); }}
+                placeholder="Search contacts in Holded..."
+                className={inputClass + " pr-8"}
+              />
+
+              {(contactQuery || selectedContact) && (
+                <button
+                  type="button"
+                  onClick={handleContactClear}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+
+              {contactLoading && (
+                <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-cyan-500" />
+                </div>
+              )}
+
+              {contactOpen && contactResults.length > 0 && (
+                <ul className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  {contactResults.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleContactSelect(c)}
+                        className="flex w-full flex-col items-start px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                      >
+                        <span className="text-sm font-medium text-zinc-900 dark:text-white">{c.name}</span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {[c.email, c.billAddress?.city].filter(Boolean).join(" · ")}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {contactOpen && !contactLoading && contactResults.length === 0 && contactQuery.trim().length >= 2 && (
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-3 text-center text-sm text-zinc-500 shadow-lg dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+                  No contacts found
+                </div>
+              )}
+            </div>
+
+            {selectedContact && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-cyan-50 px-3 py-2 dark:bg-cyan-900/20">
+                <svg className="h-4 w-4 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">{selectedContact.name}</span>
+                <span className="text-xs text-cyan-600 dark:text-cyan-400">— fields auto-filled</span>
+              </div>
+            )}
+          </div>
 
           {/* Shipment info */}
           <div>
@@ -389,6 +553,8 @@ export default function NewShipmentPage() {
               setContentDescription("");
               setDeclaredValue("");
               setSelectedProjectId("");
+              setSelectedContact(null);
+              setContactQuery("");
               setRecipientName("");
               setRecipientEmail("");
               setRecipientPhone("");

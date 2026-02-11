@@ -28,9 +28,9 @@ interface ProjectShippingProps {
 // Sender address (workshop default)
 const SENDER_ADDRESS = {
   name: "Prototipalo",
-  street1: "",
-  city: "",
-  zip_code: "",
+  street1: "Calle Viriato 27",
+  city: "Madrid",
+  zip_code: "28010",
   country: "ES",
   email: "",
   phone: "",
