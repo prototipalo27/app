@@ -40,11 +40,13 @@ export async function POST(request: NextRequest) {
 
   if (status === "DELIVERED") {
     updates.delivered_at = new Date().toISOString();
-    // Also update project status
-    await supabase
-      .from("projects")
-      .update({ status: "delivered" })
-      .eq("id", shipping.project_id);
+    // Only update project status if linked to a project
+    if (shipping.project_id) {
+      await supabase
+        .from("projects")
+        .update({ status: "delivered" })
+        .eq("id", shipping.project_id);
+    }
   }
 
   if (Object.keys(updates).length > 0) {

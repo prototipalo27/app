@@ -198,6 +198,11 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
         notes: null,
         delivered_at: null,
         tracking_number: null,
+        title: null,
+        content_description: null,
+        declared_value: null,
+        created_at: null,
+        created_by: null,
       });
       setStep("created");
     } catch (err) {

@@ -266,7 +266,11 @@ export type Database = {
           address_line: string | null
           carrier: string | null
           city: string | null
+          content_description: string | null
           country: string | null
+          created_at: string | null
+          created_by: string | null
+          declared_value: number | null
           delivered_at: string | null
           id: string
           label_url: string | null
@@ -279,7 +283,7 @@ export type Database = {
           packlink_shipment_ref: string | null
           postal_code: string | null
           price: number | null
-          project_id: string
+          project_id: string | null
           recipient_email: string | null
           recipient_name: string | null
           recipient_phone: string | null
@@ -287,13 +291,18 @@ export type Database = {
           service_name: string | null
           shipment_status: string | null
           shipped_at: string | null
+          title: string | null
           tracking_number: string | null
         }
         Insert: {
           address_line?: string | null
           carrier?: string | null
           city?: string | null
+          content_description?: string | null
           country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          declared_value?: number | null
           delivered_at?: string | null
           id?: string
           label_url?: string | null
@@ -306,7 +315,7 @@ export type Database = {
           packlink_shipment_ref?: string | null
           postal_code?: string | null
           price?: number | null
-          project_id: string
+          project_id?: string | null
           recipient_email?: string | null
           recipient_name?: string | null
           recipient_phone?: string | null
@@ -314,13 +323,18 @@ export type Database = {
           service_name?: string | null
           shipment_status?: string | null
           shipped_at?: string | null
+          title?: string | null
           tracking_number?: string | null
         }
         Update: {
           address_line?: string | null
           carrier?: string | null
           city?: string | null
+          content_description?: string | null
           country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          declared_value?: number | null
           delivered_at?: string | null
           id?: string
           label_url?: string | null
@@ -333,7 +347,7 @@ export type Database = {
           packlink_shipment_ref?: string | null
           postal_code?: string | null
           price?: number | null
-          project_id?: string
+          project_id?: string | null
           recipient_email?: string | null
           recipient_name?: string | null
           recipient_phone?: string | null
@@ -341,13 +355,14 @@ export type Database = {
           service_name?: string | null
           shipment_status?: string | null
           shipped_at?: string | null
+          title?: string | null
           tracking_number?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "shipping_info_project_id_fkey"
             columns: ["project_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },

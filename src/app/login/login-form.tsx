@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { login, signup, signInWithGoogle } from "./actions";
 
 export default function LoginForm() {
@@ -10,6 +11,8 @@ export default function LoginForm() {
     null
   );
   const [googlePending, startGoogleTransition] = useTransition();
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
 
   return (
     <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -21,6 +24,12 @@ export default function LoginForm() {
           ? "Sign up for Prototipalo"
           : "Welcome back to Prototipalo"}
       </p>
+
+      {urlError && (
+        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          {urlError}
+        </p>
+      )}
 
       <form action={formAction} className="mt-6 space-y-4">
         <div>
