@@ -38,6 +38,53 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_claims: {
+        Row: {
+          claim_date: string | null
+          created_at: string | null
+          created_by: string | null
+          email_sent_to: string
+          id: string
+          response_notes: string | null
+          status: string | null
+          supplier_id: string | null
+          total_amount: number
+          transactions: Json
+        }
+        Insert: {
+          claim_date?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email_sent_to: string
+          id?: string
+          response_notes?: string | null
+          status?: string | null
+          supplier_id?: string | null
+          total_amount: number
+          transactions: Json
+        }
+        Update: {
+          claim_date?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email_sent_to?: string
+          id?: string
+          response_notes?: string | null
+          status?: string | null
+          supplier_id?: string | null
+          total_amount?: number
+          transactions?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_claims_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       printers: {
         Row: {
           bed_target: number | null
@@ -628,6 +675,35 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      vendor_mappings: {
+        Row: {
+          bank_vendor_name: string
+          created_at: string | null
+          id: string
+          supplier_id: string | null
+        }
+        Insert: {
+          bank_vendor_name: string
+          created_at?: string | null
+          id?: string
+          supplier_id?: string | null
+        }
+        Update: {
+          bank_vendor_name?: string
+          created_at?: string | null
+          id?: string
+          supplier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_mappings_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
