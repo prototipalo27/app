@@ -261,6 +261,109 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_items: {
+        Row: {
+          actual_price: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string
+          estimated_price: number | null
+          id: string
+          item_type: string | null
+          link: string | null
+          notes: string | null
+          purchase_list_id: string
+          purchased_at: string | null
+          purchased_by: string | null
+          quantity: number | null
+          received_at: string | null
+          status: string | null
+        }
+        Insert: {
+          actual_price?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description: string
+          estimated_price?: number | null
+          id?: string
+          item_type?: string | null
+          link?: string | null
+          notes?: string | null
+          purchase_list_id: string
+          purchased_at?: string | null
+          purchased_by?: string | null
+          quantity?: number | null
+          received_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          actual_price?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string
+          estimated_price?: number | null
+          id?: string
+          item_type?: string | null
+          link?: string | null
+          notes?: string | null
+          purchase_list_id?: string
+          purchased_at?: string | null
+          purchased_by?: string | null
+          quantity?: number | null
+          received_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_items_purchase_list_id_fkey"
+            columns: ["purchase_list_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_lists: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          notes: string | null
+          project_id: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_lists_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -394,6 +497,107 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      supplier_payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          has_invoice: boolean | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          notes: string | null
+          payment_date: string
+          supplier_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          has_invoice?: boolean | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          notes?: string | null
+          payment_date: string
+          supplier_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          has_invoice?: boolean | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          notes?: string | null
+          payment_date?: string
+          supplier_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          city: string | null
+          country: string | null
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          holded_contact_id: string | null
+          id: string
+          name: string
+          nif_cif: string | null
+          notes: string | null
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          holded_contact_id?: string | null
+          id?: string
+          name: string
+          nif_cif?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          holded_contact_id?: string | null
+          id?: string
+          name?: string
+          nif_cif?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {

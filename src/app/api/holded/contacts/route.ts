@@ -17,11 +17,17 @@ export async function GET(request: NextRequest) {
   }
 
   const search = request.nextUrl.searchParams.get("search");
+  const type = request.nextUrl.searchParams.get("type");
 
   try {
-    const contacts = search
+    let contacts = search
       ? await searchContacts(search)
       : await listContacts();
+
+    // Filter by contact type if specified (e.g. "supplier", "client")
+    if (type) {
+      contacts = contacts.filter((c) => c.type === type);
+    }
 
     return NextResponse.json(contacts);
   } catch (err) {
