@@ -1,27 +1,39 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import NotificationBell from "@/components/NotificationBell";
 import MobileSidebar from "@/components/MobileSidebar";
+import { getUserProfile, type UserRole } from "@/lib/rbac";
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: "Admin",
+  manager: "Manager",
+  employee: "Empleado",
+};
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
+  const profile = await getUserProfile();
 
-  if (error || !data.user) {
+  if (!profile || !profile.is_active) {
     redirect("/login");
   }
 
+  const isSuperAdmin = profile.role === "super_admin";
+
   const bottomSection = (
     <>
-      <p className="mb-2 truncate px-3 text-xs text-zinc-500 dark:text-zinc-400">
-        {data.user.email}
-      </p>
+      <div className="mb-2 flex items-center gap-2 px-3">
+        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+          {profile.email}
+        </p>
+        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+          {ROLE_LABELS[profile.role]}
+        </span>
+      </div>
       <NotificationBell />
       <form action={signOut}>
         <button
@@ -40,7 +52,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
       {/* Mobile sidebar + top bar */}
-      <MobileSidebar>{bottomSection}</MobileSidebar>
+      <MobileSidebar role={profile.role}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
@@ -103,6 +115,24 @@ export default async function DashboardLayout({
             </svg>
             Proveedores
           </Link>
+
+          {isSuperAdmin && (
+            <>
+              <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
+              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Admin
+              </p>
+              <Link
+                href="/dashboard/users"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Usuarios
+              </Link>
+            </>
+          )}
         </nav>
 
         <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">

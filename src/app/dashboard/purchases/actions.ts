@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/rbac";
 
 // ── Purchase Lists ─────────────────────────────────────────
 
@@ -83,12 +84,9 @@ export async function reopenPurchaseList(listId: string) {
 }
 
 export async function deletePurchaseList(listId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("purchase_lists")
@@ -178,12 +176,9 @@ export async function updatePurchaseItemStatus(
 }
 
 export async function deletePurchaseItem(itemId: string, listId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("purchase_items")

@@ -1,15 +1,11 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { login, signup, signInWithGoogle } from "./actions";
+import { login, signInWithGoogle } from "./actions";
 
 export default function LoginForm() {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [state, formAction, isPending] = useActionState(
-    isSignUp ? signup : login,
-    null
-  );
+  const [state, formAction, isPending] = useActionState(login, null);
   const [googlePending, startGoogleTransition] = useTransition();
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
@@ -17,12 +13,10 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <h1 className="text-center text-2xl font-bold text-zinc-900 dark:text-white">
-        {isSignUp ? "Create account" : "Sign in"}
+        Sign in
       </h1>
       <p className="mt-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        {isSignUp
-          ? "Sign up for Prototipalo"
-          : "Welcome back to Prototipalo"}
+        Welcome back to Prototipalo
       </p>
 
       {urlError && (
@@ -45,7 +39,7 @@ export default function LoginForm() {
             type="email"
             required
             className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-green-500"
-            placeholder="you@example.com"
+            placeholder="you@prototipalo.com"
           />
         </div>
 
@@ -73,24 +67,12 @@ export default function LoginForm() {
           </p>
         )}
 
-        {state?.message && (
-          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">
-            {state.message}
-          </p>
-        )}
-
         <button
           type="submit"
           disabled={isPending}
           className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
         >
-          {isPending
-            ? isSignUp
-              ? "Creating account..."
-              : "Signing in..."
-            : isSignUp
-              ? "Create account"
-              : "Sign in"}
+          {isPending ? "Signing in..." : "Sign in"}
         </button>
       </form>
 
@@ -126,15 +108,8 @@ export default function LoginForm() {
         {googlePending ? "Redirecting..." : "Continue with Google"}
       </button>
 
-      <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-        <button
-          type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="font-medium text-green-600 hover:text-green-500"
-        >
-          {isSignUp ? "Sign in" : "Sign up"}
-        </button>
+      <p className="mt-6 text-center text-xs text-zinc-400 dark:text-zinc-500">
+        Solo cuentas @prototipalo.com
       </p>
     </div>
   );

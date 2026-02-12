@@ -18,10 +18,12 @@ export default function PaymentForm({
   supplierId,
   payments,
   supplierName,
+  canManage = true,
 }: {
   supplierId: string;
   payments: Payment[];
   supplierName: string;
+  canManage?: boolean;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -54,13 +56,15 @@ export default function PaymentForm({
             </span>
           )}
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-        >
-          {showForm ? "Cancelar" : "+ Añadir pago"}
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+          >
+            {showForm ? "Cancelar" : "+ Añadir pago"}
+          </button>
+        )}
       </div>
 
       {/* Add payment form */}
@@ -257,55 +261,59 @@ export default function PaymentForm({
                     {p.invoice_number || "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {!p.has_invoice && (
-                        <>
-                          {markingId === p.id ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={invoiceNum}
-                                onChange={(e) => setInvoiceNum(e.target.value)}
-                                placeholder="N.º factura"
-                                className="w-28 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                              />
+                    {canManage ? (
+                      <div className="flex items-center gap-2">
+                        {!p.has_invoice && (
+                          <>
+                            {markingId === p.id ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={invoiceNum}
+                                  onChange={(e) => setInvoiceNum(e.target.value)}
+                                  placeholder="N.º factura"
+                                  className="w-28 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkInvoice(p.id)}
+                                  className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                                >
+                                  OK
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMarkingId(null);
+                                    setInvoiceNum("");
+                                  }}
+                                  className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                                >
+                                  X
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => handleMarkInvoice(p.id)}
-                                className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                                onClick={() => setMarkingId(p.id)}
+                                className="rounded border border-green-300 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
                               >
-                                OK
+                                Marcar factura
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMarkingId(null);
-                                  setInvoiceNum("");
-                                }}
-                                className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
-                              >
-                                X
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setMarkingId(p.id)}
-                              className="rounded border border-green-300 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
-                            >
-                              Marcar factura
-                            </button>
-                          )}
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(p.id)}
-                        className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                            )}
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(p.id)}
+                          className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-400">—</span>
+                    )}
                   </td>
                 </tr>
               ))

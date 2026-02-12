@@ -3,41 +3,50 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { isAllowedDomain } from "@/lib/rbac";
+
+const DOMAIN = "prototipalo.com";
 
 export async function login(
   _prevState: { error?: string; message?: string } | null,
   formData: FormData
 ) {
+  const email = formData.get("email") as string;
+
+  if (!isAllowedDomain(email)) {
+    return { error: `Solo cuentas @${DOMAIN} pueden acceder` };
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithPassword({
-    email: formData.get("email") as string,
+    email,
     password: formData.get("password") as string,
   });
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Check if user is active
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("is_active")
+      .eq("id", user.id)
+      .single();
+
+    if (profile && !profile.is_active) {
+      await supabase.auth.signOut();
+      return { error: "Tu cuenta ha sido desactivada. Contacta al administrador." };
+    }
   }
 
   redirect("/dashboard");
-}
-
-export async function signup(
-  _prevState: { error?: string; message?: string } | null,
-  formData: FormData
-) {
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.signUp({
-    email: formData.get("email") as string,
-    password: formData.get("password") as string,
-  });
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { message: "Check your email to confirm your account." };
 }
 
 export async function signInWithGoogle() {

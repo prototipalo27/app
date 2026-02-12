@@ -2,8 +2,10 @@ import { createSupplier } from "../actions";
 import SupplierSelector from "../supplier-selector";
 import Link from "next/link";
 import SupplierForm from "./supplier-form";
+import { requireRole } from "@/lib/rbac";
 
-export default function NewSupplierPage() {
+export default async function NewSupplierPage() {
+  await requireRole("manager");
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/rbac";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -88,12 +89,9 @@ export async function updateProjectStatusById(id: string, status: string) {
 }
 
 export async function deleteProject(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await createClient();
 
   const id = formData.get("id") as string;
 

@@ -3,8 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/rbac";
 
 export async function createSupplier(formData: FormData) {
+  await requireRole("manager");
+
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -44,12 +47,9 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function updateSupplier(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await createClient();
 
   const id = formData.get("id") as string;
 
@@ -77,12 +77,9 @@ export async function updateSupplier(formData: FormData) {
 }
 
 export async function deleteSupplier(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await createClient();
 
   const id = formData.get("id") as string;
 
@@ -97,6 +94,8 @@ export async function deleteSupplier(formData: FormData) {
 }
 
 export async function addPayment(formData: FormData) {
+  await requireRole("manager");
+
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -131,12 +130,9 @@ export async function addPayment(formData: FormData) {
 }
 
 export async function updatePayment(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await createClient();
 
   const id = formData.get("id") as string;
   const supplierId = formData.get("supplier_id") as string;
@@ -170,12 +166,9 @@ export async function markInvoiceReceived(
   paymentId: string,
   invoiceNumber: string
 ) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("supplier_payments")
@@ -197,12 +190,9 @@ export async function markInvoiceReceived(
 }
 
 export async function deletePayment(paymentId: string, supplierId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  await requireRole("manager");
 
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("supplier_payments")

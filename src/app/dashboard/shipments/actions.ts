@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/rbac";
 
 export async function linkShipmentToProject(shipmentId: string, projectId: string) {
   const supabase = await createClient();
@@ -40,6 +41,8 @@ export async function unlinkShipmentFromProject(shipmentId: string) {
 }
 
 export async function deleteShipment(shipmentId: string) {
+  await requireRole("manager");
+
   const supabase = await createClient();
 
   // Only allow deleting standalone shipments

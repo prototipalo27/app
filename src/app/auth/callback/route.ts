@@ -12,14 +12,32 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const email = user?.email ?? "";
 
       if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
         await supabase.auth.signOut();
         return NextResponse.redirect(
-          `${origin}/login?error=Solo cuentas @${ALLOWED_DOMAIN} pueden acceder`,
+          `${origin}/login?error=Solo cuentas @${ALLOWED_DOMAIN} pueden acceder`
         );
+      }
+
+      // Check if user is active
+      if (user) {
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("is_active")
+          .eq("id", user.id)
+          .single();
+
+        if (profile && !profile.is_active) {
+          await supabase.auth.signOut();
+          return NextResponse.redirect(
+            `${origin}/login?error=Tu cuenta ha sido desactivada. Contacta al administrador.`
+          );
+        }
       }
 
       return NextResponse.redirect(`${origin}/dashboard`);

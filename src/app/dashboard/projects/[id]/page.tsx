@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { updateProjectStatus, deleteProject } from "../actions";
+import { getUserProfile, hasRole } from "@/lib/rbac";
 import { getContact } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
 import { ProjectItems } from "./project-items";
@@ -51,12 +52,11 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const profile = await getUserProfile();
+  if (!profile) redirect("/login");
+  const canDelete = hasRole(profile.role, "manager");
 
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await createClient();
 
   const { data: project } = await supabase
     .from("projects")
@@ -254,21 +254,23 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* Delete */}
-          <div className="rounded-xl border border-red-200 bg-white p-5 dark:border-red-900/50 dark:bg-zinc-900">
-            <h2 className="mb-2 text-sm font-semibold text-red-600 dark:text-red-400">Danger zone</h2>
-            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              This action cannot be undone. All files and shipping info will also be deleted.
-            </p>
-            <form action={deleteProject}>
-              <input type="hidden" name="id" value={project.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                Delete project
-              </button>
-            </form>
-          </div>
+          {canDelete && (
+            <div className="rounded-xl border border-red-200 bg-white p-5 dark:border-red-900/50 dark:bg-zinc-900">
+              <h2 className="mb-2 text-sm font-semibold text-red-600 dark:text-red-400">Danger zone</h2>
+              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                This action cannot be undone. All files and shipping info will also be deleted.
+              </p>
+              <form action={deleteProject}>
+                <input type="hidden" name="id" value={project.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  Delete project
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>

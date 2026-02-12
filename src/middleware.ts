@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const ALLOWED_DOMAIN = "prototipalo.com";
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -41,7 +43,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/") ||
     pathname.startsWith("/track/");
 
-  // Not authenticated + protected route → redirect to login
+  // Not authenticated + protected route -> redirect to login
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -52,7 +54,20 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // Authenticated + login page → redirect to dashboard
+  // Safety net: authenticated user with non-allowed domain -> sign out
+  if (user && !isPublic && !user.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
+    await supabase.auth.signOut();
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", `Solo cuentas @${ALLOWED_DOMAIN} pueden acceder`);
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+    return redirectResponse;
+  }
+
+  // Authenticated + login page -> redirect to dashboard
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";

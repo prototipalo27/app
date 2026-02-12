@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { ShipmentDetail } from "./shipment-detail";
+import { getUserProfile, hasRole } from "@/lib/rbac";
 
 export default async function ShipmentDetailPage({
   params,
@@ -8,6 +9,9 @@ export default async function ShipmentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const profile = await getUserProfile();
+  const canDelete = profile ? hasRole(profile.role, "manager") : false;
+
   const supabase = await createClient();
 
   const { data: shipment } = await supabase
@@ -44,6 +48,7 @@ export default async function ShipmentDetailPage({
       shipment={shipment}
       linkedProject={shipment.projects as { id: string; name: string } | null}
       availableProjects={unlinkableProjects}
+      canDelete={canDelete}
     />
   );
 }
