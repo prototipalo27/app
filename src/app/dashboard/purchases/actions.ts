@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/rbac";
 // ── Purchase Lists ─────────────────────────────────────────
 
 export async function createPurchaseList(formData: FormData) {
+  await requireRole("manager");
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -42,12 +43,8 @@ export async function createPurchaseList(formData: FormData) {
 }
 
 export async function closePurchaseList(listId: string) {
+  await requireRole("manager");
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
 
   const { error } = await supabase
     .from("purchase_lists")
@@ -63,12 +60,8 @@ export async function closePurchaseList(listId: string) {
 }
 
 export async function reopenPurchaseList(listId: string) {
+  await requireRole("manager");
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
 
   const { error } = await supabase
     .from("purchase_lists")
@@ -104,6 +97,7 @@ export async function deletePurchaseList(listId: string) {
 // ── Purchase Items ─────────────────────────────────────────
 
 export async function addPurchaseItem(formData: FormData) {
+  await requireRole("manager");
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -143,6 +137,7 @@ export async function updatePurchaseItemStatus(
   listId: string,
   actualPrice?: number
 ) {
+  await requireRole("manager");
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 

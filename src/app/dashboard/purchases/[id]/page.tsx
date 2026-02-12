@@ -2,12 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import PurchaseItems from "./purchase-items";
+import { requireRole } from "@/lib/rbac";
 
 export default async function PurchaseListDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireRole("manager");
   const { id } = await params;
   const supabase = await createClient();
 

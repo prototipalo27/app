@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { requireRole } from "@/lib/rbac";
 
 export default async function PurchasesPage() {
+  await requireRole("manager");
   const supabase = await createClient();
 
   const { data: lists } = await supabase

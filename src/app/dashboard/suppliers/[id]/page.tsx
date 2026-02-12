@@ -1,20 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { deleteSupplier } from "../actions";
 import PaymentForm from "./payment-form";
 import Reconciliation from "./reconciliation";
-import { getUserProfile, hasRole } from "@/lib/rbac";
+import { requireRole } from "@/lib/rbac";
 
 export default async function SupplierDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireRole("manager");
   const { id } = await params;
-  const profile = await getUserProfile();
-  if (!profile) redirect("/login");
-  const isManager = hasRole(profile.role, "manager");
 
   const supabase = await createClient();
 
@@ -56,22 +54,20 @@ export default async function SupplierDetailPage({
               </span>
             )}
           </div>
-          {isManager && (
-            <form action={deleteSupplier}>
-              <input type="hidden" name="id" value={supplier.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                onClick={(e) => {
-                  if (!confirm("Eliminar proveedor y todos sus pagos?")) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                Eliminar
-              </button>
-            </form>
-          )}
+          <form action={deleteSupplier}>
+            <input type="hidden" name="id" value={supplier.id} />
+            <button
+              type="submit"
+              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+              onClick={(e) => {
+                if (!confirm("Eliminar proveedor y todos sus pagos?")) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              Eliminar
+            </button>
+          </form>
         </div>
 
         <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 md:grid-cols-3">
@@ -131,7 +127,7 @@ export default async function SupplierDetailPage({
         supplierId={supplier.id}
         payments={payments || []}
         supplierName={supplier.name}
-        canManage={isManager}
+        canManage={true}
       />
 
       {/* Reconciliation */}

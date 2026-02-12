@@ -11,6 +11,7 @@ interface ShipmentDetailProps {
   shipment: Tables<"shipping_info">;
   linkedProject: { id: string; name: string } | null;
   availableProjects: { id: string; name: string }[];
+  canDelete?: boolean;
 }
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -28,7 +29,7 @@ function StatusBadge({ status }: { status: string | null }) {
   return <span className={classes}>{status ?? "unknown"}</span>;
 }
 
-export function ShipmentDetail({ shipment, linkedProject, availableProjects }: ShipmentDetailProps) {
+export function ShipmentDetail({ shipment, linkedProject, availableProjects, canDelete }: ShipmentDetailProps) {
   const router = useRouter();
   const [tracking, setTracking] = useState<PacklinkTrackingEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -304,7 +305,7 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects }: S
           >
             Refresh tracking
           </button>
-          {!linkedProject && (
+          {canDelete && !linkedProject && (
             <>
               {showDeleteConfirm ? (
                 <div className="flex items-center gap-2">

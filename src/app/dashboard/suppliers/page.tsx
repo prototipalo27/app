@@ -1,10 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { getUserProfile, hasRole } from "@/lib/rbac";
+import { requireRole } from "@/lib/rbac";
 
 export default async function SuppliersPage() {
-  const profile = await getUserProfile();
-  const isManager = profile ? hasRole(profile.role, "manager") : false;
+  await requireRole("manager");
 
   const supabase = await createClient();
 
@@ -72,14 +71,12 @@ export default async function SuppliersPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
           Proveedores
         </h1>
-        {isManager && (
-          <Link
-            href="/dashboard/suppliers/new"
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-          >
-            + Nuevo proveedor
-          </Link>
-        )}
+        <Link
+          href="/dashboard/suppliers/new"
+          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+        >
+          + Nuevo proveedor
+        </Link>
       </div>
 
       {/* Suppliers table */}
