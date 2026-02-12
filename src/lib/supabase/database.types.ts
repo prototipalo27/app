@@ -272,7 +272,8 @@ export type Database = {
           item_type: string | null
           link: string | null
           notes: string | null
-          purchase_list_id: string
+          purchase_list_id: string | null
+          provider: string | null
           purchased_at: string | null
           purchased_by: string | null
           quantity: number | null
@@ -289,7 +290,8 @@ export type Database = {
           item_type?: string | null
           link?: string | null
           notes?: string | null
-          purchase_list_id: string
+          purchase_list_id?: string | null
+          provider?: string | null
           purchased_at?: string | null
           purchased_by?: string | null
           quantity?: number | null
@@ -307,6 +309,7 @@ export type Database = {
           link?: string | null
           notes?: string | null
           purchase_list_id?: string
+          provider?: string | null
           purchased_at?: string | null
           purchased_by?: string | null
           quantity?: number | null

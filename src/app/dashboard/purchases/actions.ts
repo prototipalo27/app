@@ -4,123 +4,27 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-export async function createPurchaseList(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
-
-  const title = formData.get("title") as string;
-  if (!title?.trim()) {
-    redirect("/dashboard/purchases/new");
-  }
-
-  const projectId = (formData.get("project_id") as string)?.trim() || null;
-
-  const { data, error } = await supabase
-    .from("purchase_lists")
-    .insert({
-      title: title.trim(),
-      notes: (formData.get("notes") as string)?.trim() || null,
-      project_id: projectId || null,
-      created_by: userData.user.id,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard/purchases");
-  redirect(`/dashboard/purchases/${data.id}`);
-}
-
-export async function closePurchaseList(listId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .update({ status: "closed", updated_at: new Date().toISOString() })
-    .eq("id", listId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
-}
-
-export async function reopenPurchaseList(listId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .update({ status: "open", updated_at: new Date().toISOString() })
-    .eq("id", listId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
-}
-
-export async function deletePurchaseList(formData: FormData) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
-
-  const id = formData.get("id") as string;
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard/purchases");
-  redirect("/dashboard/purchases");
-}
-
 export async function addPurchaseItem(formData: FormData) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
   if (userError || !userData.user) {
-    throw new Error("Unauthorized");
+    redirect("/login");
   }
 
-  const listId = formData.get("purchase_list_id") as string;
+  const description = formData.get("description") as string;
+  if (!description?.trim()) return;
+
   const quantity = formData.get("quantity") as string;
   const estimatedPrice = formData.get("estimated_price") as string;
 
   const { error } = await supabase.from("purchase_items").insert({
-    purchase_list_id: listId,
-    description: (formData.get("description") as string).trim(),
+    purchase_list_id: null,
+    description: description.trim(),
     link: (formData.get("link") as string)?.trim() || null,
     quantity: quantity ? parseInt(quantity, 10) : 1,
     item_type: (formData.get("item_type") as string) || "general",
+    provider: (formData.get("provider") as string) || "general",
     estimated_price: estimatedPrice ? parseFloat(estimatedPrice) : null,
     notes: (formData.get("notes") as string)?.trim() || null,
     created_by: userData.user.id,
@@ -130,13 +34,12 @@ export async function addPurchaseItem(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidatePath(`/dashboard/purchases/${listId}`);
+  revalidatePath("/dashboard/purchases");
 }
 
 export async function updatePurchaseItemStatus(
   itemId: string,
   status: string,
-  listId: string,
   actualPrice?: number
 ) {
   const supabase = await createClient();
@@ -167,10 +70,10 @@ export async function updatePurchaseItemStatus(
     throw new Error(error.message);
   }
 
-  revalidatePath(`/dashboard/purchases/${listId}`);
+  revalidatePath("/dashboard/purchases");
 }
 
-export async function deletePurchaseItem(itemId: string, listId: string) {
+export async function deletePurchaseItem(itemId: string) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -187,5 +90,25 @@ export async function deletePurchaseItem(itemId: string, listId: string) {
     throw new Error(error.message);
   }
 
-  revalidatePath(`/dashboard/purchases/${listId}`);
+  revalidatePath("/dashboard/purchases");
+}
+
+export async function clearPurchasedItems() {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { error } = await supabase
+    .from("purchase_items")
+    .delete()
+    .eq("status", "received");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard/purchases");
 }
