@@ -4,6 +4,7 @@ import Link from "next/link";
 import { deleteSupplier } from "../actions";
 import PaymentForm from "./payment-form";
 import Reconciliation from "./reconciliation";
+import DeleteButton from "./delete-button";
 import { requireRole } from "@/lib/rbac";
 
 export default async function SupplierDetailPage({
@@ -56,17 +57,7 @@ export default async function SupplierDetailPage({
           </div>
           <form action={deleteSupplier}>
             <input type="hidden" name="id" value={supplier.id} />
-            <button
-              type="submit"
-              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-              onClick={(e) => {
-                if (!confirm("Eliminar proveedor y todos sus pagos?")) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              Eliminar
-            </button>
+            <DeleteButton />
           </form>
         </div>
 
