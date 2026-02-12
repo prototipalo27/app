@@ -5,8 +5,10 @@ import {
   addPurchaseItem,
   updatePurchaseItemStatus,
   deletePurchaseItem,
-  clearPurchasedItems,
-} from "./actions";
+  closePurchaseList,
+  reopenPurchaseList,
+  deletePurchaseList,
+} from "../actions";
 
 interface Item {
   id: string;
@@ -14,7 +16,6 @@ interface Item {
   link: string | null;
   quantity: number | null;
   item_type: string | null;
-  provider: string | null;
   status: string | null;
   estimated_price: number | null;
   actual_price: number | null;
@@ -22,13 +23,6 @@ interface Item {
   received_at: string | null;
   notes: string | null;
 }
-
-const PROVIDERS = [
-  { value: "amazon", label: "Amazon" },
-  { value: "imprenta", label: "Imprenta" },
-  { value: "maderas", label: "Maderas" },
-  { value: "general", label: "General" },
-];
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente",
@@ -38,135 +32,105 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  purchased: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  received: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  purchased:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  received:
+    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
 };
 
-const PROVIDER_COLORS: Record<string, string> = {
-  amazon: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  imprenta: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  maderas: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  general: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-};
-
-export default function PurchaseList({ items }: { items: Item[] }) {
+export default function PurchaseItems({
+  listId,
+  listStatus,
+  items,
+}: {
+  listId: string;
+  listStatus: string;
+  items: Item[];
+}) {
   const [showForm, setShowForm] = useState(false);
-  const [filter, setFilter] = useState<string>("all");
   const [pricePromptId, setPricePromptId] = useState<string | null>(null);
   const [actualPrice, setActualPrice] = useState("");
 
-  const filteredItems =
-    filter === "all"
-      ? items
-      : items.filter((i) => (i.provider || "general") === filter);
-
-  const pendingItems = filteredItems.filter((i) => i.status === "pending");
-  const purchasedItems = filteredItems.filter((i) => i.status === "purchased");
-  const receivedItems = filteredItems.filter((i) => i.status === "received");
+  const pending = items.filter((i) => i.status === "pending").length;
+  const purchased = items.filter((i) => i.status === "purchased").length;
+  const received = items.filter((i) => i.status === "received").length;
 
   async function handleStatusChange(itemId: string, currentStatus: string) {
     if (currentStatus === "pending") {
       setPricePromptId(itemId);
       setActualPrice("");
     } else if (currentStatus === "purchased") {
-      await updatePurchaseItemStatus(itemId, "received");
+      await updatePurchaseItemStatus(itemId, "received", listId);
     }
   }
 
   async function handleConfirmPurchase(itemId: string) {
     const price = actualPrice ? parseFloat(actualPrice) : undefined;
-    await updatePurchaseItemStatus(itemId, "purchased", price);
+    await updatePurchaseItemStatus(itemId, "purchased", listId, price);
     setPricePromptId(null);
     setActualPrice("");
   }
 
   async function handleDelete(itemId: string) {
     if (!confirm("Eliminar este item?")) return;
-    await deletePurchaseItem(itemId);
+    await deletePurchaseItem(itemId, listId);
   }
 
-  async function handleClearReceived() {
-    if (!confirm("Limpiar todos los items recibidos?")) return;
-    await clearPurchasedItems();
-  }
-
-  // Count per provider for filter badges
-  const providerCounts = new Map<string, number>();
-  items.forEach((i) => {
-    if (i.status === "pending") {
-      const p = i.provider || "general";
-      providerCounts.set(p, (providerCounts.get(p) || 0) + 1);
+  async function handleToggleList() {
+    if (listStatus === "open") {
+      await closePurchaseList(listId);
+    } else {
+      await reopenPurchaseList(listId);
     }
-  });
+  }
+
+  async function handleDeleteList() {
+    if (!confirm("Eliminar esta lista y todos sus items?")) return;
+    await deletePurchaseList(listId);
+  }
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Actions bar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            Lista de compras
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {pendingItems.length} pendiente(s) &middot;{" "}
-            {purchasedItems.length} comprado(s) &middot;{" "}
-            {receivedItems.length} recibido(s)
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+            Items
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {pending} pendiente(s) &middot; {purchased} comprado(s) &middot;{" "}
+            {received} recibido(s)
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {receivedItems.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClearReceived}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Limpiar recibidos
-            </button>
-          )}
           <button
             type="button"
-            onClick={() => setShowForm(!showForm)}
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+            onClick={handleToggleList}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            {showForm ? "Cancelar" : "+ Añadir item"}
+            {listStatus === "open" ? "Cerrar lista" : "Reabrir lista"}
           </button>
+          <button
+            type="button"
+            onClick={handleDeleteList}
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            Eliminar lista
+          </button>
+          {listStatus === "open" && (
+            <button
+              type="button"
+              onClick={() => setShowForm(!showForm)}
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              {showForm ? "Cancelar" : "+ Añadir item"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Provider filter */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter("all")}
-          className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-            filter === "all"
-              ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-              : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-          }`}
-        >
-          Todos ({items.filter((i) => i.status === "pending").length})
-        </button>
-        {PROVIDERS.map((p) => {
-          const count = providerCounts.get(p.value) || 0;
-          return (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setFilter(p.value)}
-              className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-                filter === p.value
-                  ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                  : `${PROVIDER_COLORS[p.value]} hover:opacity-80`
-              }`}
-            >
-              {p.label} {count > 0 && `(${count})`}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Add item form */}
-      {showForm && (
+      {showForm && listStatus === "open" && (
         <form
           action={async (formData) => {
             await addPurchaseItem(formData);
@@ -174,6 +138,8 @@ export default function PurchaseList({ items }: { items: Item[] }) {
           }}
           className="mb-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50"
         >
+          <input type="hidden" name="purchase_list_id" value={listId} />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -198,7 +164,7 @@ export default function PurchaseList({ items }: { items: Item[] }) {
                 placeholder="https://..."
               />
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Cant.
@@ -210,22 +176,6 @@ export default function PurchaseList({ items }: { items: Item[] }) {
                   min={1}
                   className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Proveedor
-                </label>
-                <select
-                  name="provider"
-                  defaultValue={filter !== "all" ? filter : "general"}
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                >
-                  {PROVIDERS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -241,7 +191,7 @@ export default function PurchaseList({ items }: { items: Item[] }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Precio
+                  Precio est.
                 </label>
                 <input
                   type="number"
@@ -283,9 +233,6 @@ export default function PurchaseList({ items }: { items: Item[] }) {
               <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
                 Cant.
               </th>
-              <th className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">
-                Proveedor
-              </th>
               <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
                 Precio
               </th>
@@ -298,8 +245,8 @@ export default function PurchaseList({ items }: { items: Item[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {filteredItems.length > 0 ? (
-              filteredItems.map((item) => (
+            {items.length > 0 ? (
+              items.map((item) => (
                 <tr
                   key={item.id}
                   className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 ${
@@ -334,6 +281,11 @@ export default function PurchaseList({ items }: { items: Item[] }) {
                           Link
                         </a>
                       )}
+                      {item.item_type === "dtf" && (
+                        <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                          DTF
+                        </span>
+                      )}
                       {item.notes && (
                         <span className="mt-0.5 text-xs text-zinc-400">
                           {item.notes}
@@ -343,21 +295,6 @@ export default function PurchaseList({ items }: { items: Item[] }) {
                   </td>
                   <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
                     {item.quantity || 1}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        PROVIDER_COLORS[item.provider || "general"]
-                      }`}
-                    >
-                      {PROVIDERS.find((p) => p.value === item.provider)
-                        ?.label || item.provider}
-                    </span>
-                    {item.item_type === "dtf" && (
-                      <span className="ml-1 inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                        DTF
-                      </span>
-                    )}
                   </td>
                   <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
                     {item.actual_price != null ? (
@@ -444,12 +381,10 @@ export default function PurchaseList({ items }: { items: Item[] }) {
             ) : (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
                 >
-                  {filter !== "all"
-                    ? "No hay items de este proveedor."
-                    : "La lista esta vacia. Añade el primer item."}
+                  No hay items. Añade el primero.
                 </td>
               </tr>
             )}
