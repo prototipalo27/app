@@ -473,7 +473,7 @@ export default function StatementProcessor({
                     {claimHistory.map((claim) => (
                       <tr key={claim.id}>
                         <td className="px-3 py-2 text-zinc-900 dark:text-white">
-                          {new Date(claim.created_at).toLocaleDateString("es-ES")}
+                          {claim.created_at ? new Date(claim.created_at).toLocaleDateString("es-ES") : "—"}
                         </td>
                         <td className="px-3 py-2 text-zinc-900 dark:text-white">
                           {claim.suppliers?.name || "—"}
@@ -485,7 +485,7 @@ export default function StatementProcessor({
                           {Number(claim.total_amount).toFixed(2)}€
                         </td>
                         <td className="px-3 py-2">
-                          <StatusBadge status={claim.status} />
+                          <StatusBadge status={claim.status || "sent"} />
                         </td>
                       </tr>
                     ))}
