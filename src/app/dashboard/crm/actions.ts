@@ -1,0 +1,170 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/rbac";
+import { sendEmail } from "@/lib/email";
+import type { LeadStatus } from "@/lib/crm-config";
+
+// ── Create Lead (manual) ────────────────────────────────
+
+export async function createLead(formData: FormData) {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const fullName = formData.get("full_name") as string;
+  if (!fullName?.trim()) {
+    redirect("/dashboard/crm/new");
+  }
+
+  const assignedTo = (formData.get("assigned_to") as string)?.trim() || null;
+
+  const { data, error } = await supabase
+    .from("leads")
+    .insert({
+      full_name: fullName.trim(),
+      company: (formData.get("company") as string)?.trim() || null,
+      email: (formData.get("email") as string)?.trim() || null,
+      phone: (formData.get("phone") as string)?.trim() || null,
+      message: (formData.get("message") as string)?.trim() || null,
+      source: "manual",
+      assigned_to: assignedTo,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard/crm");
+  redirect(`/dashboard/crm/${data.id}`);
+}
+
+// ── Update Lead Status ───────────────────────────────────
+
+export async function updateLeadStatus(
+  id: string,
+  newStatus: LeadStatus,
+  lostReason?: string
+) {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get current status for the activity log
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("status")
+    .eq("id", id)
+    .single();
+
+  if (!lead) throw new Error("Lead no encontrado");
+
+  const oldStatus = lead.status;
+
+  const updates: Record<string, unknown> = { status: newStatus };
+  if (newStatus === "lost" && lostReason) {
+    updates.lost_reason = lostReason;
+  }
+
+  const { error } = await supabase.from("leads").update(updates).eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  // Log status change activity
+  await supabase.from("lead_activities").insert({
+    lead_id: id,
+    activity_type: "status_change",
+    content: `Estado cambiado de ${oldStatus} a ${newStatus}`,
+    metadata: { old_status: oldStatus, new_status: newStatus, lost_reason: lostReason || null },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+}
+
+// ── Assign Lead ──────────────────────────────────────────
+
+export async function assignLead(id: string, userId: string | null) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ assigned_to: userId })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+}
+
+// ── Add Note ─────────────────────────────────────────────
+
+export async function addNote(id: string, content: string) {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!content?.trim()) return;
+
+  const { error } = await supabase.from("lead_activities").insert({
+    lead_id: id,
+    activity_type: "note",
+    content: content.trim(),
+    created_by: profile.id,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/crm/${id}`);
+}
+
+// ── Send Email ───────────────────────────────────────────
+
+export async function sendLeadEmail(
+  id: string,
+  to: string,
+  subject: string,
+  body: string
+) {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!to?.trim() || !subject?.trim() || !body?.trim()) {
+    throw new Error("Email, asunto y cuerpo son obligatorios");
+  }
+
+  await sendEmail({
+    to: to.trim(),
+    subject: subject.trim(),
+    text: body.trim(),
+  });
+
+  // Log email activity
+  await supabase.from("lead_activities").insert({
+    lead_id: id,
+    activity_type: "email_sent",
+    content: body.trim(),
+    metadata: { email_to: to.trim(), email_subject: subject.trim() },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${id}`);
+}
+
+// ── Delete Lead ──────────────────────────────────────────
+
+export async function deleteLead(id: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("leads").delete().eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard/crm");
+  redirect("/dashboard/crm");
+}
