@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_statements: {
+        Row: {
+          id: string
+          month: number
+          year: number
+          file_name: string | null
+          transactions: Json
+          total_count: number
+          pending_count: number
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          month: number
+          year: number
+          file_name?: string | null
+          transactions: Json
+          total_count?: number
+          pending_count?: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          month?: number
+          year?: number
+          file_name?: string | null
+          transactions?: Json
+          total_count?: number
+          pending_count?: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       client_drive_folders: {
         Row: {
           client_name: string

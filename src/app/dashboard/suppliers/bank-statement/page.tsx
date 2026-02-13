@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { getSuppliers, getVendorMappings, getClaimHistory } from "./actions";
+import { getSuppliers, getVendorMappings, getClaimHistory, getStatements } from "./actions";
 import StatementProcessor from "./statement-processor";
 
 export default async function BankStatementPage() {
-  const [suppliers, vendorMappings, claimHistory] = await Promise.all([
+  const [suppliers, vendorMappings, claimHistory, statements] = await Promise.all([
     getSuppliers(),
     getVendorMappings(),
     getClaimHistory(),
+    getStatements(),
   ]);
 
   return (
@@ -22,10 +23,10 @@ export default async function BankStatementPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            Importar extracto bancario
+            Extractos bancarios
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Sube un extracto BBVA (.xlsx) para identificar pagos pendientes de factura y enviar reclamaciones
+            Gestiona extractos BBVA por mes, mapea proveedores y envia reclamaciones de facturas
           </p>
         </div>
       </div>
@@ -34,6 +35,7 @@ export default async function BankStatementPage() {
         suppliers={suppliers}
         vendorMappings={vendorMappings}
         claimHistory={claimHistory}
+        statements={statements}
       />
     </div>
   );

@@ -138,6 +138,84 @@ export async function sendClaimEmail(
   return { success: true };
 }
 
+// --- Bank Statement persistence ---
+
+export async function saveStatement(
+  month: number,
+  year: number,
+  fileName: string,
+  transactions: unknown[],
+  totalCount: number,
+  pendingCount: number
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("bank_statements")
+    .upsert(
+      {
+        month,
+        year,
+        file_name: fileName,
+        transactions: JSON.parse(JSON.stringify(transactions)),
+        total_count: totalCount,
+        pending_count: pendingCount,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "month,year" }
+    );
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/suppliers/bank-statement");
+}
+
+export async function getStatements() {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("bank_statements")
+    .select("id, month, year, file_name, total_count, pending_count, created_at, updated_at")
+    .order("year", { ascending: false })
+    .order("month", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getStatement(month: number, year: number) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("bank_statements")
+    .select("*")
+    .eq("month", month)
+    .eq("year", year)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return data;
+}
+
+export async function deleteStatement(month: number, year: number) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("bank_statements")
+    .delete()
+    .eq("month", month)
+    .eq("year", year);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/suppliers/bank-statement");
+}
+
 export async function getClaimHistory() {
   await requireRole("manager");
   const supabase = await createClient();
