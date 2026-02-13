@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail } from "@/lib/email";
+import { getOrCreateSubfolder } from "@/lib/google-drive/client";
+
+const INVOICES_DRIVE_PARENT = "1bzQ0UaPk3VDltG3hyX--cHTRqJYJRczV";
 
 export async function getSuppliers() {
   await requireRole("manager");
@@ -176,7 +179,7 @@ export async function getStatements() {
 
   const { data, error } = await supabase
     .from("bank_statements")
-    .select("id, month, year, file_name, total_count, pending_count, created_at, updated_at")
+    .select("id, month, year, file_name, total_count, pending_count, drive_folder_id, created_at, updated_at")
     .order("year", { ascending: false })
     .order("month", { ascending: false });
 
@@ -214,6 +217,43 @@ export async function deleteStatement(month: number, year: number) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard/suppliers/bank-statement");
+}
+
+const MONTH_NAMES_ES = [
+  "01 - Enero", "02 - Febrero", "03 - Marzo", "04 - Abril",
+  "05 - Mayo", "06 - Junio", "07 - Julio", "08 - Agosto",
+  "09 - Septiembre", "10 - Octubre", "11 - Noviembre", "12 - Diciembre",
+];
+
+export async function getOrCreateMonthFolder(month: number, year: number) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Check if we already have it cached
+  const { data: existing } = await supabase
+    .from("bank_statements")
+    .select("drive_folder_id")
+    .eq("month", month)
+    .eq("year", year)
+    .single();
+
+  if (existing?.drive_folder_id) {
+    return existing.drive_folder_id;
+  }
+
+  // Create year folder, then month subfolder
+  const yearFolderId = await getOrCreateSubfolder(INVOICES_DRIVE_PARENT, String(year));
+  const monthFolderName = MONTH_NAMES_ES[month - 1];
+  const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
+
+  // Cache the folder ID
+  await supabase
+    .from("bank_statements")
+    .update({ drive_folder_id: monthFolderId })
+    .eq("month", month)
+    .eq("year", year);
+
+  return monthFolderId;
 }
 
 export async function getClaimHistory() {

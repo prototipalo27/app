@@ -23,6 +23,7 @@ export type Database = {
           transactions: Json
           total_count: number
           pending_count: number
+          drive_folder_id: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -34,6 +35,7 @@ export type Database = {
           transactions: Json
           total_count?: number
           pending_count?: number
+          drive_folder_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -45,6 +47,7 @@ export type Database = {
           transactions?: Json
           total_count?: number
           pending_count?: number
+          drive_folder_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }

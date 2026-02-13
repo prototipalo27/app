@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useTransition } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   parseBBVAStatement,
   groupByVendor,
@@ -13,6 +13,7 @@ import {
   saveStatement,
   getStatement,
   deleteStatement,
+  getOrCreateMonthFolder,
 } from "./actions";
 
 interface Supplier {
@@ -45,6 +46,7 @@ export interface StatementSummary {
   file_name: string | null;
   total_count: number;
   pending_count: number;
+  drive_folder_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -76,7 +78,6 @@ export default function StatementProcessor({
   const [filterPending, setFilterPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isPending, startTransition] = useTransition();
   const [statements, setStatements] = useState<StatementSummary[]>(initialStatements);
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
 
@@ -202,6 +203,7 @@ export default function StatementProcessor({
               file_name: file.name,
               total_count: total,
               pending_count: pending,
+              drive_folder_id: null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             },
@@ -254,6 +256,28 @@ export default function StatementProcessor({
         );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al eliminar");
+      }
+    },
+    [selectedYear]
+  );
+
+  // Open Drive folder for a month (create if needed)
+  const handleOpenDriveFolder = useCallback(
+    async (month: number) => {
+      setError(null);
+      try {
+        const folderId = await getOrCreateMonthFolder(month, selectedYear);
+        // Update local cache
+        setStatements((prev) =>
+          prev.map((s) =>
+            s.month === month && s.year === selectedYear
+              ? { ...s, drive_folder_id: folderId }
+              : s
+          )
+        );
+        window.open(`https://drive.google.com/drive/folders/${folderId}`, "_blank");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error al abrir carpeta Drive");
       }
     },
     [selectedYear]
@@ -436,13 +460,24 @@ export default function StatementProcessor({
                         </span>
                       )}
                       <div className="mt-3 flex flex-col gap-1.5">
-                        <button
-                          onClick={() => handleLoadMonth(month)}
-                          disabled={loading}
-                          className="w-full rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                        >
-                          Abrir
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleLoadMonth(month)}
+                            disabled={loading}
+                            className="flex-1 rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Abrir
+                          </button>
+                          <button
+                            onClick={() => handleOpenDriveFolder(month)}
+                            title="Abrir carpeta en Drive"
+                            className="rounded-lg bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            </svg>
+                          </button>
+                        </div>
                         <div className="flex gap-1">
                           <label className="flex-1 cursor-pointer rounded-lg border border-zinc-300 px-2 py-1 text-center text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
                             Reemplazar
@@ -509,16 +544,29 @@ export default function StatementProcessor({
                 )}
               </div>
             </div>
-            <label className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
-              Reemplazar extracto
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => handleFileUpload(e, activeMonth ?? undefined)}
-                className="hidden"
-                disabled={loading}
-              />
-            </label>
+            <div className="flex items-center gap-2">
+              {activeMonth && (
+                <button
+                  onClick={() => handleOpenDriveFolder(activeMonth)}
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  Facturas en Drive
+                </button>
+              )}
+              <label className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                Reemplazar extracto
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => handleFileUpload(e, activeMonth ?? undefined)}
+                  className="hidden"
+                  disabled={loading}
+                />
+              </label>
+            </div>
           </div>
 
           {/* Summary */}

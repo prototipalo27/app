@@ -142,11 +142,14 @@ export function extractVendorName(description: string): string {
   // Remove trailing date patterns (dd/mm, dd/mm/yy)
   name = name.replace(/\s+\d{2}\/\d{2}(\/\d{2,4})?\s*$/, "");
 
-  // Normalize Amazon variants
-  if (/amazon/i.test(name)) {
+  // Normalize Amazon variants — group all AMZN Mktp together
+  if (/amzn\s*mktp/i.test(name) || /amazon\s*market/i.test(name)) {
+    return "Amazon Marketplace";
+  }
+  if (/amazon/i.test(name) || /amzn/i.test(name)) {
     if (/prime/i.test(name)) return "Amazon Prime";
     if (/web\s*services|aws/i.test(name)) return "Amazon Web Services";
-    return "Amazon";
+    return "Amazon Marketplace";
   }
 
   // Normalize PayPal

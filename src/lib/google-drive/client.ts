@@ -134,6 +134,32 @@ export async function listFolderFiles(
 }
 
 /**
+ * Find a subfolder by name inside a parent, or create it if missing.
+ * Returns the folder ID.
+ */
+export async function getOrCreateSubfolder(
+  parentId: string,
+  folderName: string,
+): Promise<string> {
+  const drive = getDriveClient();
+
+  // Search for existing folder
+  const res = await drive.files.list({
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    q: `'${parentId}' in parents and name = '${folderName.replace(/'/g, "\\'")}' and mimeType = '${FOLDER_MIME}' and trashed = false`,
+    fields: "files(id)",
+    pageSize: 1,
+  });
+
+  if (res.data.files && res.data.files.length > 0 && res.data.files[0].id) {
+    return res.data.files[0].id;
+  }
+
+  return createFolder(drive, folderName, parentId);
+}
+
+/**
  * Get a thumbnail/preview URL for a file.
  */
 export async function getFilePreviewUrl(
