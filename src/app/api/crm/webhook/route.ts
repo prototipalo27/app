@@ -27,16 +27,38 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = await request.json();
+    console.log("CRM webhook raw payload:", JSON.stringify(payload));
 
     // Webflow sends data nested under payload.data or directly
     const data = payload?.data || payload;
 
-    const fullName =
-      data["Nombre completo"] || data["full_name"] || data["name"] || "";
-    const company = data["Empresa"] || data["company"] || null;
-    const email = data["Email"] || data["email"] || null;
-    const phone = data["Telefono"] || data["phone"] || null;
-    const message = data["Mensaje"] || data["message"] || null;
+    // Helper: find a field value by checking multiple possible key names (case-insensitive)
+    function findField(obj: Record<string, unknown>, keys: string[]): string | null {
+      for (const key of keys) {
+        const lower = key.toLowerCase();
+        for (const [k, v] of Object.entries(obj)) {
+          if (k.toLowerCase() === lower && v) return String(v);
+        }
+      }
+      return null;
+    }
+
+    const fullName = findField(data, [
+      "Nombre completo", "nombre-completo", "nombre_completo",
+      "full_name", "full-name", "fullname", "name", "nombre",
+    ]) || "";
+    const company = findField(data, [
+      "Empresa", "empresa", "company", "compañia", "compania",
+    ]);
+    const email = findField(data, [
+      "Email", "email", "e-mail", "correo",
+    ]);
+    const phone = findField(data, [
+      "Telefono", "telefono", "teléfono", "phone", "tel",
+    ]);
+    const message = findField(data, [
+      "Mensaje", "mensaje", "message", "comentario", "comentarios",
+    ]);
     const submissionId =
       payload?._id || payload?.submissionId || data?._id || null;
 
