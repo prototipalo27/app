@@ -14,42 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      bank_statements: {
+      app_metadata: {
         Row: {
-          id: string
-          month: number
-          year: number
-          file_name: string | null
-          transactions: Json
-          total_count: number
-          pending_count: number
-          drive_folder_id: string | null
-          created_at: string | null
+          key: string
           updated_at: string | null
+          value: string | null
         }
         Insert: {
-          id?: string
-          month: number
-          year: number
-          file_name?: string | null
-          transactions: Json
-          total_count?: number
-          pending_count?: number
-          drive_folder_id?: string | null
-          created_at?: string | null
+          key: string
           updated_at?: string | null
+          value?: string | null
         }
         Update: {
+          key?: string
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
+      bank_statements: {
+        Row: {
+          created_at: string | null
+          drive_folder_id: string | null
+          file_name: string | null
+          id: string
+          month: number
+          pending_count: number
+          total_count: number
+          transactions: Json
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          drive_folder_id?: string | null
+          file_name?: string | null
+          id?: string
+          month: number
+          pending_count?: number
+          total_count?: number
+          transactions: Json
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          drive_folder_id?: string | null
+          file_name?: string | null
           id?: string
           month?: number
-          year?: number
-          file_name?: string | null
-          transactions?: Json
-          total_count?: number
           pending_count?: number
-          drive_folder_id?: string | null
-          created_at?: string | null
+          total_count?: number
+          transactions?: Json
           updated_at?: string | null
+          year?: number
         }
         Relationships: []
       }

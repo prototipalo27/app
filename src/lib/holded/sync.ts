@@ -295,5 +295,11 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
   }
 
+  // ── Record sync timestamp ──────────────────────────────
+  await supabase
+    .from("app_metadata")
+    .update({ value: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("key", "last_holded_sync");
+
   return result;
 }

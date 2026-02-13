@@ -5,6 +5,7 @@ import { KanbanBoard } from "./kanban-board";
 import { UpcomingProjects } from "./upcoming-projects";
 import { RealtimeProjectsListener } from "./realtime-projects";
 import { SyncHoldedButton } from "./sync-holded-button";
+import { AutoSync } from "./auto-sync";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -26,8 +27,15 @@ export default async function DashboardPage() {
     .eq("project_type", "confirmed")
     .order("created_at", { ascending: false });
 
+  const { data: syncMeta } = await supabase
+    .from("app_metadata")
+    .select("value")
+    .eq("key", "last_holded_sync")
+    .single();
+
   return (
     <>
+      <AutoSync lastSyncAt={syncMeta?.value ?? null} />
       <div className="mb-6 flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
