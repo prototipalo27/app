@@ -55,13 +55,44 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
   return (
     <DragDropProvider onDragEnd={handleDragEnd}>
       <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((column) => (
-          <KanbanColumn
-            key={column.id}
-            column={column}
-            projects={projects.filter((p) => p.status === column.id)}
-          />
-        ))}
+        {COLUMNS.map((column) => {
+          // Stack QC below post_processing, delivered below shipping
+          if (column.id === "qc" || column.id === "delivered") return null;
+
+          const stackedId =
+            column.id === "post_processing"
+              ? "qc"
+              : column.id === "shipping"
+                ? "delivered"
+                : null;
+
+          const stackedColumn = stackedId
+            ? COLUMNS.find((c) => c.id === stackedId)
+            : null;
+
+          if (stackedColumn) {
+            return (
+              <div key={column.id} className="flex shrink-0 flex-col gap-4">
+                <KanbanColumn
+                  column={column}
+                  projects={projects.filter((p) => p.status === column.id)}
+                />
+                <KanbanColumn
+                  column={stackedColumn}
+                  projects={projects.filter((p) => p.status === stackedColumn.id)}
+                />
+              </div>
+            );
+          }
+
+          return (
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              projects={projects.filter((p) => p.status === column.id)}
+            />
+          );
+        })}
       </div>
     </DragDropProvider>
   );
