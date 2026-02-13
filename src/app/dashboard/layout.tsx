@@ -60,8 +60,8 @@ export default async function DashboardLayout({
       <aside className="hidden w-64 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 p-5 dark:border-zinc-800">
           <Link href="/dashboard">
-            <Image src="/logo-light.png" alt="Prototipalo" width={180} height={40} className="h-8 w-auto dark:hidden" priority />
-            <Image src="/logo-dark.png" alt="Prototipalo" width={180} height={40} className="hidden h-8 w-auto dark:block" priority />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-10 w-auto dark:hidden" priority />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-10 w-auto dark:block" priority />
           </Link>
         </div>
 

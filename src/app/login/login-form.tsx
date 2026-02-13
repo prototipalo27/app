@@ -14,12 +14,9 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex justify-center">
-        <Image src="/logo-light.png" alt="Prototipalo" width={200} height={45} className="h-10 w-auto dark:hidden" priority />
-        <Image src="/logo-dark.png" alt="Prototipalo" width={200} height={45} className="hidden h-10 w-auto dark:block" priority />
+        <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-14 w-auto dark:hidden" priority />
+        <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-14 w-auto dark:block" priority />
       </div>
-      <p className="mt-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        Inicia sesion en tu cuenta
-      </p>
 
       {urlError && (
         <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
@@ -40,7 +37,7 @@ export default function LoginForm() {
             name="email"
             type="email"
             required
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-green-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
             placeholder="you@prototipalo.com"
           />
         </div>
@@ -58,7 +55,7 @@ export default function LoginForm() {
             type="password"
             required
             minLength={6}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-green-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-400"
             placeholder="••••••••"
           />
         </div>
@@ -72,7 +69,7 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
+          className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 dark:focus:ring-zinc-400 dark:focus:ring-offset-zinc-900"
         >
           {isPending ? "Signing in..." : "Sign in"}
         </button>
@@ -87,7 +84,7 @@ export default function LoginForm() {
       <button
         onClick={() => startGoogleTransition(() => signInWithGoogle())}
         disabled={googlePending}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:focus:ring-offset-zinc-900"
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:focus:ring-offset-zinc-900"
       >
         <svg className="h-4 w-4" viewBox="0 0 24 24">
           <path
