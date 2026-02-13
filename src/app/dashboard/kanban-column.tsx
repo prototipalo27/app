@@ -8,13 +8,14 @@ import type { COLUMNS } from "@/lib/kanban-config";
 interface KanbanColumnProps {
   column: (typeof COLUMNS)[number];
   projects: ProjectWithItems[];
+  className?: string;
 }
 
-export function KanbanColumn({ column, projects }: KanbanColumnProps) {
+export function KanbanColumn({ column, projects, className }: KanbanColumnProps) {
   const { ref, isDropTarget } = useDroppable({ id: column.id });
 
   return (
-    <div className="flex w-70 shrink-0 flex-col rounded-xl bg-zinc-100 dark:bg-zinc-900">
+    <div className={`flex w-70 shrink-0 flex-col rounded-xl bg-zinc-100 dark:bg-zinc-900 ${className ?? ""}`}>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />

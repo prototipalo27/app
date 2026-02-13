@@ -100,15 +100,17 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
     <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-4">
         {COLUMNS.map((column) => {
-          // Stack QC below post_processing, delivered below shipping
-          if (column.id === "qc" || column.id === "delivered") return null;
+          // These are rendered as the bottom half of a stacked pair
+          if (column.id === "printing" || column.id === "qc" || column.id === "delivered") return null;
 
           const stackedId =
-            column.id === "post_processing"
-              ? "qc"
-              : column.id === "shipping"
-                ? "delivered"
-                : null;
+            column.id === "design"
+              ? "printing"
+              : column.id === "post_processing"
+                ? "qc"
+                : column.id === "shipping"
+                  ? "delivered"
+                  : null;
 
           const stackedColumn = stackedId
             ? COLUMNS.find((c) => c.id === stackedId)
@@ -116,12 +118,14 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
           if (stackedColumn) {
             return (
-              <div key={column.id} className="flex shrink-0 flex-col gap-4">
+              <div key={column.id} className="flex shrink-0 flex-col gap-3">
                 <KanbanColumn
+                  className="min-h-0 flex-1"
                   column={column}
                   projects={projects.filter((p) => p.status === column.id)}
                 />
                 <KanbanColumn
+                  className="min-h-0 flex-1"
                   column={stackedColumn}
                   projects={projects.filter((p) => p.status === stackedColumn.id)}
                 />
