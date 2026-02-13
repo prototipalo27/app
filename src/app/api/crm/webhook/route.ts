@@ -9,6 +9,20 @@ function getSupabase() {
   );
 }
 
+async function logWebhook(method: string, headers: Record<string, string>, body: string) {
+  try {
+    const supabase = getSupabase();
+    await supabase.from("webhook_logs").insert({
+      endpoint: "/api/crm/webhook",
+      method,
+      headers,
+      body,
+    });
+  } catch (e) {
+    console.error("Failed to log webhook:", e);
+  }
+}
+
 /**
  * POST /api/crm/webhook?secret=CRM_WEBHOOK_SECRET
  *
@@ -16,6 +30,14 @@ function getSupabase() {
  * Protected by CRM_WEBHOOK_SECRET query param.
  */
 export async function POST(request: NextRequest) {
+  // Capture raw body first for debugging
+  const rawBody = await request.text();
+  const headerObj: Record<string, string> = {};
+  request.headers.forEach((v, k) => { headerObj[k] = v; });
+
+  // Log everything that arrives, before any validation
+  await logWebhook("POST", headerObj, rawBody);
+
   const secret = process.env.CRM_WEBHOOK_SECRET;
   if (secret) {
     const url = new URL(request.url);
@@ -26,8 +48,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const payload = await request.json();
-    console.log("CRM webhook raw payload:", JSON.stringify(payload));
+    const payload = JSON.parse(rawBody);
 
     // Webflow sends data nested under payload.data or directly
     const data = payload?.data || payload;
@@ -121,4 +142,13 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// Also handle GET in case Webflow sends a verification request
+export async function GET(request: NextRequest) {
+  const headerObj: Record<string, string> = {};
+  request.headers.forEach((v, k) => { headerObj[k] = v; });
+  await logWebhook("GET", headerObj, new URL(request.url).search);
+
+  return NextResponse.json({ ok: true, message: "CRM webhook is active" });
 }
