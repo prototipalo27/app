@@ -446,6 +446,7 @@ export type Database = {
       }
       project_items: {
         Row: {
+          batch_size: number
           completed: number
           created_at: string
           id: string
@@ -454,6 +455,7 @@ export type Database = {
           quantity: number
         }
         Insert: {
+          batch_size?: number
           completed?: number
           created_at?: string
           id?: string
@@ -462,6 +464,7 @@ export type Database = {
           quantity?: number
         }
         Update: {
+          batch_size?: number
           completed?: number
           created_at?: string
           id?: string

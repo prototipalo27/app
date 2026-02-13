@@ -133,7 +133,8 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Failed to create folder");
+        const detail = data.details ? ` (${JSON.stringify(data.details)})` : "";
+        throw new Error((data.error ?? "Failed to create folder") + detail);
       }
       // Reload the page to pick up the new folder ID
       window.location.reload();

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-export async function addItem(projectId: string, name: string, quantity: number) {
+export async function addItem(projectId: string, name: string, quantity: number, batchSize: number = 1) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -16,6 +16,7 @@ export async function addItem(projectId: string, name: string, quantity: number)
     project_id: projectId,
     name: name.trim(),
     quantity: Math.max(1, quantity),
+    batch_size: Math.max(1, batchSize),
   });
 
   if (error) {
@@ -56,6 +57,34 @@ export async function updateItemCompleted(itemId: string, completed: number) {
 
   revalidatePath(`/dashboard/projects/${item.project_id}`);
   revalidatePath("/dashboard");
+}
+
+export async function updateItemBatchSize(itemId: string, batchSize: number) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    redirect("/login");
+  }
+
+  const { data: item } = await supabase
+    .from("project_items")
+    .select("project_id")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item not found");
+
+  const { error } = await supabase
+    .from("project_items")
+    .update({ batch_size: Math.max(1, batchSize) })
+    .eq("id", itemId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/dashboard/projects/${item.project_id}`);
 }
 
 export async function deleteItem(itemId: string) {

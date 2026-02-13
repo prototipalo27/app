@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { addItem, updateItemCompleted, deleteItem } from "../items-actions";
+import { addItem, updateItemCompleted, updateItemBatchSize, deleteItem } from "../items-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 
 interface ProjectItemsProps {
@@ -14,17 +14,21 @@ function ItemRow({
   isPending,
   onUpdate,
   onDelete,
+  onBatchChange,
 }: {
   item: Tables<"project_items">;
   isPending: boolean;
   onUpdate: (id: string, completed: number) => void;
   onDelete: (id: string) => void;
+  onBatchChange: (id: string, batchSize: number) => void;
 }) {
   const [local, setLocal] = useState(item.completed);
+  const [editingBatch, setEditingBatch] = useState(false);
   const dragging = useRef(false);
   const prevServer = useRef(item.completed);
   const isComplete = local === item.quantity;
   const pct = item.quantity > 0 ? (local / item.quantity) * 100 : 0;
+  const batch = item.batch_size ?? 1;
 
   // Sync with server value only when it actually changes from the server
   if (item.completed !== prevServer.current) {
@@ -43,7 +47,7 @@ function ItemRow({
 
   return (
     <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-      {/* Top row: check + name + count + delete */}
+      {/* Top row: check + name + batch badge + count + delete */}
       <div className="flex items-center gap-2">
         {isComplete ? (
           <span className="text-green-500">
@@ -57,6 +61,41 @@ function ItemRow({
         <span className={`flex-1 text-sm font-medium ${isComplete ? "text-green-600 dark:text-green-400" : "text-zinc-900 dark:text-white"}`}>
           {item.name}
         </span>
+
+        {/* Batch size badge */}
+        {editingBatch ? (
+          <input
+            type="number"
+            min={1}
+            defaultValue={batch}
+            autoFocus
+            className="w-14 rounded border border-green-400 bg-white px-1.5 py-0.5 text-center text-xs font-medium text-zinc-900 focus:outline-none dark:border-green-600 dark:bg-zinc-800 dark:text-white"
+            onBlur={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (val && val >= 1 && val !== batch) {
+                onBatchChange(item.id, val);
+              }
+              setEditingBatch(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                (e.target as HTMLInputElement).blur();
+              } else if (e.key === "Escape") {
+                setEditingBatch(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingBatch(true)}
+            className="rounded bg-zinc-200/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-zinc-500 hover:bg-green-100 hover:text-green-700 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-green-900/30 dark:hover:text-green-400"
+            title={`Bandeja: ${batch} uds. Click para cambiar.`}
+          >
+            ×{batch}
+          </button>
+        )}
+
         <span className={`text-sm tabular-nums ${isComplete ? "font-semibold text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}>
           {local}/{item.quantity}
         </span>
@@ -77,7 +116,7 @@ function ItemRow({
       <div className="mt-2.5 flex items-center gap-2.5">
         <button
           type="button"
-          onClick={() => commit(local - 1)}
+          onClick={() => commit(local - batch)}
           disabled={isPending || local === 0}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-white text-base font-bold text-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600 dark:active:bg-zinc-500"
         >
@@ -88,6 +127,7 @@ function ItemRow({
           type="range"
           min={0}
           max={item.quantity}
+          step={batch}
           value={local}
           onChange={(e) => { dragging.current = true; setLocal(Number(e.target.value)); }}
           onMouseUp={() => commit(local)}
@@ -102,7 +142,7 @@ function ItemRow({
 
         <button
           type="button"
-          onClick={() => commit(local + 1)}
+          onClick={() => commit(local + batch)}
           disabled={isPending || isComplete}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-white text-base font-bold text-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600 dark:active:bg-zinc-500"
         >
@@ -119,15 +159,22 @@ export function ProjectItems({ projectId, items }: ProjectItemsProps) {
   function handleAdd(formData: FormData) {
     const name = (formData.get("name") as string)?.trim();
     const qty = parseInt(formData.get("quantity") as string, 10) || 1;
+    const batch = parseInt(formData.get("batch_size") as string, 10) || 1;
     if (!name) return;
     startTransition(async () => {
-      await addItem(projectId, name, qty);
+      await addItem(projectId, name, qty, batch);
     });
   }
 
   function handleUpdate(itemId: string, completed: number) {
     startTransition(async () => {
       await updateItemCompleted(itemId, completed);
+    });
+  }
+
+  function handleBatchChange(itemId: string, batchSize: number) {
+    startTransition(async () => {
+      await updateItemBatchSize(itemId, batchSize);
     });
   }
 
@@ -157,7 +204,17 @@ export function ProjectItems({ projectId, items }: ProjectItemsProps) {
           name="quantity"
           min={1}
           defaultValue={1}
+          title="Cantidad total"
           className="w-18 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+        />
+        <input
+          type="number"
+          name="batch_size"
+          min={1}
+          defaultValue={1}
+          title="Uds. por bandeja"
+          placeholder="×"
+          className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
         />
         <button
           type="submit"
@@ -180,6 +237,7 @@ export function ProjectItems({ projectId, items }: ProjectItemsProps) {
               isPending={isPending}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
+              onBatchChange={handleBatchChange}
             />
           ))}
         </div>

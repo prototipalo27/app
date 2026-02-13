@@ -31,9 +31,15 @@ export async function GET(request: NextRequest) {
   try {
     const files = await listFolderFiles(folderId);
     return NextResponse.json(files);
-  } catch (err) {
+  } catch (err: unknown) {
+    console.error("[Drive GET] Error listing files:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Surface Google API error details if available
+    const details = (err as { errors?: unknown[] })?.errors;
+    return NextResponse.json(
+      { error: message, details: details ?? null },
+      { status: 500 },
+    );
   }
 }
 
@@ -122,8 +128,20 @@ export async function POST(request: NextRequest) {
       .eq("id", project.id);
 
     return NextResponse.json({ folderId });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err: unknown) {
+    console.error("[Drive POST] Error creating folder:", err);
+    // Extract Google API error details
+    let message = "Unknown error";
+    let details: unknown = null;
+    if (err instanceof Error) {
+      message = err.message;
+      // googleapis wraps errors with response data
+      const gErr = err as { response?: { data?: { error?: { message?: string; errors?: unknown[] } } }; code?: number };
+      if (gErr.response?.data?.error) {
+        message = gErr.response.data.error.message ?? message;
+        details = gErr.response.data.error.errors ?? null;
+      }
+    }
+    return NextResponse.json({ error: message, details }, { status: 500 });
   }
 }
