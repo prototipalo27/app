@@ -2,6 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { login, signInWithGoogle } from "./actions";
 
 export default function LoginForm() {
@@ -12,11 +13,12 @@ export default function LoginForm() {
 
   return (
     <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h1 className="text-center text-2xl font-bold text-zinc-900 dark:text-white">
-        Sign in
-      </h1>
-      <p className="mt-1 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        Welcome back to Prototipalo
+      <div className="flex justify-center">
+        <Image src="/logo-light.png" alt="Prototipalo" width={200} height={45} className="h-10 w-auto dark:hidden" priority />
+        <Image src="/logo-dark.png" alt="Prototipalo" width={200} height={45} className="hidden h-10 w-auto dark:block" priority />
+      </div>
+      <p className="mt-3 text-center text-sm text-zinc-500 dark:text-zinc-400">
+        Inicia sesion en tu cuenta
       </p>
 
       {urlError && (

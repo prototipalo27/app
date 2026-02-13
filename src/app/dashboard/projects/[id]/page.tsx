@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { updateProjectStatus, deleteProject } from "../actions";
+import { updateProjectStatus, deleteProject, updateProjectDeadline } from "../actions";
+import { DeadlinePicker } from "./deadline-picker";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { getContact } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
@@ -188,7 +189,11 @@ export default async function ProjectDetailPage({
           <DetailRow label="Material" value={project.material} />
           <DetailRow label="Printer" value={project.assigned_printer} />
           <DetailRow label="Print time" value={project.print_time_minutes ? formatMinutes(project.print_time_minutes) : null} />
-          <DetailRow label="Price" value={project.price !== null ? `${Number(project.price).toFixed(2)}` : null} />
+          <DetailRow label="Price" value={project.price !== null ? `${Number(project.price).toFixed(2)} €` : null} />
+          <div className="flex items-center justify-between border-b border-zinc-100 py-2.5 last:border-0 dark:border-zinc-800">
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">Fecha de entrega</span>
+            <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
+          </div>
           <DetailRow label="Created" value={new Date(project.created_at).toLocaleString()} />
           <DetailRow label="Updated" value={new Date(project.updated_at).toLocaleString()} />
           {project.notes && (

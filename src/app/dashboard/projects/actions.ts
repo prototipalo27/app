@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
+import { syncHoldedDocuments, type SyncResult } from "@/lib/holded/sync";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -86,6 +87,32 @@ export async function updateProjectStatusById(id: string, status: string) {
   }
 
   revalidatePath("/dashboard");
+}
+
+export async function updateProjectDeadline(projectId: string, deadline: string | null) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ deadline })
+    .eq("id", projectId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+}
+
+export async function triggerHoldedSync(): Promise<SyncResult> {
+  await requireRole("manager");
+  const result = await syncHoldedDocuments();
+  revalidatePath("/dashboard");
+  return result;
 }
 
 export async function deleteProject(formData: FormData) {

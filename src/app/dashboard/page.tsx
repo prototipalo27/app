@@ -4,6 +4,7 @@ import Link from "next/link";
 import { KanbanBoard } from "./kanban-board";
 import { UpcomingProjects } from "./upcoming-projects";
 import { RealtimeProjectsListener } from "./realtime-projects";
+import { SyncHoldedButton } from "./sync-holded-button";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -36,12 +37,15 @@ export default async function DashboardPage() {
             Gestiona tus proyectos de produccion
           </p>
         </div>
-        <Link
-          href="/dashboard/projects/new"
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
-        >
-          Nuevo proyecto
-        </Link>
+        <div className="flex items-center gap-3">
+          <SyncHoldedButton />
+          <Link
+            href="/dashboard/projects/new"
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
+          >
+            Nuevo proyecto
+          </Link>
+        </div>
       </div>
 
       <RealtimeProjectsListener />
