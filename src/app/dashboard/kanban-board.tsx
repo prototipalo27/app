@@ -118,14 +118,14 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
           if (stackedColumn) {
             return (
-              <div key={column.id} className="flex min-h-0 flex-col gap-3">
+              <div key={column.id} className="grid min-h-0 grid-rows-2 gap-3">
                 <KanbanColumn
-                  className="min-h-0 flex-1"
+                  className="min-h-0 overflow-hidden"
                   column={column}
                   projects={projects.filter((p) => p.status === column.id)}
                 />
                 <KanbanColumn
-                  className="min-h-0 flex-1"
+                  className="min-h-0 overflow-hidden"
                   column={stackedColumn}
                   projects={projects.filter((p) => p.status === stackedColumn.id)}
                 />
