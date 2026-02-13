@@ -60,7 +60,7 @@ export function KanbanCard({ project }: KanbanCardProps) {
       {/* Compact view: name + deadline */}
       <div className="flex items-center justify-between gap-2">
         <h4 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
-          {project.name}
+          {project.client_name || project.name}
         </h4>
         {deadline.label && (
           <span className="shrink-0 text-[11px] font-medium">
