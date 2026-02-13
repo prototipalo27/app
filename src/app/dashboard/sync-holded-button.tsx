@@ -14,6 +14,7 @@ export function SyncHoldedButton() {
       const res = await triggerHoldedSync();
       const parts = [];
       if (res.newUpcoming > 0) parts.push(`${res.newUpcoming} nuevo(s)`);
+      if (res.newFromInvoice > 0) parts.push(`${res.newFromInvoice} factura(s)`);
       if (res.converted > 0) parts.push(`${res.converted} confirmado(s)`);
       setResult(parts.length > 0 ? parts.join(", ") : "Sin cambios");
       setTimeout(() => setResult(null), 4000);
