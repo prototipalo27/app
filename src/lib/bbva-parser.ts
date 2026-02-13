@@ -115,6 +115,17 @@ export function extractVendorName(description: string): string {
   // Remove card number prefix: "1234****5678 " or similar
   name = name.replace(/^[\d*]{8,}\s+/, "");
 
+  // Early check on raw description: group all AMZN Mktp / Amazon variants
+  // Catches "AMZN Mktp ES*Z748Q43G4", "AMZN Mktp ES*EU0QW73W5", etc.
+  if (/amzn\s*mktp/i.test(name) || /amazon\s*market/i.test(name)) {
+    return "Amazon Marketplace";
+  }
+  if (/amazon/i.test(name) || /amzn/i.test(name)) {
+    if (/prime/i.test(name)) return "Amazon Prime";
+    if (/web\s*services|aws/i.test(name)) return "Amazon Web Services";
+    return "Amazon Marketplace";
+  }
+
   // Remove trailing payment method phrases
   const suffixPatterns = [
     /\s+PAGO CON TARJETA.*$/i,
@@ -141,16 +152,6 @@ export function extractVendorName(description: string): string {
 
   // Remove trailing date patterns (dd/mm, dd/mm/yy)
   name = name.replace(/\s+\d{2}\/\d{2}(\/\d{2,4})?\s*$/, "");
-
-  // Normalize Amazon variants — group all AMZN Mktp together
-  if (/amzn\s*mktp/i.test(name) || /amazon\s*market/i.test(name)) {
-    return "Amazon Marketplace";
-  }
-  if (/amazon/i.test(name) || /amzn/i.test(name)) {
-    if (/prime/i.test(name)) return "Amazon Prime";
-    if (/web\s*services|aws/i.test(name)) return "Amazon Web Services";
-    return "Amazon Marketplace";
-  }
 
   // Normalize PayPal
   if (/paypal/i.test(name)) {

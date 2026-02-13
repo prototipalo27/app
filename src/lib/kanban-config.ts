@@ -15,7 +15,7 @@ export const COLUMNS: {
 }[] = [
   {
     id: "pending",
-    label: "Pending",
+    label: "Pedidos Nuevos",
     accent: "bg-zinc-400",
     badge: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   },

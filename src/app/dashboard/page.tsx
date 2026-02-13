@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { KanbanBoard } from "./kanban-board";
 import { UpcomingProjects } from "./upcoming-projects";
+import { RealtimeProjectsListener } from "./realtime-projects";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -29,26 +30,28 @@ export default async function DashboardPage() {
       <div className="mb-6 flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            Projects
+            Proyectos
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Manage your production projects
+            Gestiona tus proyectos de produccion
           </p>
         </div>
         <Link
           href="/dashboard/projects/new"
           className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
         >
-          New project
+          Nuevo proyecto
         </Link>
       </div>
+
+      <RealtimeProjectsListener />
 
       <UpcomingProjects projects={upcomingProjects ?? []} />
 
       {!confirmedProjects || confirmedProjects.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No projects yet. Create your first project to get started.
+            No hay proyectos. Crea tu primer proyecto para empezar.
           </p>
         </div>
       ) : (

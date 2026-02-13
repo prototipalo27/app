@@ -285,6 +285,7 @@ export type Database = {
           client_name: string | null
           created_at: string
           created_by: string | null
+          deadline: string | null
           description: string | null
           google_drive_folder_id: string | null
           holded_contact_id: string | null
@@ -307,6 +308,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          deadline?: string | null
           description?: string | null
           google_drive_folder_id?: string | null
           holded_contact_id?: string | null
@@ -329,6 +331,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           created_by?: string | null
+          deadline?: string | null
           description?: string | null
           google_drive_folder_id?: string | null
           holded_contact_id?: string | null
