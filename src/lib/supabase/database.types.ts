@@ -95,6 +95,85 @@ export type Database = {
         }
         Relationships: []
       }
+      improvement_requests: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          description: string
+          id: string
+          manager_notes: string | null
+          priority: string | null
+          request_type: string
+          requested_by: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          manager_notes?: string | null
+          priority?: string | null
+          request_type: string
+          requested_by: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          manager_notes?: string | null
+          priority?: string | null
+          request_type?: string
+          requested_by?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "improvement_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "improvement_requests_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "improvement_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_claims: {
         Row: {
           claim_date: string | null
