@@ -1,0 +1,139 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+
+function NavLink({ href, label, icon, exact = false, alsoMatch }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string }) {
+  const pathname = usePathname();
+  const isActive = (exact ? pathname === href : pathname?.startsWith(href)) || (alsoMatch && pathname?.startsWith(alsoMatch));
+
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+        isActive
+          ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      }`}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <>
+      <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
+      <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        {label}
+      </p>
+    </>
+  );
+}
+
+export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boolean; isSuperAdmin: boolean }) {
+  return (
+    <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+      {/* ── VENTAS ── */}
+      {isManager && (
+        <>
+          <SectionLabel label="Ventas" />
+          <NavLink
+            href="/dashboard/crm"
+            label="Leads"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            }
+          />
+        </>
+      )}
+
+      {/* ── PRODUCCIÓN ── */}
+      <SectionLabel label="Producción" />
+      <NavLink
+        href="/dashboard"
+        exact
+        alsoMatch="/dashboard/projects"
+        label="Proyectos"
+        icon={
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        }
+      />
+      <NavLink
+        href="/dashboard/printers"
+        label="Impresoras"
+        icon={
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+        }
+      />
+      <NavLink
+        href="/dashboard/shipments"
+        label="Envíos"
+        icon={
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+          </svg>
+        }
+      />
+
+      {/* ── COMPRAS ── */}
+      {isManager && (
+        <>
+          <SectionLabel label="Compras" />
+          <NavLink
+            href="/dashboard/purchases"
+            label="Lista de Compras"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+              </svg>
+            }
+          />
+          <NavLink
+            href="/dashboard/suppliers"
+            exact
+            label="Proveedores"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            }
+          />
+          <NavLink
+            href="/dashboard/suppliers/bank-statement"
+            label="Extracto bancario"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+          />
+        </>
+      )}
+
+      {/* ── ADMIN ── */}
+      {isSuperAdmin && (
+        <>
+          <SectionLabel label="Admin" />
+          <NavLink
+            href="/dashboard/users"
+            label="Usuarios"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            }
+          />
+        </>
+      )}
+    </nav>
+  );
+}
