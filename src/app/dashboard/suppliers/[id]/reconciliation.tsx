@@ -59,29 +59,49 @@ export default function Reconciliation({
     return d.toLocaleString("es-ES", { month: "long", year: "numeric" });
   }, [selectedMonth]);
 
+  function formatDate(dateStr: string) {
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
+  function formatAmount(amount: number) {
+    return amount.toLocaleString("es-ES", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
   function generateClaimText() {
     const lines = [
-      `Estimado/a ${supplierName},`,
+      `Hola ${supplierName},`,
       "",
-      `Estamos revisando los pagos realizados durante ${monthLabel} y nos faltan las siguientes facturas:`,
+      "Estoy ayudando en Prototipalo a recopilar las facturas de los últimos gastos para poder cerrar la conciliación contable.",
+      "",
+      "He visto estos cargos realizados con tarjeta y no tengo todavía la factura correspondiente:",
       "",
     ];
 
-    pendingPayments.forEach((p, i) => {
+    pendingPayments.forEach((p) => {
       lines.push(
-        `${i + 1}. ${p.payment_date} — ${p.amount.toFixed(2)}€${p.description ? ` — ${p.description}` : ""}`
+        `${formatDate(p.payment_date)} — ${formatAmount(p.amount)} €${p.description ? ` — ${p.description}` : ""}`
       );
     });
 
     lines.push("");
-    lines.push(`Total pendiente de facturar: ${totalPending.toFixed(2)}€`);
+    lines.push(`Total: ${formatAmount(totalPending)} €`);
     lines.push("");
-    lines.push(
-      "Por favor, enviadnos las facturas correspondientes a la mayor brevedad."
-    );
+    lines.push("¿Podríais enviarnos las facturas, por favor?");
+    lines.push("Como siempre, deberían ir a nombre de:");
     lines.push("");
-    lines.push("Gracias,");
-    lines.push("Prototipalo");
+    lines.push("Prototipalo SL");
+    lines.push("Calle Viriato 27");
+    lines.push("28010 Madrid");
+    lines.push("B72410665");
+    lines.push("");
+    lines.push("Muchas gracias por la ayuda 😊");
+    lines.push("");
+    lines.push("Un saludo,");
+    lines.push("Manu");
 
     return lines.join("\n");
   }
