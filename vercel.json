@@ -4,10 +4,6 @@
     {
       "path": "/api/printers/sync",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/email-sync",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
