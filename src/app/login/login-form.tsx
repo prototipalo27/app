@@ -14,8 +14,8 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex justify-center">
-        <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-14 w-auto dark:hidden" priority />
-        <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-14 w-auto dark:block" priority />
+        <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-28 w-auto dark:hidden" priority />
+        <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-28 w-auto dark:block" priority />
       </div>
 
       {urlError && (

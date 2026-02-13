@@ -25,8 +25,8 @@ export default function MobileSidebar({
       {/* Mobile top bar */}
       <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-zinc-900">
         <Link href="/dashboard">
-          <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-9 w-auto dark:hidden" />
-          <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-9 w-auto dark:block" />
+          <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-18 w-auto dark:hidden" />
+          <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-18 w-auto dark:block" />
         </Link>
         <button
           onClick={() => setOpen(!open)}
@@ -60,8 +60,8 @@ export default function MobileSidebar({
       >
         <div className="border-b border-zinc-200 p-5 dark:border-zinc-800">
           <Link href="/dashboard" onClick={handleNavClick}>
-            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-9 w-auto dark:hidden" />
-            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-9 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-18 w-auto dark:hidden" />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-18 w-auto dark:block" />
           </Link>
         </div>
 
