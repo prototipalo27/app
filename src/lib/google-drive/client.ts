@@ -16,6 +16,18 @@ const PROJECT_SUBFOLDERS = ["Briefing", "Indoor", "Entregable"];
 /**
  * Authenticate with a Service Account and return a Drive client.
  */
+function formatPrivateKey(raw: string): string {
+  // Handle both escaped \n (from .env files) and real newlines (from Vercel dashboard)
+  let key = raw.replace(/\\n/g, "\n");
+
+  // Remove surrounding quotes if present
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).replace(/\\n/g, "\n");
+  }
+
+  return key;
+}
+
 function getDriveClient(): drive_v3.Drive {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
@@ -26,8 +38,7 @@ function getDriveClient(): drive_v3.Drive {
 
   const auth = new google.auth.JWT({
     email,
-    // The key comes from env with literal \n — replace to real newlines
-    key: privateKey.replace(/\\n/g, "\n"),
+    key: formatPrivateKey(privateKey),
     scopes: ["https://www.googleapis.com/auth/drive"],
   });
 
