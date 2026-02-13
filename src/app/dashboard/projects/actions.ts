@@ -115,6 +115,24 @@ export async function triggerHoldedSync(): Promise<SyncResult> {
   return result;
 }
 
+export async function discardProject(id: string) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ project_type: "discarded", updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+}
+
 export async function deleteProject(formData: FormData) {
   await requireRole("manager");
 

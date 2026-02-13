@@ -117,7 +117,8 @@ export default async function ProjectDetailPage({
             </p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
+          <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
           <CopyTrackingLink trackingToken={project.tracking_token} />
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
             {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
@@ -190,10 +191,6 @@ export default async function ProjectDetailPage({
           <DetailRow label="Printer" value={project.assigned_printer} />
           <DetailRow label="Print time" value={project.print_time_minutes ? formatMinutes(project.print_time_minutes) : null} />
           <DetailRow label="Price" value={project.price !== null ? `${Number(project.price).toFixed(2)} €` : null} />
-          <div className="flex items-center justify-between border-b border-zinc-100 py-2.5 last:border-0 dark:border-zinc-800">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">Fecha de entrega</span>
-            <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
-          </div>
           <DetailRow label="Created" value={new Date(project.created_at).toLocaleString()} />
           <DetailRow label="Updated" value={new Date(project.updated_at).toLocaleString()} />
           {project.notes && (
