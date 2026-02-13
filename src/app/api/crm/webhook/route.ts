@@ -80,6 +80,9 @@ export async function POST(request: NextRequest) {
     const message = findField(data, [
       "Mensaje", "mensaje", "message", "comentario", "comentarios",
     ]);
+    const emailSubjectTag = findField(data, [
+      "email_subject_tag", "emailSubjectTag",
+    ]);
     const submissionId =
       payload?._id || payload?.submissionId || data?._id || null;
 
@@ -117,6 +120,7 @@ export async function POST(request: NextRequest) {
         email: email?.trim() || null,
         phone: phone?.trim() || null,
         message: message?.trim() || null,
+        email_subject_tag: emailSubjectTag?.trim() || null,
         source: "webflow",
         status: "new",
         webflow_submission_id: submissionId || null,

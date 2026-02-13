@@ -232,6 +232,9 @@ export default async function LeadDetailPage({
             activities={activities || []}
             leadId={lead.id}
             leadEmail={lead.email}
+            leadName={lead.full_name}
+            leadCompany={lead.company}
+            emailSubjectTag={lead.email_subject_tag}
           />
 
           {/* Activity timeline */}

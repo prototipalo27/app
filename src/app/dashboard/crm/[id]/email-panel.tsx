@@ -26,6 +26,9 @@ interface EmailPanelProps {
   activities: Activity[];
   leadId: string;
   leadEmail: string | null;
+  leadName: string;
+  leadCompany: string | null;
+  emailSubjectTag: string | null;
 }
 
 function normalizeSubject(subject: string): string {
@@ -75,13 +78,20 @@ function groupIntoThreads(activities: Activity[]): EmailThread[] {
   return threads;
 }
 
-export default function EmailPanel({ activities, leadId, leadEmail }: EmailPanelProps) {
+function buildDefaultSubject(tag: string | null, company: string | null, name: string): string {
+  const identifier = tag || company || name;
+  return `Presupuesto - Prototipalo - ${identifier}`;
+}
+
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const defaultSubject = buildDefaultSubject(emailSubjectTag, leadCompany, leadName);
+
   // Compose state
   const [emailTo, setEmailTo] = useState(leadEmail || "");
-  const [emailSubject, setEmailSubject] = useState("");
+  const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("");
 
   // Reply state
@@ -118,7 +128,7 @@ export default function EmailPanel({ activities, leadId, leadEmail }: EmailPanel
     setReplyToMessageId(null);
     setReplyThreadId(null);
     setReplyBanner(null);
-    setEmailSubject("");
+    setEmailSubject(defaultSubject);
     setEmailBody("");
   };
 
@@ -321,9 +331,8 @@ export default function EmailPanel({ activities, leadId, leadEmail }: EmailPanel
           <input
             type="text"
             value={emailSubject}
-            onChange={(e) => setEmailSubject(e.target.value)}
-            placeholder="Asunto"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+            readOnly
+            className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
           />
           <textarea
             value={emailBody}
