@@ -98,7 +98,7 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
   return (
     <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-4">
+      <div className="grid min-h-0 flex-1 auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto">
         {COLUMNS.map((column) => {
           // These are rendered as the bottom half of a stacked pair
           if (column.id === "printing" || column.id === "qc" || column.id === "delivered") return null;
@@ -118,7 +118,7 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
           if (stackedColumn) {
             return (
-              <div key={column.id} className="flex shrink-0 flex-col gap-3">
+              <div key={column.id} className="flex min-h-0 flex-col gap-3">
                 <KanbanColumn
                   className="min-h-0 flex-1"
                   column={column}
