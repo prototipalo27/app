@@ -230,6 +230,7 @@ export type Database = {
           id: string
           lead_id: string
           metadata: Json | null
+          thread_id: string | null
         }
         Insert: {
           activity_type: string
@@ -239,6 +240,7 @@ export type Database = {
           id?: string
           lead_id: string
           metadata?: Json | null
+          thread_id?: string | null
         }
         Update: {
           activity_type?: string
@@ -248,6 +250,7 @@ export type Database = {
           id?: string
           lead_id?: string
           metadata?: Json | null
+          thread_id?: string | null
         }
         Relationships: [
           {
@@ -490,6 +493,7 @@ export type Database = {
           holded_invoice_id: string | null
           holded_proforma_id: string | null
           id: string
+          lead_id: string | null
           material: string | null
           name: string
           notes: string | null
@@ -513,6 +517,7 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          lead_id?: string | null
           material?: string | null
           name: string
           notes?: string | null
@@ -536,6 +541,7 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          lead_id?: string | null
           material?: string | null
           name?: string
           notes?: string | null
@@ -546,7 +552,15 @@ export type Database = {
           tracking_token?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_items: {
         Row: {
@@ -944,6 +958,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      webhook_logs: {
+        Row: {
+          body: string | null
+          created_at: string | null
+          endpoint: string
+          headers: Json | null
+          id: string
+          method: string | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string | null
+          endpoint: string
+          headers?: Json | null
+          id?: string
+          method?: string | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string | null
+          endpoint?: string
+          headers?: Json | null
+          id?: string
+          method?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {

@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
-import EmailThread from "./email-thread";
+import EmailPanel from "./email-panel";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -47,6 +47,13 @@ export default async function LeadDetailPage({
     .in("role", ["manager", "super_admin"])
     .eq("is_active", true);
 
+  // Fetch linked projects
+  const { data: linkedProjects } = await supabase
+    .from("projects")
+    .select("id, name, status, project_type")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false });
+
   // Fetch user names for activities & assignee
   const userIds = [
     ...new Set([
@@ -66,6 +73,16 @@ export default async function LeadDetailPage({
 
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    design: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+    printing: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    post_processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    qc: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+    shipping: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+    delivered: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  };
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6">
@@ -78,7 +95,7 @@ export default async function LeadDetailPage({
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Left panel: lead info + timeline */}
+        {/* Left panel: lead info + emails + timeline */}
         <div className="space-y-4 md:col-span-2">
           {/* Lead info card */}
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -178,8 +195,44 @@ export default async function LeadDetailPage({
             </p>
           </div>
 
-          {/* Email thread */}
-          <EmailThread activities={activities || []} />
+          {/* Linked projects */}
+          {linkedProjects && linkedProjects.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
+                Proyectos vinculados ({linkedProjects.length})
+              </h3>
+              <div className="space-y-2">
+                {linkedProjects.map((project) => (
+                  <Link
+                    key={project.id}
+                    href={`/dashboard/projects/${project.id}`}
+                    className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                  >
+                    <div>
+                      <span className="text-sm font-medium text-zinc-900 dark:text-white">
+                        {project.name}
+                      </span>
+                      <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        {project.project_type === "upcoming" ? "Proforma" : "Confirmado"}
+                      </span>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status] || STATUS_COLORS.pending}`}
+                    >
+                      {project.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Email panel (threads + compose) */}
+          <EmailPanel
+            activities={activities || []}
+            leadId={lead.id}
+            leadEmail={lead.email}
+          />
 
           {/* Activity timeline */}
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -274,7 +327,6 @@ export default async function LeadDetailPage({
           <LeadActions
             leadId={lead.id}
             currentStatus={lead.status as LeadStatus}
-            leadEmail={lead.email}
             managers={managers || []}
             assignedTo={lead.assigned_to}
           />

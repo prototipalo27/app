@@ -14,11 +14,21 @@ export interface SendEmailOptions {
   text: string;
   html?: string;
   replyTo?: string;
+  inReplyTo?: string;
+  references?: string[];
 }
 
 export async function sendEmail(options: SendEmailOptions) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
     throw new Error("SMTP_USER y SMTP_PASS deben estar configurados en las variables de entorno");
+  }
+
+  const headers: Record<string, string> = {};
+  if (options.inReplyTo) {
+    headers["In-Reply-To"] = options.inReplyTo;
+  }
+  if (options.references?.length) {
+    headers["References"] = options.references.join(" ");
   }
 
   const result = await transporter.sendMail({
@@ -28,6 +38,7 @@ export async function sendEmail(options: SendEmailOptions) {
     text: options.text,
     html: options.html,
     replyTo: options.replyTo || process.env.SMTP_USER,
+    headers,
   });
 
   return result;

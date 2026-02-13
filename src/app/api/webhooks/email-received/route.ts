@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 function getSupabase() {
   return createClient(
@@ -30,6 +31,7 @@ async function logWebhook(
  * POST /api/webhooks/email-received?secret=EMAIL_WEBHOOK_SECRET
  *
  * Receives email data from n8n (IMAP trigger) and creates lead activities.
+ * Auto-creates a lead if the sender email doesn't match any existing lead.
  *
  * Body:
  * {
@@ -88,15 +90,76 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .single();
 
-    if (!lead) {
-      return NextResponse.json({ ok: false, reason: "no_lead_found" });
+    let leadId: string;
+    let autoCreated = false;
+
+    if (lead) {
+      leadId = lead.id;
+    } else {
+      // Auto-create lead from unknown sender
+      const displayName = fromName !== from
+        ? fromName
+        : from.split("@")[0].replace(/[._-]/g, " ");
+
+      const { data: newLead, error: createError } = await supabase
+        .from("leads")
+        .insert({
+          full_name: displayName,
+          email: from,
+          source: "email",
+          status: "new",
+        })
+        .select("id")
+        .single();
+
+      if (createError) {
+        console.error("Failed to auto-create lead:", createError);
+        return NextResponse.json(
+          { error: createError.message },
+          { status: 500 }
+        );
+      }
+
+      leadId = newLead.id;
+      autoCreated = true;
+
+      // Notify team about new lead from email
+      sendPushToAll({
+        title: "Nuevo lead (email)",
+        body: `${displayName} <${from}>`,
+        url: `/dashboard/crm/${leadId}`,
+      }).catch(() => {});
+    }
+
+    // Resolve thread_id
+    let threadId: string | null = null;
+
+    if (inReplyTo) {
+      // Look for an existing activity with this message_id
+      const { data: parentActivity } = await supabase
+        .from("lead_activities")
+        .select("thread_id")
+        .eq("metadata->>message_id", inReplyTo)
+        .not("thread_id", "is", null)
+        .limit(1)
+        .single();
+
+      if (parentActivity) {
+        threadId = parentActivity.thread_id;
+      }
+    }
+
+    // If no thread found, start a new thread with this message's ID
+    if (!threadId) {
+      threadId = messageId || `auto-${Date.now()}`;
     }
 
     // Insert activity (unique index on message_id prevents duplicates)
     const { error } = await supabase.from("lead_activities").insert({
-      lead_id: lead.id,
+      lead_id: leadId,
       activity_type: "email_received",
       content: body,
+      thread_id: threadId,
       metadata: {
         message_id: messageId,
         email_from: from,
@@ -114,14 +177,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           ok: true,
           duplicate: true,
-          lead_id: lead.id,
+          lead_id: leadId,
         });
       }
       console.error("Email webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, lead_id: lead.id });
+    return NextResponse.json({
+      ok: true,
+      lead_id: leadId,
+      auto_created: autoCreated,
+      thread_id: threadId,
+    });
   } catch (err) {
     console.error("Email webhook error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";

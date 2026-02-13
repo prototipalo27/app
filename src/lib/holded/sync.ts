@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { listDocuments } from "./api";
+import { listDocuments, getContact } from "./api";
 import {
   getOrCreateClientFolder,
   createProjectFolder,
@@ -11,6 +11,34 @@ export interface SyncResult {
   converted: number;
   newFromInvoice: number;
   errors: string[];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function autoLinkLead(
+  supabase: any,
+  projectId: string,
+  contactId: string,
+) {
+  try {
+    const contact = await getContact(contactId);
+    if (!contact?.email) return;
+
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id")
+      .ilike("email", contact.email.toLowerCase().trim())
+      .limit(1)
+      .single();
+
+    if (lead) {
+      await supabase
+        .from("projects")
+        .update({ lead_id: lead.id })
+        .eq("id", projectId);
+    }
+  } catch {
+    // Non-critical — skip if contact lookup fails
+  }
 }
 
 export async function syncHoldedDocuments(): Promise<SyncResult> {
@@ -64,6 +92,11 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     result.newUpcoming++;
+
+    // Auto-link lead by contact email
+    if (proforma.contact && project) {
+      autoLinkLead(supabase, project.id, proforma.contact);
+    }
 
     // Notify about new project
     sendPushToAll({
@@ -225,6 +258,11 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     result.newFromInvoice++;
+
+    // Auto-link lead by contact email
+    if (invoice.contact && project) {
+      autoLinkLead(supabase, project.id, invoice.contact);
+    }
 
     // Notify about new project from invoice
     sendPushToAll({

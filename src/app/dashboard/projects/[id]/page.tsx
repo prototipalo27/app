@@ -10,6 +10,8 @@ import { ProjectItems } from "./project-items";
 import { ProjectDocuments } from "./project-documents";
 import { ProjectShipping } from "./project-shipping";
 import { CopyTrackingLink } from "./copy-tracking-link";
+import ProjectEmails from "./project-emails";
+import LinkLead from "./link-lead";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -92,6 +94,41 @@ export default async function ProjectDetailPage({
     .eq("project_id", id)
     .single();
 
+  // Fetch linked lead and their email activities
+  let linkedLead: { id: string; full_name: string; email: string | null } | null = null;
+  let leadActivities: Array<{
+    id: string;
+    activity_type: string;
+    content: string | null;
+    metadata: unknown;
+    thread_id: string | null;
+    created_at: string;
+    created_by: string | null;
+  }> = [];
+
+  if (project.lead_id) {
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id, full_name, email")
+      .eq("id", project.lead_id)
+      .single();
+
+    if (lead) {
+      linkedLead = lead;
+
+      const { data: activities } = await supabase
+        .from("lead_activities")
+        .select("id, activity_type, content, metadata, thread_id, created_at, created_by")
+        .eq("lead_id", lead.id)
+        .in("activity_type", ["email_sent", "email_received"])
+        .order("created_at", { ascending: false });
+
+      leadActivities = activities || [];
+    }
+  }
+
+  const clientEmail = linkedLead?.email || project.client_email || null;
+
   const currentStatusColor = STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
 
   return (
@@ -145,6 +182,20 @@ export default async function ProjectDetailPage({
           projectId={project.id}
           shippingInfo={shippingInfo}
           holdedContact={holdedContact}
+        />
+      </div>
+
+      {/* Lead link + Communications */}
+      <div className="mb-6 space-y-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Lead vinculado</h2>
+          <LinkLead projectId={project.id} linkedLead={linkedLead} />
+        </div>
+
+        <ProjectEmails
+          projectId={project.id}
+          activities={leadActivities}
+          clientEmail={clientEmail}
         />
       </div>
 

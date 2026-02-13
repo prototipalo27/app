@@ -128,7 +128,9 @@ export async function sendLeadEmail(
   id: string,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  replyToMessageId?: string,
+  threadId?: string
 ) {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -137,26 +139,89 @@ export async function sendLeadEmail(
     throw new Error("Email, asunto y cuerpo son obligatorios");
   }
 
+  // Build threading headers for replies
+  let inReplyTo: string | undefined;
+  let references: string[] | undefined;
+
+  if (replyToMessageId && threadId) {
+    inReplyTo = replyToMessageId;
+
+    // Fetch all message_ids in this thread for the References header
+    const { data: threadActivities } = await supabase
+      .from("lead_activities")
+      .select("metadata")
+      .eq("thread_id", threadId)
+      .in("activity_type", ["email_sent", "email_received"])
+      .order("created_at", { ascending: true });
+
+    references = (threadActivities || [])
+      .map((a) => (a.metadata as Record<string, unknown>)?.message_id as string)
+      .filter(Boolean);
+  }
+
   const result = await sendEmail({
     to: to.trim(),
     subject: subject.trim(),
     text: body.trim(),
+    html: body.trim().replace(/\n/g, "<br>"),
+    inReplyTo,
+    references,
   });
+
+  // Determine thread_id for this sent email
+  const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;
 
   // Log email activity
   await supabase.from("lead_activities").insert({
     lead_id: id,
     activity_type: "email_sent",
     content: body.trim(),
+    thread_id: finalThreadId,
     metadata: {
       email_to: to.trim(),
       email_subject: subject.trim(),
       message_id: result.messageId || null,
+      in_reply_to: inReplyTo || null,
     },
     created_by: profile.id,
   });
 
   revalidatePath(`/dashboard/crm/${id}`);
+}
+
+// ── Link Lead to Project ─────────────────────────────────
+
+export async function linkLeadToProject(leadId: string, projectId: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ lead_id: leadId })
+    .eq("id", projectId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+}
+
+// ── Search Leads ─────────────────────────────────────────
+
+export async function searchLeads(query: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, full_name, email, company")
+    .or(`full_name.ilike.%${query}%,email.ilike.%${query}%,company.ilike.%${query}%`)
+    .limit(10);
+
+  if (error) throw new Error(error.message);
+
+  return data || [];
 }
 
 // ── Delete Lead ──────────────────────────────────────────

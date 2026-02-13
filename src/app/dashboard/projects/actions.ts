@@ -115,6 +115,127 @@ export async function triggerHoldedSync(): Promise<SyncResult> {
   return result;
 }
 
+// ── Send Email from Project ──────────────────────────────
+
+export async function sendProjectEmail(
+  projectId: string,
+  to: string,
+  subject: string,
+  body: string,
+  replyToMessageId?: string,
+  threadId?: string
+) {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!to?.trim() || !subject?.trim() || !body?.trim()) {
+    throw new Error("Email, asunto y cuerpo son obligatorios");
+  }
+
+  // Get the project to find or create the lead link
+  const { data: project } = await supabase
+    .from("projects")
+    .select("lead_id, client_email, client_name")
+    .eq("id", projectId)
+    .single();
+
+  if (!project) throw new Error("Proyecto no encontrado");
+
+  let leadId = project.lead_id;
+
+  // If no lead linked, try to find or create one
+  if (!leadId) {
+    const email = to.toLowerCase().trim();
+
+    // Look for existing lead by email
+    const { data: existingLead } = await supabase
+      .from("leads")
+      .select("id")
+      .ilike("email", email)
+      .limit(1)
+      .single();
+
+    if (existingLead) {
+      leadId = existingLead.id;
+    } else {
+      // Create lead from project info
+      const { data: newLead } = await supabase
+        .from("leads")
+        .insert({
+          full_name: project.client_name || email.split("@")[0],
+          email,
+          source: "project",
+          status: "new",
+        })
+        .select("id")
+        .single();
+
+      if (newLead) {
+        leadId = newLead.id;
+      }
+    }
+
+    // Link lead to project
+    if (leadId) {
+      await supabase
+        .from("projects")
+        .update({ lead_id: leadId })
+        .eq("id", projectId);
+    }
+  }
+
+  if (!leadId) throw new Error("No se pudo vincular un lead al proyecto");
+
+  // Delegate to the same email sending logic
+  const { sendEmail } = await import("@/lib/email");
+
+  let inReplyTo: string | undefined;
+  let references: string[] | undefined;
+
+  if (replyToMessageId && threadId) {
+    inReplyTo = replyToMessageId;
+
+    const { data: threadActivities } = await supabase
+      .from("lead_activities")
+      .select("metadata")
+      .eq("thread_id", threadId)
+      .in("activity_type", ["email_sent", "email_received"])
+      .order("created_at", { ascending: true });
+
+    references = (threadActivities || [])
+      .map((a) => (a.metadata as Record<string, unknown>)?.message_id as string)
+      .filter(Boolean);
+  }
+
+  const result = await sendEmail({
+    to: to.trim(),
+    subject: subject.trim(),
+    text: body.trim(),
+    html: body.trim().replace(/\n/g, "<br>"),
+    inReplyTo,
+    references,
+  });
+
+  const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: body.trim(),
+    thread_id: finalThreadId,
+    metadata: {
+      email_to: to.trim(),
+      email_subject: subject.trim(),
+      message_id: result.messageId || null,
+      in_reply_to: inReplyTo || null,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath(`/dashboard/crm/${leadId}`);
+}
+
 export async function discardProject(id: string) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();

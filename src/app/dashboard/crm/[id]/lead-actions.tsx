@@ -6,7 +6,6 @@ import {
   updateLeadStatus,
   assignLead,
   addNote,
-  sendLeadEmail,
   deleteLead,
 } from "../actions";
 import {
@@ -18,7 +17,6 @@ import {
 interface LeadActionsProps {
   leadId: string;
   currentStatus: LeadStatus;
-  leadEmail: string | null;
   managers: { id: string; email: string }[];
   assignedTo: string | null;
 }
@@ -26,7 +24,6 @@ interface LeadActionsProps {
 export default function LeadActions({
   leadId,
   currentStatus,
-  leadEmail,
   managers,
   assignedTo,
 }: LeadActionsProps) {
@@ -35,12 +32,6 @@ export default function LeadActions({
 
   // Note form
   const [note, setNote] = useState("");
-
-  // Email form
-  const [showEmail, setShowEmail] = useState(false);
-  const [emailTo, setEmailTo] = useState(leadEmail || "");
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailBody, setEmailBody] = useState("");
 
   // Lost reason
   const [showLostReason, setShowLostReason] = useState(false);
@@ -81,17 +72,6 @@ export default function LeadActions({
     startTransition(async () => {
       await addNote(leadId, note);
       setNote("");
-      router.refresh();
-    });
-  };
-
-  const handleSendEmail = () => {
-    if (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return;
-    startTransition(async () => {
-      await sendLeadEmail(leadId, emailTo, emailSubject, emailBody);
-      setShowEmail(false);
-      setEmailSubject("");
-      setEmailBody("");
       router.refresh();
     });
   };
@@ -204,57 +184,6 @@ export default function LeadActions({
         >
           Guardar nota
         </button>
-      </div>
-
-      {/* Email composer */}
-      <div>
-        <button
-          onClick={() => setShowEmail(!showEmail)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-          {showEmail ? "Cerrar email" : "Enviar email"}
-        </button>
-
-        {showEmail && (
-          <div className="mt-3 space-y-2">
-            <input
-              type="email"
-              value={emailTo}
-              onChange={(e) => setEmailTo(e.target.value)}
-              placeholder="Para"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-            />
-            <input
-              type="text"
-              value={emailSubject}
-              onChange={(e) => setEmailSubject(e.target.value)}
-              placeholder="Asunto"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-            />
-            <textarea
-              value={emailBody}
-              onChange={(e) => setEmailBody(e.target.value)}
-              placeholder="Cuerpo del email..."
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              rows={4}
-            />
-            <button
-              onClick={handleSendEmail}
-              disabled={
-                isPending ||
-                !emailTo.trim() ||
-                !emailSubject.trim() ||
-                !emailBody.trim()
-              }
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              Enviar
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Delete */}
