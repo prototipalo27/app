@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
+import EmailThread from "./email-thread";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -177,6 +178,9 @@ export default async function LeadDetailPage({
             </p>
           </div>
 
+          {/* Email thread */}
+          <EmailThread activities={activities || []} />
+
           {/* Activity timeline */}
           <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -201,6 +205,7 @@ export default async function LeadDetailPage({
                         >
                           {actType === "note" && "N"}
                           {actType === "email_sent" && "E"}
+                          {actType === "email_received" && "R"}
                           {actType === "status_change" && "S"}
                           {actType === "call" && "C"}
                         </span>
@@ -231,6 +236,13 @@ export default async function LeadDetailPage({
                         {actType === "email_sent" && metadata && (
                           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                             Para: {String(metadata.email_to || "")} — Asunto:{" "}
+                            {String(metadata.email_subject || "")}
+                          </p>
+                        )}
+
+                        {actType === "email_received" && metadata && (
+                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                            De: {String(metadata.email_from_name || metadata.email_from || "")} — Asunto:{" "}
                             {String(metadata.email_subject || "")}
                           </p>
                         )}

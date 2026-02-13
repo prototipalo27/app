@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["googleapis", "google-auth-library"],
+  serverExternalPackages: ["googleapis", "google-auth-library", "imapflow", "mailparser"],
   images: {
     remotePatterns: [
       {

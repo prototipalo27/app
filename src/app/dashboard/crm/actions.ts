@@ -137,7 +137,7 @@ export async function sendLeadEmail(
     throw new Error("Email, asunto y cuerpo son obligatorios");
   }
 
-  await sendEmail({
+  const result = await sendEmail({
     to: to.trim(),
     subject: subject.trim(),
     text: body.trim(),
@@ -148,7 +148,11 @@ export async function sendLeadEmail(
     lead_id: id,
     activity_type: "email_sent",
     content: body.trim(),
-    metadata: { email_to: to.trim(), email_subject: subject.trim() },
+    metadata: {
+      email_to: to.trim(),
+      email_subject: subject.trim(),
+      message_id: result.messageId || null,
+    },
     created_by: profile.id,
   });
 
