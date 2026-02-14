@@ -1,4 +1,5 @@
 import { google, type drive_v3 } from "googleapis";
+import { Readable } from "stream";
 
 export interface DriveFile {
   id: string;
@@ -6,6 +7,7 @@ export interface DriveFile {
   mimeType: string;
   thumbnailLink: string | null;
   webViewLink: string | null;
+  webContentLink: string | null;
   size: string | null;
   modifiedTime: string | null;
 }
@@ -128,7 +130,7 @@ export async function listFolderFiles(
       includeItemsFromAllDrives: true,
       q: `'${folderId}' in parents and trashed = false`,
       fields:
-        "nextPageToken, files(id, name, mimeType, thumbnailLink, webViewLink, size, modifiedTime)",
+        "nextPageToken, files(id, name, mimeType, thumbnailLink, webViewLink, webContentLink, size, modifiedTime)",
       pageSize: 100,
       pageToken,
     });
@@ -140,6 +142,7 @@ export async function listFolderFiles(
         mimeType: f.mimeType!,
         thumbnailLink: f.thumbnailLink ?? null,
         webViewLink: f.webViewLink ?? null,
+        webContentLink: f.webContentLink ?? null,
         size: f.size ?? null,
         modifiedTime: f.modifiedTime ?? null,
       });
@@ -175,6 +178,44 @@ export async function getOrCreateSubfolder(
   }
 
   return createFolder(drive, folderName, parentId);
+}
+
+/**
+ * Upload a file to a Drive folder. Returns the created DriveFile.
+ */
+export async function uploadFile(
+  folderId: string,
+  fileName: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<DriveFile> {
+  const drive = getDriveClient();
+
+  const res = await drive.files.create({
+    supportsAllDrives: true,
+    requestBody: {
+      name: fileName,
+      parents: [folderId],
+    },
+    media: {
+      mimeType,
+      body: Readable.from(buffer),
+    },
+    fields:
+      "id, name, mimeType, thumbnailLink, webViewLink, webContentLink, size, modifiedTime",
+  });
+
+  const f = res.data;
+  return {
+    id: f.id!,
+    name: f.name!,
+    mimeType: f.mimeType!,
+    thumbnailLink: f.thumbnailLink ?? null,
+    webViewLink: f.webViewLink ?? null,
+    webContentLink: f.webContentLink ?? null,
+    size: f.size ?? null,
+    modifiedTime: f.modifiedTime ?? null,
+  };
 }
 
 /**
