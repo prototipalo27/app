@@ -22,23 +22,50 @@ export async function createProject(formData: FormData) {
   const price = formData.get("price") as string;
   const printTime = formData.get("print_time_minutes") as string;
 
-  const { error } = await supabase.from("projects").insert({
-    name: name.trim(),
-    description: (formData.get("description") as string)?.trim() || null,
-    project_type: (formData.get("project_type") as string) || "confirmed",
-    holded_contact_id: (formData.get("holded_contact_id") as string)?.trim() || null,
-    client_name: (formData.get("client_name") as string)?.trim() || null,
-    client_email: (formData.get("client_email") as string)?.trim() || null,
-    price: price ? parseFloat(price) : null,
-    material: (formData.get("material") as string)?.trim() || null,
-    assigned_printer: (formData.get("assigned_printer") as string)?.trim() || null,
-    print_time_minutes: printTime ? parseInt(printTime, 10) : null,
-    notes: (formData.get("notes") as string)?.trim() || null,
-    created_by: userData.user.id,
-  });
+  const templateId = (formData.get("template_id") as string)?.trim() || null;
 
-  if (error) {
-    throw new Error(error.message);
+  const { data: project, error } = await supabase
+    .from("projects")
+    .insert({
+      name: name.trim(),
+      description: (formData.get("description") as string)?.trim() || null,
+      project_type: (formData.get("project_type") as string) || "confirmed",
+      holded_contact_id: (formData.get("holded_contact_id") as string)?.trim() || null,
+      client_name: (formData.get("client_name") as string)?.trim() || null,
+      client_email: (formData.get("client_email") as string)?.trim() || null,
+      price: price ? parseFloat(price) : null,
+      material: (formData.get("material") as string)?.trim() || null,
+      assigned_printer: (formData.get("assigned_printer") as string)?.trim() || null,
+      print_time_minutes: printTime ? parseInt(printTime, 10) : null,
+      notes: (formData.get("notes") as string)?.trim() || null,
+      created_by: userData.user.id,
+      template_id: templateId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !project) {
+    throw new Error(error?.message ?? "Failed to create project");
+  }
+
+  // Copy template checklist items to project
+  if (templateId) {
+    const { data: templateItems } = await supabase
+      .from("template_checklist_items")
+      .select("name, item_type, position")
+      .eq("template_id", templateId)
+      .order("position");
+
+    if (templateItems && templateItems.length > 0) {
+      await supabase.from("project_checklist_items").insert(
+        templateItems.map((item) => ({
+          project_id: project.id,
+          name: item.name,
+          item_type: item.item_type,
+          position: item.position,
+        }))
+      );
+    }
   }
 
   revalidatePath("/dashboard");

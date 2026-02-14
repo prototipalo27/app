@@ -1,10 +1,17 @@
 import { createProject } from "../actions";
 import ContactSelector from "../contact-selector";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 
 const MATERIALS = ["PLA", "PETG", "ASA", "ABS", "TPU", "Nylon", "PC", "Resin"];
 
-export default function NewProjectPage() {
+export default async function NewProjectPage() {
+  const supabase = await createClient();
+  const { data: templates } = await supabase
+    .from("project_templates")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name");
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
@@ -61,6 +68,23 @@ export default function NewProjectPage() {
           >
             <option value="confirmed">Confirmed (invoiced)</option>
             <option value="upcoming">Upcoming (proforma)</option>
+          </select>
+        </div>
+
+        {/* Template */}
+        <div>
+          <label htmlFor="template_id" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Plantilla
+          </label>
+          <select
+            id="template_id"
+            name="template_id"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          >
+            <option value="">Sin plantilla</option>
+            {templates?.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
           </select>
         </div>
 

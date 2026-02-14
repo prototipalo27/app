@@ -13,6 +13,7 @@ import { CopyTrackingLink } from "./copy-tracking-link";
 import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
+import ProjectChecklist from "./project-checklist";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -191,6 +192,24 @@ export default async function ProjectDetailPage({
     }
   }
 
+  // Fetch checklist items
+  const { data: checklistItems } = await supabase
+    .from("project_checklist_items")
+    .select("*")
+    .eq("project_id", id)
+    .order("position", { ascending: true });
+
+  // Fetch template name if linked
+  let templateName: string | null = null;
+  if (project.template_id) {
+    const { data: tmpl } = await supabase
+      .from("project_templates")
+      .select("name")
+      .eq("id", project.template_id)
+      .single();
+    templateName = tmpl?.name ?? null;
+  }
+
   const clientEmail = linkedLead?.email || project.client_email || null;
 
   const currentStatusColor = STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
@@ -237,6 +256,23 @@ export default async function ProjectDetailPage({
           driveFiles={driveFiles}
         />
       </div>
+
+      {/* Checklist */}
+      {checklistItems && checklistItems.length > 0 && (
+        <div className="mb-6">
+          <ProjectChecklist
+            items={checklistItems.map((i) => ({
+              id: i.id,
+              name: i.name,
+              item_type: i.item_type,
+              position: i.position,
+              completed: i.completed,
+              data: i.data as { names?: string[] } | null,
+            }))}
+            templateName={templateName}
+          />
+        </div>
+      )}
 
       {/* Documents */}
       <div className="mb-6">

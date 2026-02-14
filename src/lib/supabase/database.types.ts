@@ -628,6 +628,53 @@ export type Database = {
           },
         ]
       }
+      project_checklist_items: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          data: Json | null
+          id: string
+          item_type: string
+          name: string
+          position: number
+          project_id: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          data?: Json | null
+          id?: string
+          item_type?: string
+          name: string
+          position?: number
+          project_id: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          data?: Json | null
+          id?: string
+          item_type?: string
+          name?: string
+          position?: number
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_checklist_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_files: {
         Row: {
           file_name: string
@@ -723,6 +770,33 @@ export type Database = {
           },
         ]
       }
+      project_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           assigned_printer: string | null
@@ -745,6 +819,7 @@ export type Database = {
           print_time_minutes: number | null
           project_type: string
           status: string
+          template_id: string | null
           tracking_token: string
           updated_at: string
         }
@@ -769,6 +844,7 @@ export type Database = {
           print_time_minutes?: number | null
           project_type?: string
           status?: string
+          template_id?: string | null
           tracking_token?: string
           updated_at?: string
         }
@@ -793,6 +869,7 @@ export type Database = {
           print_time_minutes?: number | null
           project_type?: string
           status?: string
+          template_id?: string | null
           tracking_token?: string
           updated_at?: string
         }
@@ -802,6 +879,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "project_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1040,7 +1124,7 @@ export type Database = {
           {
             foreignKeyName: "shipping_info_project_id_fkey"
             columns: ["project_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -1187,6 +1271,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      template_checklist_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          item_type: string
+          name: string
+          position: number
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type?: string
+          name: string
+          position?: number
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type?: string
+          name?: string
+          position?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_checklist_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "project_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_profiles: {
         Row: {
