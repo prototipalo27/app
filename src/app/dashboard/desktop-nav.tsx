@@ -3,22 +3,38 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-function NavLink({ href, label, icon, exact = false, alsoMatch }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string }) {
+function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode }) {
   const pathname = usePathname();
   const isActive = (exact ? pathname === href : pathname?.startsWith(href)) || (alsoMatch && pathname?.startsWith(alsoMatch));
+  const isActionActive = actionHref && pathname?.startsWith(actionHref);
 
   return (
-    <Link
-      href={href}
-      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-        isActive
-          ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-      }`}
-    >
-      {icon}
-      {label}
-    </Link>
+    <div className="flex items-center gap-0.5">
+      <Link
+        href={href}
+        className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+          isActive
+            ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        }`}
+      >
+        {icon}
+        {label}
+      </Link>
+      {actionHref && (
+        <Link
+          href={actionHref}
+          className={`flex items-center rounded-lg p-2 ${
+            isActionActive
+              ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+              : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          }`}
+          title="Cola de impresión"
+        >
+          {actionIcon}
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -73,11 +89,8 @@ export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boo
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
         }
-      />
-      <NavLink
-        href="/dashboard/queue"
-        label="Cola de impresion"
-        icon={
+        actionHref="/dashboard/queue"
+        actionIcon={
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
           </svg>

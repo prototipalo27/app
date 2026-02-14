@@ -109,20 +109,36 @@ export default function MobileSidebar({
             </svg>
             Proyectos
           </Link>
-          <Link
-            href="/dashboard/printers"
-            onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-              pathname?.startsWith("/dashboard/printers")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            }`}
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Impresoras
-          </Link>
+          <div className="flex items-center gap-0.5">
+            <Link
+              href="/dashboard/printers"
+              onClick={handleNavClick}
+              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                pathname?.startsWith("/dashboard/printers")
+                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Impresoras
+            </Link>
+            <Link
+              href="/dashboard/queue"
+              onClick={handleNavClick}
+              className={`flex items-center rounded-lg p-2 ${
+                pathname?.startsWith("/dashboard/queue")
+                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              }`}
+              title="Cola de impresión"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </Link>
+          </div>
           <Link
             href="/dashboard/shipments"
             onClick={handleNavClick}
