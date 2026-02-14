@@ -69,7 +69,7 @@ export default async function DashboardLayout({
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 p-5 dark:border-zinc-800">
-          <Link href="/dashboard">
+          <Link href={isManager ? "/dashboard/control" : "/dashboard"}>
             <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-20 w-auto dark:hidden" priority />
             <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-20 w-auto dark:block" priority />
           </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   isOfficeHour,
@@ -68,12 +68,30 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 }
 
-/** Pixels per wall-clock minute for the timeline axis */
-const PX_PER_MIN = 2;
+/** Fixed 48-hour window for the timeline */
+const TIMELINE_HOURS = 48;
+const TIMELINE_MINUTES = TIMELINE_HOURS * 60;
+/** Label column width in pixels */
+const LABEL_WIDTH = 160;
 
 export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps) {
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const origin = useMemo(() => new Date(startTime), [startTime]);
+
+  // Measure available width and recalc on resize
+  useEffect(() => {
+    function measure() {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Group jobs by printer
   const jobsByPrinter: Record<string, JobInfo[]> = {};
@@ -88,23 +106,16 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
 
   const unassignedJobs = jobs.filter((j) => !j.printer_id);
 
-  // Compute latest end time across all jobs to size the axis
-  let latestEnd = new Date(origin);
-  for (const j of jobs) {
-    if (j.scheduled_start) {
-      const jobEnd = addWorkMinutes(new Date(j.scheduled_start), j.estimated_minutes);
-      if (jobEnd > latestEnd) latestEnd = jobEnd;
-    }
-  }
+  const totalWallMinutes = TIMELINE_MINUTES;
+  const timelineWidth = Math.max(containerWidth - LABEL_WIDTH, 200);
+  const pxPerMin = timelineWidth / totalWallMinutes;
 
-  const totalWallMinutes = Math.max(
-    60,
-    Math.ceil((latestEnd.getTime() - origin.getTime()) / 60000) + 60
-  );
-  const totalWidthPx = totalWallMinutes * PX_PER_MIN;
-
-  // Generate hour markers (real clock times)
+  // Generate hour markers — skip labels when space is tight
   const hourMarkers = useMemo(() => {
+    const pxPerHour = pxPerMin * 60;
+    // Show every hour if >=40px/h, every 3h if >=15px/h, else every 6h
+    const step = pxPerHour >= 40 ? 1 : pxPerHour >= 15 ? 3 : 6;
+
     const markers: { label: string; offsetPx: number; isNewDay: boolean }[] = [];
     const cursor = new Date(origin);
     // Round up to next full hour
@@ -112,16 +123,18 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
     cursor.setHours(cursor.getHours() + 1);
 
     while (cursor.getTime() - origin.getTime() < totalWallMinutes * 60000) {
-      const offsetMin = (cursor.getTime() - origin.getTime()) / 60000;
-      markers.push({
-        label: formatTime(cursor),
-        offsetPx: offsetMin * PX_PER_MIN,
-        isNewDay: cursor.getHours() === 0,
-      });
+      if (cursor.getHours() % step === 0) {
+        const offsetMin = (cursor.getTime() - origin.getTime()) / 60000;
+        markers.push({
+          label: formatTime(cursor),
+          offsetPx: offsetMin * pxPerMin,
+          isNewDay: cursor.getHours() === 0,
+        });
+      }
       cursor.setHours(cursor.getHours() + 1);
     }
     return markers;
-  }, [origin, totalWallMinutes]);
+  }, [origin, totalWallMinutes, pxPerMin]);
 
   // Generate dead-zone bands (nights & weekends)
   const deadZones = useMemo(() => {
@@ -138,8 +151,8 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         const widthMin = (deadEnd - deadStart) / 60000;
         if (widthMin > 0) {
           zones.push({
-            leftPx: leftMin * PX_PER_MIN,
-            widthPx: widthMin * PX_PER_MIN,
+            leftPx: leftMin * pxPerMin,
+            widthPx: widthMin * pxPerMin,
           });
         }
         cursor = new Date(deadEnd);
@@ -151,7 +164,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
       }
     }
     return zones;
-  }, [origin, totalWallMinutes]);
+  }, [origin, totalWallMinutes, pxPerMin]);
 
   // Day labels for the header
   const dayLabels = useMemo(() => {
@@ -173,15 +186,15 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
       if (widthMin > 0) {
         labels.push({
           label: formatDate(new Date(dayStart)),
-          offsetPx: leftMin * PX_PER_MIN,
-          widthPx: widthMin * PX_PER_MIN,
+          offsetPx: leftMin * pxPerMin,
+          widthPx: widthMin * pxPerMin,
         });
       }
       cursor.setDate(cursor.getDate() + 1);
       cursor.setHours(0, 0, 0, 0);
     }
     return labels;
-  }, [origin, totalWallMinutes]);
+  }, [origin, totalWallMinutes, pxPerMin]);
 
   const printersWithJobs = printers.filter(
     (p) => (jobsByPrinter[p.id]?.length ?? 0) > 0
@@ -191,7 +204,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
   );
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs">
         <span className="flex items-center gap-1.5">
@@ -216,7 +229,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         {/* Day labels row */}
         <div className="flex border-b border-zinc-100 dark:border-zinc-800">
           <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-1 dark:border-zinc-800" />
-          <div className="relative flex-1" style={{ minWidth: `${totalWidthPx}px` }}>
+          <div className="relative flex-1" style={{ minWidth: `${timelineWidth}px` }}>
             {dayLabels.map((d, i) => (
               <div
                 key={i}
@@ -234,7 +247,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
           <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Impresora
           </div>
-          <div className="relative flex-1" style={{ minWidth: `${totalWidthPx}px`, height: "28px" }}>
+          <div className="relative flex-1" style={{ minWidth: `${timelineWidth}px`, height: "28px" }}>
             {hourMarkers.map((m, i) => (
               <div
                 key={i}
@@ -272,7 +285,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
               {/* Jobs positioned absolutely on the timeline */}
               <div
                 className="relative flex-1 py-2"
-                style={{ minWidth: `${totalWidthPx}px`, height: "48px" }}
+                style={{ minWidth: `${timelineWidth}px`, height: "48px" }}
               >
                 {/* Dead zone bands */}
                 {deadZones.map((z, i) => (
@@ -293,8 +306,8 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
                   // Wall-clock width (includes dead hours visually)
                   const leftMin = (jobStart.getTime() - origin.getTime()) / 60000;
                   const widthMin = (jobEnd.getTime() - jobStart.getTime()) / 60000;
-                  const leftPx = Math.max(0, leftMin * PX_PER_MIN);
-                  const widthPx = Math.max(24, widthMin * PX_PER_MIN);
+                  const leftPx = Math.max(0, leftMin * pxPerMin);
+                  const widthPx = Math.max(24, widthMin * pxPerMin);
                   const isHovered = hoveredJob === job.id;
 
                   return (
