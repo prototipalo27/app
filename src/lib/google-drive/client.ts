@@ -17,15 +17,22 @@ const PROJECT_SUBFOLDERS = ["Briefing", "Indoor", "Entregable"];
  * Authenticate with a Service Account and return a Drive client.
  */
 function formatPrivateKey(raw: string): string {
-  // Handle both escaped \n (from .env files) and real newlines (from Vercel dashboard)
-  let key = raw.replace(/\\n/g, "\n");
+  // Strip quotes, escaped newlines, real newlines, header/footer — get raw base64
+  let key = raw
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
 
-  // Remove surrounding quotes if present
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    key = key.slice(1, -1).replace(/\\n/g, "\n");
-  }
-
-  return key;
+  // Rebuild proper PEM with 64-char lines
+  const lines = key.match(/.{1,64}/g) ?? [];
+  return [
+    "-----BEGIN PRIVATE KEY-----",
+    ...lines,
+    "-----END PRIVATE KEY-----",
+    "",
+  ].join("\n");
 }
 
 function getDriveClient(): drive_v3.Drive {
