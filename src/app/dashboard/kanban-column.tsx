@@ -17,7 +17,7 @@ export function KanbanColumn({ column, projects, className }: KanbanColumnProps)
   return (
     <div className={`flex min-w-0 flex-col rounded-xl bg-zinc-100 dark:bg-zinc-900 ${className ?? ""}`}>
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+      <div className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
         <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           {column.label}
@@ -29,10 +29,10 @@ export function KanbanColumn({ column, projects, className }: KanbanColumnProps)
         </span>
       </div>
 
-      {/* Cards area */}
+      {/* Cards area — scrolls internally */}
       <div
         ref={ref}
-        className={`flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors ${
+        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors ${
           isDropTarget
             ? "rounded-b-xl ring-2 ring-green-500/50 ring-inset"
             : ""

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { COLUMNS, type ProjectStatus } from "@/lib/kanban-config";
 import { KanbanColumn } from "./kanban-column";
 import { updateProjectStatusById, discardProject } from "./projects/actions";
 import type { ProjectWithItems } from "./kanban-card";
+
+const MAX_DELIVERED = 6;
 
 interface KanbanBoardProps {
   initialProjects: ProjectWithItems[];
@@ -38,6 +40,18 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
 
+  // Prevent body scroll while dragging
+  useEffect(() => {
+    if (dragging) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [dragging]);
+
   const handleDragStart = useCallback(() => {
     setDragging(true);
   }, []);
@@ -56,7 +70,6 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
       if (targetId === "discard") {
         setProjects((prev) => prev.filter((p) => p.id !== projectId));
         discardProject(projectId).catch(() => {
-          // Revert: re-add the project
           const project = initialProjects.find((p) => p.id === projectId);
           if (project) {
             setProjects((prev) => [...prev, project]);
@@ -67,11 +80,9 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
       const newStatus = targetId as ProjectStatus;
 
-      // Find the project's current status
       const project = projects.find((p) => p.id === projectId);
       if (!project || project.status === newStatus) return;
 
-      // Verify the drop target is a valid column
       if (!COLUMNS.some((col) => col.id === newStatus)) return;
 
       const previousStatus = project.status;
@@ -85,7 +96,6 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
 
       // Persist to database
       updateProjectStatusById(projectId, newStatus).catch(() => {
-        // Revert on error
         setProjects((prev) =>
           prev.map((p) =>
             p.id === projectId ? { ...p, status: previousStatus } : p,
@@ -96,9 +106,21 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
     [projects, initialProjects],
   );
 
+  /** Get projects for a column, with FIFO limit for delivered */
+  function getColumnProjects(columnId: ProjectStatus) {
+    const columnProjects = projects.filter((p) => p.status === columnId);
+    if (columnId === "delivered" && columnProjects.length > MAX_DELIVERED) {
+      // Sort by created_at descending, keep only the newest
+      return [...columnProjects]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, MAX_DELIVERED);
+    }
+    return columnProjects;
+  }
+
   return (
     <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="grid min-h-0 flex-1 auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto">
+      <div className="grid min-h-0 flex-1 auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto md:grid-cols-4 md:auto-cols-auto">
         {COLUMNS.map((column) => {
           // These are rendered as the bottom half of a stacked pair
           if (column.id === "printing" || column.id === "qc" || column.id === "delivered") return null;
@@ -122,12 +144,12 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"
                   column={column}
-                  projects={projects.filter((p) => p.status === column.id)}
+                  projects={getColumnProjects(column.id)}
                 />
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"
                   column={stackedColumn}
-                  projects={projects.filter((p) => p.status === stackedColumn.id)}
+                  projects={getColumnProjects(stackedColumn.id)}
                 />
               </div>
             );
@@ -137,7 +159,7 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
             <KanbanColumn
               key={column.id}
               column={column}
-              projects={projects.filter((p) => p.status === column.id)}
+              projects={getColumnProjects(column.id)}
             />
           );
         })}

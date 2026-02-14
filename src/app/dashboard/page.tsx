@@ -34,9 +34,9 @@ export default async function DashboardPage() {
     .single();
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <AutoSync lastSyncAt={syncMeta?.value ?? null} />
-      <div className="mb-6 flex shrink-0 items-center justify-between">
+      <div className="mb-4 flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
             Proyectos
@@ -67,8 +67,10 @@ export default async function DashboardPage() {
           </p>
         </div>
       ) : (
-        <KanbanBoard initialProjects={confirmedProjects} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <KanbanBoard initialProjects={confirmedProjects} />
+        </div>
       )}
-    </>
+    </div>
   );
 }

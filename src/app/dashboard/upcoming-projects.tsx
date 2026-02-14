@@ -14,7 +14,7 @@ export function UpcomingProjects({ projects }: UpcomingProjectsProps) {
   if (projects.length === 0) return null;
 
   return (
-    <div className="mb-6">
+    <div className="mb-4 shrink-0">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
