@@ -92,10 +92,9 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
 
   function handleGenerate() {
     startTransition(async () => {
-      try {
-        await generatePrintJobs(item.id);
-      } catch (e) {
-        alert(e instanceof Error ? e.message : "Error al generar cola");
+      const result = await generatePrintJobs(item.id);
+      if (!result.success) {
+        alert(result.error || "Error al generar cola");
       }
     });
   }

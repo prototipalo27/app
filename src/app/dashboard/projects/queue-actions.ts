@@ -38,7 +38,8 @@ export async function updateItemPrintConfig(
   revalidatePath(`/dashboard/projects/${item.project_id}`);
 }
 
-export async function generatePrintJobs(itemId: string) {
+export async function generatePrintJobs(itemId: string): Promise<{ success: boolean; error?: string }> {
+  try {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) redirect("/login");
@@ -49,9 +50,9 @@ export async function generatePrintJobs(itemId: string) {
     .select("*")
     .eq("id", itemId)
     .single();
-  if (!item) throw new Error("Item not found");
-  if (!item.print_time_minutes) throw new Error("Print time not set");
-  if (!item.printer_type_id) throw new Error("Printer type not set");
+  if (!item) return { success: false, error: "Item no encontrado" };
+  if (!item.print_time_minutes) return { success: false, error: "Tiempo de impresion no configurado" };
+  if (!item.printer_type_id) return { success: false, error: "Tipo de impresora no seleccionado" };
 
   // Delete existing queued jobs for this item
   await supabase
@@ -70,7 +71,7 @@ export async function generatePrintJobs(itemId: string) {
     .eq("printer_type_id", item.printer_type_id);
 
   if (!printers || printers.length === 0) {
-    throw new Error("No printers of this type available");
+    return { success: false, error: "No hay impresoras de este tipo disponibles" };
   }
 
   // Calculate current load per printer (sum of estimated_minutes for queued/printing jobs)
@@ -146,11 +147,16 @@ export async function generatePrintJobs(itemId: string) {
 
   // Insert all jobs
   const { error } = await supabase.from("print_jobs").insert(jobs);
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: `Error al insertar jobs: ${error.message}` };
 
   revalidatePath(`/dashboard/projects/${item.project_id}`);
   revalidatePath("/dashboard/queue");
   revalidatePath("/dashboard/printers");
+
+  return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Error desconocido al generar cola" };
+  }
 }
 
 export async function cancelPrintJob(jobId: string) {
