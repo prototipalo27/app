@@ -5,9 +5,11 @@ export interface PacklinkAddress {
   country: string; // ISO 2-letter code (ES, FR, DE…)
   email?: string;
   name?: string;
+  surname?: string;
   phone?: string;
   street1: string;
   zip_code: string;
+  state?: string;
   company?: string;
 }
 

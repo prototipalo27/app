@@ -4,16 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { PacklinkService } from "@/lib/packlink/types";
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
-
-const SENDER_ADDRESS = {
-  name: "Prototipalo",
-  street1: "Calle Viriato 27",
-  city: "Madrid",
-  zip_code: "28010",
-  country: "ES",
-  email: "",
-  phone: "",
-};
+import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
 interface ProjectOption {
   id: string;
@@ -65,6 +56,7 @@ export default function NewShipmentPage() {
 
   // Recipient
   const [recipientName, setRecipientName] = useState("");
+  const [recipientSurname, setRecipientSurname] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
 
@@ -135,8 +127,10 @@ export default function NewShipmentPage() {
     setContactQuery(contact.name);
     setContactOpen(false);
 
-    // Auto-fill recipient fields
-    setRecipientName(contact.name || "");
+    // Auto-fill recipient fields — split name into first + surname
+    const nameParts = (contact.name || "").split(" ");
+    setRecipientName(nameParts[0] || "");
+    setRecipientSurname(nameParts.slice(1).join(" ") || "");
     setRecipientEmail(contact.email || "");
     setRecipientPhone(contact.phone || contact.mobile || "");
 
@@ -206,6 +200,7 @@ export default function NewShipmentPage() {
           from: SENDER_ADDRESS,
           to: {
             name: recipientName,
+            surname: recipientSurname,
             email: recipientEmail,
             phone: recipientPhone,
             street1: street,
@@ -358,7 +353,8 @@ export default function NewShipmentPage() {
           <div>
             <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Recipient</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input type="text" placeholder="Name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className={inputClass} />
+              <input type="text" placeholder="First name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} className={inputClass} />
+              <input type="text" placeholder="Surname" value={recipientSurname} onChange={(e) => setRecipientSurname(e.target.value)} className={inputClass} />
               <input type="email" placeholder="Email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} className={inputClass} />
               <input type="tel" placeholder="Phone" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} className={inputClass} />
             </div>
@@ -537,6 +533,7 @@ export default function NewShipmentPage() {
               setSelectedContact(null);
               setContactQuery("");
               setRecipientName("");
+              setRecipientSurname("");
               setRecipientEmail("");
               setRecipientPhone("");
               setStreet("");

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkService, PacklinkTrackingEvent } from "@/lib/packlink/types";
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
+import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
 interface HoldedContactAddress {
   address?: string;
@@ -26,17 +27,6 @@ interface ProjectShippingProps {
   } | null;
 }
 
-// Sender address (workshop default)
-const SENDER_ADDRESS = {
-  name: "Prototipalo",
-  street1: "Calle Viriato 27",
-  city: "Madrid",
-  zip_code: "28010",
-  country: "ES",
-  email: "",
-  phone: "",
-};
-
 export function ProjectShipping({ projectId, shippingInfo, holdedContact }: ProjectShippingProps) {
   // Determine initial step based on existing data
   const getInitialStep = () => {
@@ -52,10 +42,15 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
   const [error, setError] = useState<string | null>(null);
   const [currentShipping, setCurrentShipping] = useState(shippingInfo);
 
-  // Form state — pre-fill from Holded contact
-  const [recipientName, setRecipientName] = useState(
-    holdedContact?.name ?? "",
-  );
+  // Form state — pre-fill from Holded contact (split name into first + surname)
+  const [recipientName, setRecipientName] = useState(() => {
+    const parts = (holdedContact?.name ?? "").split(" ");
+    return parts[0] || "";
+  });
+  const [recipientSurname, setRecipientSurname] = useState(() => {
+    const parts = (holdedContact?.name ?? "").split(" ");
+    return parts.slice(1).join(" ") || "";
+  });
   const [recipientEmail, setRecipientEmail] = useState(
     holdedContact?.email ?? "",
   );
@@ -144,6 +139,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
           from: SENDER_ADDRESS,
           to: {
             name: recipientName,
+            surname: recipientSurname,
             email: recipientEmail,
             phone: recipientPhone,
             street1: street,
@@ -276,9 +272,16 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             <div className="grid gap-3 sm:grid-cols-2">
               <input
                 type="text"
-                placeholder="Name"
+                placeholder="First name"
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
+                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+              <input
+                type="text"
+                placeholder="Surname"
+                value={recipientSurname}
+                onChange={(e) => setRecipientSurname(e.target.value)}
                 className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
               <input
