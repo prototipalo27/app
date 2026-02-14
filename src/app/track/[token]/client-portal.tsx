@@ -79,12 +79,14 @@ export default function ClientPortal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "send", token, email }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setVerifyError(data.error || "Error al enviar el código");
+        const data = await res.json().catch(() => null);
+        setVerifyError(data?.error || "Error al enviar el código");
         return;
       }
       setVerifyState("code-input");
+    } catch {
+      setVerifyError("Error de conexión. Inténtalo de nuevo.");
     } finally {
       setVerifyLoading(false);
     }
@@ -99,12 +101,14 @@ export default function ClientPortal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "check", token, code }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setVerifyError(data.error || "Error al verificar");
+        const data = await res.json().catch(() => null);
+        setVerifyError(data?.error || "Error al verificar");
         return;
       }
       setVerifyState("verified");
+    } catch {
+      setVerifyError("Error de conexión. Inténtalo de nuevo.");
     } finally {
       setVerifyLoading(false);
     }

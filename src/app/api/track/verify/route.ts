@@ -56,19 +56,27 @@ export async function POST(request: NextRequest) {
     const pendingJwt = await createPendingToken(code, email, project.id);
     await setPendingCookie(pendingJwt);
 
-    await sendEmail({
-      to: email,
-      subject: "Tu codigo de verificacion — Prototipalo",
-      text: `Tu codigo de verificacion es: ${code}\n\nExpira en 10 minutos.`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #18181b; margin-bottom: 16px;">Prototipalo</h2>
-          <p style="color: #52525b;">Tu codigo de verificacion es:</p>
-          <p style="font-size: 32px; font-weight: bold; letter-spacing: 0.15em; color: #18181b; text-align: center; margin: 24px 0;">${code}</p>
-          <p style="color: #71717a; font-size: 14px;">Expira en 10 minutos.</p>
-        </div>
-      `,
-    });
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Tu codigo de verificacion — Prototipalo",
+        text: `Tu codigo de verificacion es: ${code}\n\nExpira en 10 minutos.`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #18181b; margin-bottom: 16px;">Prototipalo</h2>
+            <p style="color: #52525b;">Tu codigo de verificacion es:</p>
+            <p style="font-size: 32px; font-weight: bold; letter-spacing: 0.15em; color: #18181b; text-align: center; margin: 24px 0;">${code}</p>
+            <p style="color: #71717a; font-size: 14px;">Expira en 10 minutos.</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      console.error("Error sending verification email:", err);
+      return NextResponse.json(
+        { error: "No se pudo enviar el email. Inténtalo de nuevo." },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({ ok: true });
   }
