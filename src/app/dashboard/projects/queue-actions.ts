@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { addWorkMinutes } from "@/lib/schedule";
 
 export async function updateItemPrintConfig(
   itemId: string,
@@ -74,10 +75,12 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
     return { success: false, error: "No hay impresoras de este tipo disponibles" };
   }
 
-  // Calculate current load per printer (sum of estimated_minutes for queued/printing jobs)
-  const printerLoads: Record<string, number> = {};
+  const now = new Date();
+
+  // Calculate current wall-clock end-time per printer
+  const printerEndTimes: Record<string, Date> = {};
   for (const p of printers) {
-    printerLoads[p.id] = 0;
+    printerEndTimes[p.id] = new Date(now);
   }
 
   const { data: existingJobs } = await supabase
@@ -87,10 +90,15 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
     .in("status", ["queued", "printing"]);
 
   if (existingJobs) {
+    // Sum existing load per printer, then convert to wall-clock end time
+    const loadMinutes: Record<string, number> = {};
     for (const job of existingJobs) {
       if (job.printer_id) {
-        printerLoads[job.printer_id] = (printerLoads[job.printer_id] || 0) + job.estimated_minutes;
+        loadMinutes[job.printer_id] = (loadMinutes[job.printer_id] || 0) + job.estimated_minutes;
       }
+    }
+    for (const [pid, mins] of Object.entries(loadMinutes)) {
+      printerEndTimes[pid] = addWorkMinutes(now, mins);
     }
   }
 
@@ -107,7 +115,7 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
     }
   }
 
-  // Generate and assign batches with greedy load balancing
+  // Generate and assign batches with greedy wall-clock load balancing
   const jobs: Array<{
     project_item_id: string;
     printer_id: string;
@@ -116,20 +124,24 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
     pieces_in_batch: number;
     estimated_minutes: number;
     position: number;
+    scheduled_start: string;
   }> = [];
 
   for (let b = 0; b < totalBatches; b++) {
     const piecesInBatch = Math.min(batchSize, item.quantity - b * batchSize);
 
-    // Find printer with minimum load
+    // Find printer with earliest end time (least loaded in wall-clock)
     let minPrinterId = printers[0].id;
-    let minLoad = printerLoads[minPrinterId];
+    let minEnd = printerEndTimes[minPrinterId].getTime();
     for (const p of printers) {
-      if (printerLoads[p.id] < minLoad) {
-        minLoad = printerLoads[p.id];
+      const t = printerEndTimes[p.id].getTime();
+      if (t < minEnd) {
+        minEnd = t;
         minPrinterId = p.id;
       }
     }
+
+    const scheduledStart = new Date(printerEndTimes[minPrinterId]);
 
     jobs.push({
       project_item_id: itemId,
@@ -139,9 +151,10 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       pieces_in_batch: piecesInBatch,
       estimated_minutes: item.print_time_minutes,
       position: printerPositions[minPrinterId],
+      scheduled_start: scheduledStart.toISOString(),
     });
 
-    printerLoads[minPrinterId] += item.print_time_minutes;
+    printerEndTimes[minPrinterId] = addWorkMinutes(scheduledStart, item.print_time_minutes);
     printerPositions[minPrinterId] += 1;
   }
 

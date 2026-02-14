@@ -96,6 +96,7 @@ export default async function ProjectDetailPage({
     estimated_minutes: number;
     status: string;
     position: number;
+    scheduled_start: string | null;
     started_at: string | null;
     completed_at: string | null;
     created_at: string | null;

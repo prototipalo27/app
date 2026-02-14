@@ -1,7 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
+import {
+  isOfficeHour,
+  nextOfficeStart,
+  addWorkMinutes,
+  OFFICE_START_H,
+  OFFICE_START_M,
+  OFFICE_END_H,
+  OFFICE_END_M,
+} from "@/lib/schedule";
 
 interface PrinterInfo {
   id: string;
@@ -19,6 +28,7 @@ interface JobInfo {
   estimated_minutes: number;
   status: string;
   position: number;
+  scheduled_start: string | null;
   item_name: string;
   project_name: string;
   project_id: string | null;
@@ -27,6 +37,7 @@ interface JobInfo {
 interface QueueTimelineProps {
   printers: PrinterInfo[];
   jobs: JobInfo[];
+  startTime: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -49,8 +60,20 @@ function formatMinutes(m: number): string {
   return h > 0 ? `${h}h ${min}m` : `${min}m`;
 }
 
-export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
+function formatTime(d: Date): string {
+  return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDate(d: Date): string {
+  return d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** Pixels per wall-clock minute for the timeline axis */
+const PX_PER_MIN = 2;
+
+export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps) {
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
+  const origin = useMemo(() => new Date(startTime), [startTime]);
 
   // Group jobs by printer
   const jobsByPrinter: Record<string, JobInfo[]> = {};
@@ -63,23 +86,103 @@ export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
     }
   }
 
-  // Unassigned jobs
   const unassignedJobs = jobs.filter((j) => !j.printer_id);
 
-  // Calculate max total minutes across all printers for scale
-  let maxMinutes = 60; // minimum 1 hour scale
-  for (const printerId of Object.keys(jobsByPrinter)) {
-    const total = jobsByPrinter[printerId]
-      .filter((j) => j.status !== "done")
-      .reduce((sum, j) => sum + j.estimated_minutes, 0);
-    if (total > maxMinutes) maxMinutes = total;
+  // Compute latest end time across all jobs to size the axis
+  let latestEnd = new Date(origin);
+  for (const j of jobs) {
+    if (j.scheduled_start) {
+      const jobEnd = addWorkMinutes(new Date(j.scheduled_start), j.estimated_minutes);
+      if (jobEnd > latestEnd) latestEnd = jobEnd;
+    }
   }
 
-  // Generate hour markers
-  const totalHours = Math.ceil(maxMinutes / 60);
-  const hourMarkers = Array.from({ length: totalHours + 1 }, (_, i) => i);
+  const totalWallMinutes = Math.max(
+    60,
+    Math.ceil((latestEnd.getTime() - origin.getTime()) / 60000) + 60
+  );
+  const totalWidthPx = totalWallMinutes * PX_PER_MIN;
 
-  // Filter printers that have jobs or have a type assigned
+  // Generate hour markers (real clock times)
+  const hourMarkers = useMemo(() => {
+    const markers: { label: string; offsetPx: number; isNewDay: boolean }[] = [];
+    const cursor = new Date(origin);
+    // Round up to next full hour
+    cursor.setMinutes(0, 0, 0);
+    cursor.setHours(cursor.getHours() + 1);
+
+    while (cursor.getTime() - origin.getTime() < totalWallMinutes * 60000) {
+      const offsetMin = (cursor.getTime() - origin.getTime()) / 60000;
+      markers.push({
+        label: formatTime(cursor),
+        offsetPx: offsetMin * PX_PER_MIN,
+        isNewDay: cursor.getHours() === 0,
+      });
+      cursor.setHours(cursor.getHours() + 1);
+    }
+    return markers;
+  }, [origin, totalWallMinutes]);
+
+  // Generate dead-zone bands (nights & weekends)
+  const deadZones = useMemo(() => {
+    const zones: { leftPx: number; widthPx: number }[] = [];
+    const endMs = origin.getTime() + totalWallMinutes * 60000;
+    let cursor = new Date(origin);
+
+    while (cursor.getTime() < endMs) {
+      if (!isOfficeHour(cursor)) {
+        const deadStart = cursor.getTime();
+        const resumeAt = nextOfficeStart(new Date(cursor));
+        const deadEnd = Math.min(resumeAt.getTime(), endMs);
+        const leftMin = (deadStart - origin.getTime()) / 60000;
+        const widthMin = (deadEnd - deadStart) / 60000;
+        if (widthMin > 0) {
+          zones.push({
+            leftPx: leftMin * PX_PER_MIN,
+            widthPx: widthMin * PX_PER_MIN,
+          });
+        }
+        cursor = new Date(deadEnd);
+      } else {
+        // Advance to end of today's office hours
+        const eod = new Date(cursor);
+        eod.setHours(OFFICE_END_H, OFFICE_END_M, 0, 0);
+        cursor = eod;
+      }
+    }
+    return zones;
+  }, [origin, totalWallMinutes]);
+
+  // Day labels for the header
+  const dayLabels = useMemo(() => {
+    const labels: { label: string; offsetPx: number; widthPx: number }[] = [];
+    const endMs = origin.getTime() + totalWallMinutes * 60000;
+    const cursor = new Date(origin);
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor.getTime() < endMs) {
+      const dayStart = Math.max(cursor.getTime(), origin.getTime());
+      const nextDay = new Date(cursor);
+      nextDay.setDate(nextDay.getDate() + 1);
+      nextDay.setHours(0, 0, 0, 0);
+      const dayEnd = Math.min(nextDay.getTime(), endMs);
+
+      const leftMin = (dayStart - origin.getTime()) / 60000;
+      const widthMin = (dayEnd - dayStart) / 60000;
+
+      if (widthMin > 0) {
+        labels.push({
+          label: formatDate(new Date(dayStart)),
+          offsetPx: leftMin * PX_PER_MIN,
+          widthPx: widthMin * PX_PER_MIN,
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(0, 0, 0, 0);
+    }
+    return labels;
+  }, [origin, totalWallMinutes]);
+
   const printersWithJobs = printers.filter(
     (p) => (jobsByPrinter[p.id]?.length ?? 0) > 0
   );
@@ -103,27 +206,44 @@ export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded bg-red-500" /> Fallido
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-6 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" /> Fuera de horario
+        </span>
       </div>
 
       {/* Timeline */}
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        {/* Day labels row */}
+        <div className="flex border-b border-zinc-100 dark:border-zinc-800">
+          <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-1 dark:border-zinc-800" />
+          <div className="relative flex-1" style={{ minWidth: `${totalWidthPx}px` }}>
+            {dayLabels.map((d, i) => (
+              <div
+                key={i}
+                className="absolute top-0 truncate px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+                style={{ left: `${d.offsetPx}px`, width: `${d.widthPx}px` }}
+              >
+                {d.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Hour scale header */}
         <div className="flex border-b border-zinc-100 dark:border-zinc-800">
           <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Impresora
           </div>
-          <div className="relative flex-1">
-            <div className="flex" style={{ minWidth: `${totalHours * 120}px` }}>
-              {hourMarkers.map((h) => (
-                <div
-                  key={h}
-                  className="border-l border-zinc-100 px-1 py-2 text-xs text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
-                  style={{ width: "120px" }}
-                >
-                  {h}h
-                </div>
-              ))}
-            </div>
+          <div className="relative flex-1" style={{ minWidth: `${totalWidthPx}px`, height: "28px" }}>
+            {hourMarkers.map((m, i) => (
+              <div
+                key={i}
+                className="absolute top-0 border-l border-zinc-100 px-1 py-2 text-[10px] text-zinc-400 dark:border-zinc-800 dark:text-zinc-500"
+                style={{ left: `${m.offsetPx}px` }}
+              >
+                {m.label}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -131,7 +251,7 @@ export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
         {printersWithJobs.map((printer) => {
           const printerJobs = jobsByPrinter[printer.id] || [];
           const activeJobs = printerJobs.filter((j) => j.status !== "done");
-          const totalMin = activeJobs.reduce((s, j) => s + j.estimated_minutes, 0);
+          const totalWorkMin = activeJobs.reduce((s, j) => s + j.estimated_minutes, 0);
 
           return (
             <div
@@ -145,34 +265,55 @@ export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
                 </div>
                 <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
                   {printer.type_name || "Sin tipo"}
-                  {totalMin > 0 && ` · ~${formatMinutes(totalMin)}`}
+                  {totalWorkMin > 0 && ` · ~${formatMinutes(totalWorkMin)} trabajo`}
                 </div>
               </div>
 
-              {/* Jobs bar */}
-              <div className="relative flex flex-1 items-center gap-0.5 px-1 py-2" style={{ minWidth: `${totalHours * 120}px` }}>
+              {/* Jobs positioned absolutely on the timeline */}
+              <div
+                className="relative flex-1 py-2"
+                style={{ minWidth: `${totalWidthPx}px`, height: "48px" }}
+              >
+                {/* Dead zone bands */}
+                {deadZones.map((z, i) => (
+                  <div
+                    key={`dz-${i}`}
+                    className="absolute top-0 h-full bg-zinc-100 dark:bg-zinc-800/50"
+                    style={{ left: `${z.leftPx}px`, width: `${z.widthPx}px` }}
+                  />
+                ))}
+
+                {/* Job blocks */}
                 {printerJobs.map((job) => {
-                  const widthPx = Math.max(
-                    (job.estimated_minutes / 60) * 120,
-                    24
-                  );
+                  const jobStart = job.scheduled_start
+                    ? new Date(job.scheduled_start)
+                    : origin;
+                  const jobEnd = addWorkMinutes(jobStart, job.estimated_minutes);
+
+                  // Wall-clock width (includes dead hours visually)
+                  const leftMin = (jobStart.getTime() - origin.getTime()) / 60000;
+                  const widthMin = (jobEnd.getTime() - jobStart.getTime()) / 60000;
+                  const leftPx = Math.max(0, leftMin * PX_PER_MIN);
+                  const widthPx = Math.max(24, widthMin * PX_PER_MIN);
                   const isHovered = hoveredJob === job.id;
 
                   return (
                     <div
                       key={job.id}
-                      className={`relative h-8 shrink-0 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} transition-all ${isHovered ? "z-10 scale-y-125 brightness-110" : ""}`}
-                      style={{ width: `${widthPx}px` }}
+                      className={`absolute top-2 h-8 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} transition-all ${isHovered ? "z-10 scale-y-125 brightness-110" : "z-[1]"}`}
+                      style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
                       onMouseEnter={() => setHoveredJob(job.id)}
                       onMouseLeave={() => setHoveredJob(null)}
                     >
                       <span className="absolute inset-0 flex items-center justify-center overflow-hidden px-1 text-[10px] font-medium text-white">
-                        {widthPx >= 60 ? `B${job.batch_number} · ${job.pieces_in_batch}pzs` : `B${job.batch_number}`}
+                        {widthPx >= 80
+                          ? `B${job.batch_number} · ${job.pieces_in_batch}pzs`
+                          : `B${job.batch_number}`}
                       </span>
 
                       {/* Tooltip */}
                       {isHovered && (
-                        <div className="absolute top-full left-0 z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                        <div className="absolute top-full left-0 z-20 mt-1 w-60 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                           <div className="text-xs font-semibold text-zinc-900 dark:text-white">
                             {job.project_name}
                           </div>
@@ -181,6 +322,12 @@ export function QueueTimeline({ printers, jobs }: QueueTimelineProps) {
                           </div>
                           <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                             {job.pieces_in_batch} piezas · ~{formatMinutes(job.estimated_minutes)}
+                          </div>
+                          <div className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                            Inicio: {formatTime(jobStart)} {formatDate(jobStart)}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                            Fin est.: {formatTime(jobEnd)} {formatDate(jobEnd)}
                           </div>
                           {job.project_id && (
                             <Link

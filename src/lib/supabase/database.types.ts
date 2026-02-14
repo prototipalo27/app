@@ -448,6 +448,7 @@ export type Database = {
           printer_id: string | null
           printer_type_id: string
           project_item_id: string
+          scheduled_start: string | null
           started_at: string | null
           status: string
         }
@@ -462,6 +463,7 @@ export type Database = {
           printer_id?: string | null
           printer_type_id: string
           project_item_id: string
+          scheduled_start?: string | null
           started_at?: string | null
           status?: string
         }
@@ -476,6 +478,7 @@ export type Database = {
           printer_id?: string | null
           printer_type_id?: string
           project_item_id?: string
+          scheduled_start?: string | null
           started_at?: string | null
           status?: string
         }

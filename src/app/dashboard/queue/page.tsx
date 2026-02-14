@@ -27,6 +27,7 @@ export default async function QueuePage() {
       estimated_minutes,
       status,
       position,
+      scheduled_start,
       started_at,
       completed_at,
       created_at
@@ -93,6 +94,7 @@ export default async function QueuePage() {
           type_name: p.printer_type_id ? printerTypeMap[p.printer_type_id] : null,
         }))}
         jobs={enrichedJobs}
+        startTime={new Date().toISOString()}
       />
     </div>
   );
