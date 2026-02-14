@@ -69,10 +69,13 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
       // Handle discard drop
       if (targetId === "discard") {
         setProjects((prev) => prev.filter((p) => p.id !== projectId));
-        discardProject(projectId).catch(() => {
-          const project = initialProjects.find((p) => p.id === projectId);
-          if (project) {
-            setProjects((prev) => [...prev, project]);
+        discardProject(projectId).then((result) => {
+          if (!result.success) {
+            // Rollback on failure
+            const project = initialProjects.find((p) => p.id === projectId);
+            if (project) {
+              setProjects((prev) => [...prev, project]);
+            }
           }
         });
         return;
@@ -95,12 +98,14 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
       );
 
       // Persist to database
-      updateProjectStatusById(projectId, newStatus).catch(() => {
-        setProjects((prev) =>
-          prev.map((p) =>
-            p.id === projectId ? { ...p, status: previousStatus } : p,
-          ),
-        );
+      updateProjectStatusById(projectId, newStatus).then((result) => {
+        if (!result.success) {
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === projectId ? { ...p, status: previousStatus } : p,
+            ),
+          );
+        }
       });
     },
     [projects, initialProjects],

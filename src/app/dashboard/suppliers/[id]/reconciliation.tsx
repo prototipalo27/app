@@ -73,7 +73,7 @@ export default function Reconciliation({
 
   function generateClaimText() {
     const lines = [
-      `Hola ${supplierName},`,
+      "Hola,",
       "",
       "Estoy ayudando en Prototipalo a recopilar las facturas de los últimos gastos para poder cerrar la conciliación contable.",
       "",

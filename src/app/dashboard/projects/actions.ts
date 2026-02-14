@@ -69,12 +69,12 @@ export async function updateProjectStatus(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-export async function updateProjectStatusById(id: string, status: string) {
+export async function updateProjectStatusById(id: string, status: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
   if (userError || !userData.user) {
-    throw new Error("Unauthorized");
+    return { success: false, error: "Unauthorized" };
   }
 
   const { error } = await supabase
@@ -83,10 +83,11 @@ export async function updateProjectStatusById(id: string, status: string) {
     .eq("id", id);
 
   if (error) {
-    throw new Error(error.message);
+    return { success: false, error: error.message };
   }
 
   revalidatePath("/dashboard");
+  return { success: true };
 }
 
 export async function updateProjectDeadline(projectId: string, deadline: string | null) {
@@ -236,12 +237,12 @@ export async function sendProjectEmail(
   revalidatePath(`/dashboard/crm/${leadId}`);
 }
 
-export async function discardProject(id: string) {
+export async function discardProject(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
 
   if (userError || !userData.user) {
-    throw new Error("Unauthorized");
+    return { success: false, error: "Unauthorized" };
   }
 
   const { error } = await supabase
@@ -249,9 +250,10 @@ export async function discardProject(id: string) {
     .update({ project_type: "discarded", updated_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard");
+  return { success: true };
 }
 
 export async function deleteProject(formData: FormData) {
