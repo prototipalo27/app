@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { Metadata } from "next";
 import { getTracking } from "@/lib/packlink/api";
+import { getVerifiedClient } from "@/lib/client-auth";
+import ClientPortal from "./client-portal";
 
 interface TrackingEvent {
   city: string;
@@ -193,7 +195,6 @@ function ShippingCard({ shipping, trackingEvents }: { shipping: Tables<"shipping
         )}
       </div>
 
-      {/* Tracking timeline */}
       {trackingEvents.length > 0 && (
         <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           <p className="mb-3 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Seguimiento</p>
@@ -230,7 +231,7 @@ export default async function TrackingPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, status, description, client_name, tracking_token")
+    .select("id, name, status, description, client_name, tracking_token, client_email, google_drive_folder_id, design_visible, design_approved_at, deliverable_visible, deliverable_approved_at, payment_confirmed_at")
     .eq("tracking_token", token)
     .single();
 
@@ -261,6 +262,10 @@ export default async function TrackingPage({
       // Tracking may not be available
     }
   }
+
+  // Check client verification
+  const verifiedEmail = await getVerifiedClient(project.id);
+  const isVerified = !!verifiedEmail;
 
   const currentStatusColor =
     STATUS_COLORS[project.status] ?? STATUS_COLORS.pending;
@@ -345,6 +350,24 @@ export default async function TrackingPage({
                 <ItemProgress key={item.id} item={item} />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Client Portal (Briefing, Diseño, Entregable) */}
+        {project.google_drive_folder_id && (
+          <div className="mb-6">
+            <ClientPortal
+              token={token}
+              projectId={project.id}
+              clientEmail={project.client_email}
+              hasDriveFolder={!!project.google_drive_folder_id}
+              isVerified={isVerified}
+              designVisible={project.design_visible}
+              designApprovedAt={project.design_approved_at}
+              deliverableVisible={project.deliverable_visible}
+              deliverableApprovedAt={project.deliverable_approved_at}
+              paymentConfirmedAt={project.payment_confirmed_at}
+            />
           </div>
         )}
 

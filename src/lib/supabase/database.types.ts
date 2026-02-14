@@ -805,7 +805,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline: string | null
+          deliverable_approved_at: string | null
+          deliverable_visible: boolean
           description: string | null
+          design_approved_at: string | null
+          design_visible: boolean
           google_drive_folder_id: string | null
           holded_contact_id: string | null
           holded_invoice_id: string | null
@@ -815,6 +819,7 @@ export type Database = {
           material: string | null
           name: string
           notes: string | null
+          payment_confirmed_at: string | null
           price: number | null
           print_time_minutes: number | null
           project_type: string
@@ -830,7 +835,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline?: string | null
+          deliverable_approved_at?: string | null
+          deliverable_visible?: boolean
           description?: string | null
+          design_approved_at?: string | null
+          design_visible?: boolean
           google_drive_folder_id?: string | null
           holded_contact_id?: string | null
           holded_invoice_id?: string | null
@@ -840,6 +849,7 @@ export type Database = {
           material?: string | null
           name: string
           notes?: string | null
+          payment_confirmed_at?: string | null
           price?: number | null
           print_time_minutes?: number | null
           project_type?: string
@@ -855,7 +865,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline?: string | null
+          deliverable_approved_at?: string | null
+          deliverable_visible?: boolean
           description?: string | null
+          design_approved_at?: string | null
+          design_visible?: boolean
           google_drive_folder_id?: string | null
           holded_contact_id?: string | null
           holded_invoice_id?: string | null
@@ -865,6 +879,7 @@ export type Database = {
           material?: string | null
           name?: string
           notes?: string | null
+          payment_confirmed_at?: string | null
           price?: number | null
           print_time_minutes?: number | null
           project_type?: string

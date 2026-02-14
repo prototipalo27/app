@@ -283,6 +283,29 @@ export async function discardProject(id: string): Promise<{ success: boolean; er
   return { success: true };
 }
 
+export async function togglePortalVisibility(
+  projectId: string,
+  field: "design_visible" | "deliverable_visible",
+  value: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ [field]: value })
+    .eq("id", projectId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function deleteProject(formData: FormData) {
   await requireRole("manager");
 

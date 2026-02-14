@@ -1,0 +1,113 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { sendEmail } from "@/lib/email";
+import {
+  generateCode,
+  createPendingToken,
+  createVerifiedToken,
+  verifyToken,
+  setPendingCookie,
+  setVerifiedCookie,
+  deletePendingCookie,
+  getPendingToken,
+} from "@/lib/client-auth";
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { action, token } = body as {
+    action: "send" | "check";
+    token: string;
+    email?: string;
+    code?: string;
+  };
+
+  if (!token) {
+    return NextResponse.json({ error: "Token requerido" }, { status: 400 });
+  }
+
+  const supabase = createServiceClient();
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, client_email")
+    .eq("tracking_token", token)
+    .single();
+
+  if (!project) {
+    return NextResponse.json({ error: "Proyecto no encontrado" }, { status: 404 });
+  }
+
+  if (action === "send") {
+    const { email } = body as { email: string };
+    if (!email) {
+      return NextResponse.json({ error: "Email requerido" }, { status: 400 });
+    }
+
+    if (
+      !project.client_email ||
+      project.client_email.toLowerCase() !== email.toLowerCase()
+    ) {
+      return NextResponse.json(
+        { error: "El email no coincide con el del proyecto" },
+        { status: 403 },
+      );
+    }
+
+    const code = generateCode();
+    const pendingJwt = await createPendingToken(code, email, project.id);
+    await setPendingCookie(pendingJwt);
+
+    await sendEmail({
+      to: email,
+      subject: "Tu codigo de verificacion — Prototipalo",
+      text: `Tu codigo de verificacion es: ${code}\n\nExpira en 10 minutos.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #18181b; margin-bottom: 16px;">Prototipalo</h2>
+          <p style="color: #52525b;">Tu codigo de verificacion es:</p>
+          <p style="font-size: 32px; font-weight: bold; letter-spacing: 0.15em; color: #18181b; text-align: center; margin: 24px 0;">${code}</p>
+          <p style="color: #71717a; font-size: 14px;">Expira en 10 minutos.</p>
+        </div>
+      `,
+    });
+
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "check") {
+    const { code } = body as { code: string };
+    if (!code) {
+      return NextResponse.json({ error: "Codigo requerido" }, { status: 400 });
+    }
+
+    const pendingJwt = await getPendingToken();
+    if (!pendingJwt) {
+      return NextResponse.json(
+        { error: "No hay codigo pendiente. Solicita uno nuevo." },
+        { status: 400 },
+      );
+    }
+
+    const pending = await verifyToken(pendingJwt);
+    if (!pending || !pending.code) {
+      return NextResponse.json(
+        { error: "Codigo expirado. Solicita uno nuevo." },
+        { status: 400 },
+      );
+    }
+
+    if (pending.code !== code) {
+      return NextResponse.json(
+        { error: "Codigo incorrecto" },
+        { status: 403 },
+      );
+    }
+
+    const verifiedJwt = await createVerifiedToken(pending.email, pending.projectId);
+    await setVerifiedCookie(verifiedJwt);
+    await deletePendingCookie();
+
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "Accion invalida" }, { status: 400 });
+}

@@ -13,7 +13,8 @@ export interface DriveFile {
 }
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-const PROJECT_SUBFOLDERS = ["Briefing", "Indoor", "Entregable"];
+const PROJECT_SUBFOLDERS = ["Briefing", "Entregable"];
+const DESIGN_SUBFOLDERS = ["Interno", "Externo"];
 
 /**
  * Authenticate with a Service Account and return a Drive client.
@@ -104,11 +105,15 @@ export async function createProjectFolder(
 
   const projectId = await createFolder(drive, projectName, clientFolderId);
 
-  // Create sub-folders in parallel
+  // Create top-level sub-folders in parallel
   await Promise.all(
-    PROJECT_SUBFOLDERS.map((name) =>
-      createFolder(drive, name, projectId),
-    ),
+    PROJECT_SUBFOLDERS.map((name) => createFolder(drive, name, projectId)),
+  );
+
+  // Create Diseño folder with Interno/Externo subfolders
+  const designId = await createFolder(drive, "Diseño", projectId);
+  await Promise.all(
+    DESIGN_SUBFOLDERS.map((name) => createFolder(drive, name, designId)),
   );
 
   return projectId;
@@ -245,6 +250,44 @@ export async function downloadFile(
     mimeType: meta.data.mimeType ?? "application/octet-stream",
     name: meta.data.name ?? "file",
   };
+}
+
+/**
+ * Resolve the Drive folder ID for a portal section.
+ * - "briefing"     → Briefing/
+ * - "design"       → Diseño/Externo/
+ * - "deliverable"  → Entregable/
+ */
+export async function resolveSectionFolder(
+  projectDriveFolderId: string,
+  section: "briefing" | "design" | "deliverable",
+): Promise<string | null> {
+  const projectFiles = await listFolderFiles(projectDriveFolderId);
+
+  if (section === "briefing") {
+    const folder = projectFiles.find(
+      (f) => f.mimeType === FOLDER_MIME && f.name === "Briefing",
+    );
+    return folder?.id ?? null;
+  }
+
+  if (section === "design") {
+    const designFolder = projectFiles.find(
+      (f) => f.mimeType === FOLDER_MIME && f.name === "Diseño",
+    );
+    if (!designFolder) return null;
+    const designFiles = await listFolderFiles(designFolder.id);
+    const externo = designFiles.find(
+      (f) => f.mimeType === FOLDER_MIME && f.name === "Externo",
+    );
+    return externo?.id ?? null;
+  }
+
+  // deliverable
+  const folder = projectFiles.find(
+    (f) => f.mimeType === FOLDER_MIME && f.name === "Entregable",
+  );
+  return folder?.id ?? null;
 }
 
 /**

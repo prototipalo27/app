@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { updateProjectStatus, deleteProject, updateProjectDeadline } from "../actions";
+import PortalToggles from "./portal-toggles";
 import { DeadlinePicker } from "./deadline-picker";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { getContact } from "@/lib/holded/api";
@@ -274,6 +275,18 @@ export default async function ProjectDetailPage({
           />
         </div>
       )}
+
+      {/* Portal toggles */}
+      <div className="mb-6">
+        <PortalToggles
+          projectId={project.id}
+          designVisible={project.design_visible}
+          designApprovedAt={project.design_approved_at}
+          deliverableVisible={project.deliverable_visible}
+          deliverableApprovedAt={project.deliverable_approved_at}
+          paymentConfirmedAt={project.payment_confirmed_at}
+        />
+      </div>
 
       {/* Documents */}
       <div className="mb-6">
