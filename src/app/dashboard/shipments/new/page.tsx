@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { PacklinkService } from "@/lib/packlink/types";
+import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 
 const SENDER_ADDRESS = {
   name: "Prototipalo",
@@ -73,11 +74,8 @@ export default function NewShipmentPage() {
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("ES");
 
-  // Package
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
-  const [length, setLength] = useState("");
-  const [weight, setWeight] = useState("");
+  // Packages
+  const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
 
   // Fetch projects for optional linking
   useEffect(() => {
@@ -163,15 +161,16 @@ export default function NewShipmentPage() {
     setError(null);
 
     try {
+      const firstPkg = packages[0];
       const params = new URLSearchParams({
         fromZip: SENDER_ADDRESS.zip_code,
         fromCountry: SENDER_ADDRESS.country,
         toZip: postalCode,
         toCountry: country,
-        width,
-        height,
-        length,
-        weight,
+        width: firstPkg.width,
+        height: firstPkg.height,
+        length: firstPkg.length,
+        weight: firstPkg.weight,
       });
 
       const res = await fetch(`/api/packlink/services?${params}`);
@@ -214,14 +213,12 @@ export default function NewShipmentPage() {
             zip_code: postalCode,
             country,
           },
-          packages: [
-            {
-              width: Number(width),
-              height: Number(height),
-              length: Number(length),
-              weight: Number(weight),
-            },
-          ],
+          packages: packages.map((p) => ({
+            width: Number(p.width),
+            height: Number(p.height),
+            length: Number(p.length),
+            weight: Number(p.weight),
+          })),
           title: title || undefined,
           contentDescription: contentDescription || undefined,
           declaredValue: declaredValue ? Number(declaredValue) : undefined,
@@ -378,28 +375,12 @@ export default function NewShipmentPage() {
             </div>
           </div>
 
-          {/* Package dimensions */}
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Package dimensions</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Width (cm)</label>
-                <input type="number" value={width} onChange={(e) => setWidth(e.target.value)} min="1" className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Height (cm)</label>
-                <input type="number" value={height} onChange={(e) => setHeight(e.target.value)} min="1" className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Length (cm)</label>
-                <input type="number" value={length} onChange={(e) => setLength(e.target.value)} min="1" className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Weight (kg)</label>
-                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} min="0.1" step="0.1" className={inputClass} />
-              </div>
-            </div>
-          </div>
+          {/* Packages */}
+          <PackageListEditor
+            packages={packages}
+            onChange={setPackages}
+            inputClass={inputClass}
+          />
 
           <div className="flex gap-2">
             <button
@@ -410,7 +391,7 @@ export default function NewShipmentPage() {
             </button>
             <button
               onClick={searchServices}
-              disabled={loading || !postalCode || !country || !width || !height || !length || !weight}
+              disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
               className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-black"
             >
               {loading ? "Searching…" : "Search carriers"}
@@ -562,10 +543,7 @@ export default function NewShipmentPage() {
               setCity("");
               setPostalCode("");
               setCountry("ES");
-              setWidth("");
-              setHeight("");
-              setLength("");
-              setWeight("");
+              setPackages([createEmptyPackage()]);
             }}
             className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
           >

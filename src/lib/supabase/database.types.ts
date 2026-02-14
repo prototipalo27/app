@@ -92,6 +92,36 @@ export type Database = {
         }
         Relationships: []
       }
+      box_presets: {
+        Row: {
+          created_at: string | null
+          height_cm: number
+          id: string
+          length_cm: number
+          name: string
+          weight_kg: number
+          width_cm: number
+        }
+        Insert: {
+          created_at?: string | null
+          height_cm: number
+          id?: string
+          length_cm: number
+          name: string
+          weight_kg: number
+          width_cm: number
+        }
+        Update: {
+          created_at?: string | null
+          height_cm?: number
+          id?: string
+          length_cm?: number
+          name?: string
+          weight_kg?: number
+          width_cm?: number
+        }
+        Relationships: []
+      }
       client_drive_folders: {
         Row: {
           client_name: string

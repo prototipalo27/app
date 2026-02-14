@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkService, PacklinkTrackingEvent } from "@/lib/packlink/types";
+import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 
 interface HoldedContactAddress {
   address?: string;
@@ -73,10 +74,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
   const [country, setCountry] = useState(
     holdedContact?.billAddress?.countryCode ?? "ES",
   );
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
-  const [length, setLength] = useState("");
-  const [weight, setWeight] = useState("");
+  const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
 
   // Fetch tracking when shipment exists
   useEffect(() => {
@@ -102,15 +100,16 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
     setError(null);
 
     try {
+      const firstPkg = packages[0];
       const params = new URLSearchParams({
         fromZip: SENDER_ADDRESS.zip_code,
         fromCountry: SENDER_ADDRESS.country,
         toZip: postalCode,
         toCountry: country,
-        width,
-        height,
-        length,
-        weight,
+        width: firstPkg.width,
+        height: firstPkg.height,
+        length: firstPkg.length,
+        weight: firstPkg.weight,
       });
 
       const res = await fetch(`/api/packlink/services?${params}`);
@@ -152,14 +151,12 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             zip_code: postalCode,
             country,
           },
-          packages: [
-            {
-              width: Number(width),
-              height: Number(height),
-              length: Number(length),
-              weight: Number(weight),
-            },
-          ],
+          packages: packages.map((p) => ({
+            width: Number(p.width),
+            height: Number(p.height),
+            length: Number(p.length),
+            weight: Number(p.weight),
+          })),
           content: "3D printed parts",
           contentvalue: 0,
         }),
@@ -186,10 +183,10 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
         recipient_name: recipientName,
         recipient_phone: recipientPhone,
         recipient_email: recipientEmail,
-        package_width: Number(width),
-        package_height: Number(height),
-        package_length: Number(length),
-        package_weight: Number(weight),
+        package_width: Number(packages[0].width),
+        package_height: Number(packages[0].height),
+        package_length: Number(packages[0].length),
+        package_weight: Number(packages[0].weight),
         shipment_status: "pending",
         shipped_at: new Date().toISOString(),
         packlink_order_ref: null,
@@ -337,53 +334,12 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             </div>
           </div>
 
-          {/* Package dimensions */}
-          <div>
-            <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Package dimensions</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Width (cm)</label>
-                <input
-                  type="number"
-                  value={width}
-                  onChange={(e) => setWidth(e.target.value)}
-                  min="1"
-                  className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Height (cm)</label>
-                <input
-                  type="number"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  min="1"
-                  className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Length (cm)</label>
-                <input
-                  type="number"
-                  value={length}
-                  onChange={(e) => setLength(e.target.value)}
-                  min="1"
-                  className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-zinc-400">Weight (kg)</label>
-                <input
-                  type="number"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  min="0.1"
-                  step="0.1"
-                  className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-            </div>
-          </div>
+          {/* Packages */}
+          <PackageListEditor
+            packages={packages}
+            onChange={setPackages}
+            inputClass="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          />
         </div>
 
         <div className="mt-5 flex gap-2">
@@ -395,7 +351,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
           </button>
           <button
             onClick={searchServices}
-            disabled={loading || !postalCode || !country || !width || !height || !length || !weight}
+            disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
             className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
           >
             {loading ? "Searching…" : "Search carriers"}
