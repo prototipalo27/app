@@ -4,6 +4,16 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 type Printer = Tables<"printers">;
 
+interface PrinterJob {
+  id: string;
+  batch_number: number;
+  pieces_in_batch: number;
+  estimated_minutes: number;
+  status: string;
+  item_name: string;
+  project_name: string;
+}
+
 const STATE_BADGES: Record<string, { label: string; className: string }> = {
   IDLE: { label: "Idle", className: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" },
   RUNNING: { label: "Printing", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
@@ -49,13 +59,21 @@ function formatTime(date: string) {
 
 function formatRemaining(minutes: number | null) {
   if (minutes === null) return null;
-  if (minutes < 60) return `${minutes}m left`;
+  if (minutes < 60) return `${minutes}m`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h}h ${m}m left`;
+  return `${h}h ${m}m`;
 }
 
-export default function PrinterCard({ printer }: { printer: Printer }) {
+function formatQueueTime(jobs: PrinterJob[]) {
+  const total = jobs.reduce((s, j) => s + j.estimated_minutes, 0);
+  if (total < 60) return `${total}m`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+export default function PrinterCard({ printer, jobs = [] }: { printer: Printer; jobs?: PrinterJob[] }) {
   const isOffline = !printer.online;
   const isRunning = printer.gcode_state === "RUNNING";
 
@@ -108,6 +126,31 @@ export default function PrinterCard({ printer }: { printer: Printer }) {
           <TempRow label="Nozzle" current={printer.nozzle_temp} target={printer.nozzle_target} />
           <TempRow label="Bed" current={printer.bed_temp} target={printer.bed_target} />
           <TempRow label="Chamber" current={printer.chamber_temp} />
+        </div>
+      )}
+
+      {/* Print Queue */}
+      {jobs.length > 0 && (
+        <div className="mb-3 space-y-1">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            Cola ({jobs.length} jobs, ~{formatQueueTime(jobs)})
+          </p>
+          {jobs.slice(0, 3).map((job) => (
+            <div key={job.id} className="flex items-center gap-1.5 text-xs">
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${job.status === "printing" ? "bg-green-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+              <span className="truncate text-zinc-600 dark:text-zinc-300">
+                {job.project_name} - B{job.batch_number}
+              </span>
+              <span className="ml-auto shrink-0 text-zinc-400">
+                {job.pieces_in_batch}pzs · {formatRemaining(job.estimated_minutes)}
+              </span>
+            </div>
+          ))}
+          {jobs.length > 3 && (
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              +{jobs.length - 3} mas
+            </p>
+          )}
         </div>
       )}
 

@@ -7,9 +7,20 @@ import PrinterCard from "./printer-card";
 
 type Printer = Tables<"printers">;
 
+interface PrinterJob {
+  id: string;
+  printer_id: string | null;
+  batch_number: number;
+  pieces_in_batch: number;
+  estimated_minutes: number;
+  status: string;
+  item_name: string;
+  project_name: string;
+}
+
 const SYNC_INTERVAL = 5 * 60_000; // 5 minutes (matches Vercel Cron)
 
-export default function PrinterGrid({ initialPrinters }: { initialPrinters: Printer[] }) {
+export default function PrinterGrid({ initialPrinters, initialJobs = [] }: { initialPrinters: Printer[]; initialJobs?: PrinterJob[] }) {
   const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -121,7 +132,7 @@ export default function PrinterGrid({ initialPrinters }: { initialPrinters: Prin
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((printer) => (
-            <PrinterCard key={printer.id} printer={printer} />
+            <PrinterCard key={printer.id} printer={printer} jobs={initialJobs.filter((j) => j.printer_id === printer.id)} />
           ))}
         </div>
       )}

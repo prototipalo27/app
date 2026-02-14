@@ -12,6 +12,7 @@ import { ProjectShipping } from "./project-shipping";
 import { CopyTrackingLink } from "./copy-tracking-link";
 import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
+import { listFolderFiles } from "@/lib/google-drive/client";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -76,6 +77,68 @@ export default async function ProjectDetailPage({
     .select("*")
     .eq("project_id", id)
     .order("created_at", { ascending: true });
+
+  // Fetch printer types for queue UI
+  const { data: printerTypes } = await supabase
+    .from("printer_types")
+    .select("*")
+    .order("name");
+
+  // Fetch print jobs for all items in this project
+  const itemIds = (projectItems ?? []).map((i) => i.id);
+  let printJobs: Array<{
+    id: string;
+    project_item_id: string;
+    printer_id: string | null;
+    printer_type_id: string;
+    batch_number: number;
+    pieces_in_batch: number;
+    estimated_minutes: number;
+    status: string;
+    position: number;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string | null;
+    printer_name?: string;
+  }> = [];
+
+  if (itemIds.length > 0) {
+    const { data: jobs } = await supabase
+      .from("print_jobs")
+      .select("*")
+      .in("project_item_id", itemIds)
+      .order("batch_number", { ascending: true });
+
+    if (jobs) {
+      // Enrich with printer names
+      const printerIds = [...new Set(jobs.filter((j) => j.printer_id).map((j) => j.printer_id!))];
+      let printerNames: Record<string, string> = {};
+      if (printerIds.length > 0) {
+        const { data: printers } = await supabase
+          .from("printers")
+          .select("id, name")
+          .in("id", printerIds);
+        if (printers) {
+          printerNames = Object.fromEntries(printers.map((p) => [p.id, p.name]));
+        }
+      }
+      printJobs = jobs.map((j) => ({
+        ...j,
+        printer_name: j.printer_id ? printerNames[j.printer_id] : undefined,
+      }));
+    }
+  }
+
+  // Fetch drive files for STL estimation
+  let driveFiles: Array<{ id: string; name: string }> = [];
+  if (project.google_drive_folder_id) {
+    try {
+      const files = await listFolderFiles(project.google_drive_folder_id);
+      driveFiles = files.map((f) => ({ id: f.id, name: f.name }));
+    } catch {
+      // Drive unavailable
+    }
+  }
 
   // Fetch Holded contact if linked
   let holdedContact: HoldedContact | null = null;
@@ -165,7 +228,13 @@ export default async function ProjectDetailPage({
 
       {/* Items */}
       <div className="mb-6">
-        <ProjectItems projectId={project.id} items={projectItems ?? []} />
+        <ProjectItems
+          projectId={project.id}
+          items={projectItems ?? []}
+          printerTypes={printerTypes ?? []}
+          printJobs={printJobs}
+          driveFiles={driveFiles}
+        />
       </div>
 
       {/* Documents */}

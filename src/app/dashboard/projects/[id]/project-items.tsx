@@ -3,10 +3,16 @@
 import { useState, useRef, useTransition } from "react";
 import { addItem, updateItemCompleted, updateItemBatchSize, deleteItem } from "../items-actions";
 import type { Tables } from "@/lib/supabase/database.types";
+import { ItemQueue } from "./item-queue";
+
+type PrintJob = Tables<"print_jobs"> & { printer_name?: string };
 
 interface ProjectItemsProps {
   projectId: string;
   items: Tables<"project_items">[];
+  printerTypes?: Tables<"printer_types">[];
+  printJobs?: PrintJob[];
+  driveFiles?: Array<{ id: string; name: string }>;
 }
 
 function ItemRow({
@@ -15,15 +21,22 @@ function ItemRow({
   onUpdate,
   onDelete,
   onBatchChange,
+  printerTypes,
+  jobs,
+  driveFiles,
 }: {
   item: Tables<"project_items">;
   isPending: boolean;
   onUpdate: (id: string, completed: number) => void;
   onDelete: (id: string) => void;
   onBatchChange: (id: string, batchSize: number) => void;
+  printerTypes: Tables<"printer_types">[];
+  jobs: PrintJob[];
+  driveFiles: Array<{ id: string; name: string }>;
 }) {
   const [local, setLocal] = useState(item.completed);
   const [editingBatch, setEditingBatch] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   const dragging = useRef(false);
   const prevServer = useRef(item.completed);
   const isComplete = local === item.quantity;
@@ -45,9 +58,12 @@ function ItemRow({
     onUpdate(item.id, clamped);
   }
 
+  const itemJobs = jobs.filter((j) => j.project_item_id === item.id);
+  const activeJobCount = itemJobs.filter((j) => j.status !== "cancelled").length;
+
   return (
     <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-      {/* Top row: check + name + batch badge + count + delete */}
+      {/* Top row: check + name + batch badge + count + queue toggle + delete */}
       <div className="flex items-center gap-2">
         {isComplete ? (
           <span className="text-green-500">
@@ -96,9 +112,32 @@ function ItemRow({
           </button>
         )}
 
+        {/* Print time badge */}
+        {item.print_time_minutes && (
+          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            {Math.floor(item.print_time_minutes / 60)}h{item.print_time_minutes % 60 > 0 ? ` ${item.print_time_minutes % 60}m` : ""}
+          </span>
+        )}
+
         <span className={`text-sm tabular-nums ${isComplete ? "font-semibold text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}>
           {local}/{item.quantity}
         </span>
+
+        {/* Queue toggle */}
+        <button
+          type="button"
+          onClick={() => setShowQueue(!showQueue)}
+          className={`rounded-md p-1 ${showQueue ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"}`}
+          title="Cola de impresion"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          {activeJobCount > 0 && (
+            <span className="ml-0.5 text-[10px]">{activeJobCount}</span>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => onDelete(item.id)}
@@ -149,11 +188,21 @@ function ItemRow({
           +
         </button>
       </div>
+
+      {/* Queue panel */}
+      {showQueue && (
+        <ItemQueue
+          item={item}
+          printerTypes={printerTypes}
+          jobs={itemJobs}
+          driveFiles={driveFiles}
+        />
+      )}
     </div>
   );
 }
 
-export function ProjectItems({ projectId, items }: ProjectItemsProps) {
+export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [] }: ProjectItemsProps) {
   const [isPending, startTransition] = useTransition();
 
   function handleAdd(formData: FormData) {
@@ -238,6 +287,9 @@ export function ProjectItems({ projectId, items }: ProjectItemsProps) {
               onUpdate={handleUpdate}
               onDelete={handleDelete}
               onBatchChange={handleBatchChange}
+              printerTypes={printerTypes}
+              jobs={printJobs}
+              driveFiles={driveFiles}
             />
           ))}
         </div>

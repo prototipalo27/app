@@ -349,6 +349,103 @@ export type Database = {
           },
         ]
       }
+      print_jobs: {
+        Row: {
+          batch_number: number
+          completed_at: string | null
+          created_at: string | null
+          estimated_minutes: number
+          id: string
+          pieces_in_batch: number
+          position: number
+          printer_id: string | null
+          printer_type_id: string
+          project_item_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          batch_number: number
+          completed_at?: string | null
+          created_at?: string | null
+          estimated_minutes: number
+          id?: string
+          pieces_in_batch: number
+          position?: number
+          printer_id?: string | null
+          printer_type_id: string
+          project_item_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          batch_number?: number
+          completed_at?: string | null
+          created_at?: string | null
+          estimated_minutes?: number
+          id?: string
+          pieces_in_batch?: number
+          position?: number
+          printer_id?: string | null
+          printer_type_id?: string
+          project_item_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_printer_type_id_fkey"
+            columns: ["printer_type_id"]
+            isOneToOne: false
+            referencedRelation: "printer_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_project_item_id_fkey"
+            columns: ["project_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printer_types: {
+        Row: {
+          bed_depth_mm: number
+          bed_height_mm: number
+          bed_width_mm: number
+          created_at: string | null
+          id: string
+          multicolor: boolean
+          name: string
+        }
+        Insert: {
+          bed_depth_mm: number
+          bed_height_mm: number
+          bed_width_mm: number
+          created_at?: string | null
+          id?: string
+          multicolor?: boolean
+          name: string
+        }
+        Update: {
+          bed_depth_mm?: number
+          bed_height_mm?: number
+          bed_width_mm?: number
+          created_at?: string | null
+          id?: string
+          multicolor?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       printers: {
         Row: {
           bed_target: number | null
@@ -370,6 +467,7 @@ export type Database = {
           online: boolean | null
           print_error: number | null
           print_percent: number | null
+          printer_type_id: string | null
           raw_status: Json | null
           remaining_minutes: number | null
           serial_number: string
@@ -396,6 +494,7 @@ export type Database = {
           online?: boolean | null
           print_error?: number | null
           print_percent?: number | null
+          printer_type_id?: string | null
           raw_status?: Json | null
           remaining_minutes?: number | null
           serial_number: string
@@ -422,13 +521,22 @@ export type Database = {
           online?: boolean | null
           print_error?: number | null
           print_percent?: number | null
+          printer_type_id?: string | null
           raw_status?: Json | null
           remaining_minutes?: number | null
           serial_number?: string
           speed_level?: number | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "printers_printer_type_id_fkey"
+            columns: ["printer_type_id"]
+            isOneToOne: false
+            referencedRelation: "printer_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_files: {
         Row: {
@@ -475,8 +583,12 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          print_time_minutes: number | null
+          printer_type_id: string | null
           project_id: string
           quantity: number
+          stl_file_id: string | null
+          stl_volume_cm3: number | null
         }
         Insert: {
           batch_size?: number
@@ -484,8 +596,12 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          print_time_minutes?: number | null
+          printer_type_id?: string | null
           project_id: string
           quantity?: number
+          stl_file_id?: string | null
+          stl_volume_cm3?: number | null
         }
         Update: {
           batch_size?: number
@@ -493,10 +609,21 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          print_time_minutes?: number | null
+          printer_type_id?: string | null
           project_id?: string
           quantity?: number
+          stl_file_id?: string | null
+          stl_volume_cm3?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_items_printer_type_id_fkey"
+            columns: ["printer_type_id"]
+            isOneToOne: false
+            referencedRelation: "printer_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_items_project_id_fkey"
             columns: ["project_id"]
