@@ -267,9 +267,10 @@ export default async function ProjectDetailPage({
               item_type: i.item_type,
               position: i.position,
               completed: i.completed,
-              data: i.data as { names?: string[] } | null,
+              data: i.data as { entries?: { line1: string; line2?: string; checked: boolean }[] } | null,
             }))}
             templateName={templateName}
+            trackingToken={project.tracking_token}
           />
         </div>
       )}

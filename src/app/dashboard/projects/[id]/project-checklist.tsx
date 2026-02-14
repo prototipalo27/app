@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { toggleChecklistItem, uploadNameList } from "../checklist-actions";
+import {
+  toggleChecklistItem,
+  uploadNameList,
+  toggleNameEntry,
+  type NameEntry,
+} from "../checklist-actions";
 
 type ChecklistItem = {
   id: string;
@@ -9,23 +14,30 @@ type ChecklistItem = {
   item_type: string;
   position: number;
   completed: boolean;
-  data: { names?: string[] } | null;
+  data: { entries?: NameEntry[] } | null;
 };
 
 export default function ProjectChecklist({
   items,
   templateName,
+  trackingToken,
 }: {
   items: ChecklistItem[];
   templateName: string | null;
+  trackingToken?: string;
 }) {
   const [localItems, setLocalItems] = useState(items);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [csvPreview, setCsvPreview] = useState<{ itemId: string; names: string[] } | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{
+    itemId: string;
+    entries: NameEntry[];
+  } | null>(null);
 
+  const [linkCopied, setLinkCopied] = useState(false);
   const completedCount = localItems.filter((i) => i.completed).length;
+  const hasNameListItems = localItems.some((i) => i.item_type === "name_list");
 
   async function handleToggle(itemId: string, completed: boolean) {
     setLocalItems((prev) =>
@@ -35,6 +47,33 @@ export default function ProjectChecklist({
     if (!result.success) {
       setLocalItems((prev) =>
         prev.map((i) => (i.id === itemId ? { ...i, completed: !completed } : i))
+      );
+    }
+  }
+
+  async function handleNameToggle(
+    itemId: string,
+    nameIndex: number,
+    checked: boolean
+  ) {
+    // Optimistic update
+    setLocalItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const entries = [...(i.data?.entries ?? [])];
+        entries[nameIndex] = { ...entries[nameIndex], checked };
+        return { ...i, data: { entries } };
+      })
+    );
+    const result = await toggleNameEntry(itemId, nameIndex, checked);
+    if (!result.success) {
+      setLocalItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== itemId) return i;
+          const entries = [...(i.data?.entries ?? [])];
+          entries[nameIndex] = { ...entries[nameIndex], checked: !checked };
+          return { ...i, data: { entries } };
+        })
       );
     }
   }
@@ -51,17 +90,24 @@ export default function ProjectChecklist({
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const names = text
+      const entries: NameEntry[] = text
         .split("\n")
         .map((line) => {
           const trimmed = line.trim();
-          if (!trimmed) return "";
-          // Take first column if there are commas
-          return trimmed.includes(",") ? trimmed.split(",")[0].trim() : trimmed;
+          if (!trimmed) return null;
+          if (trimmed.includes(",")) {
+            const parts = trimmed.split(",");
+            return {
+              line1: parts[0].trim(),
+              line2: parts[1]?.trim() || undefined,
+              checked: false,
+            };
+          }
+          return { line1: trimmed, checked: false };
         })
-        .filter(Boolean);
+        .filter((e): e is NameEntry => e !== null);
 
-      setCsvPreview({ itemId: uploadingItemId, names });
+      setCsvPreview({ itemId: uploadingItemId, entries });
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -69,12 +115,12 @@ export default function ProjectChecklist({
 
   async function confirmUpload() {
     if (!csvPreview) return;
-    const result = await uploadNameList(csvPreview.itemId, csvPreview.names);
+    const result = await uploadNameList(csvPreview.itemId, csvPreview.entries);
     if (result.success) {
       setLocalItems((prev) =>
         prev.map((i) =>
           i.id === csvPreview.itemId
-            ? { ...i, data: { names: csvPreview.names } }
+            ? { ...i, data: { entries: csvPreview.entries } }
             : i
         )
       );
@@ -88,23 +134,50 @@ export default function ProjectChecklist({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
         <div className="flex items-center gap-2">
-          <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="h-4 w-4 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
             Checklist{templateName ? ` (${templateName})` : ""}
           </h2>
         </div>
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          {completedCount}/{localItems.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {hasNameListItems && trackingToken && (
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/track/${trackingToken}/names`;
+                navigator.clipboard.writeText(url);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              }}
+              className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              {linkCopied ? "Copiado!" : "Link nombres"}
+            </button>
+          )}
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            {completedCount}/{localItems.length}
+          </span>
+        </div>
       </div>
 
       {/* Items */}
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
         {localItems.map((item) => {
-          const names = (item.data as { names?: string[] })?.names;
+          const entries = item.data?.entries;
           const isExpanded = expandedItem === item.id;
+          const checkedNames = entries?.filter((e) => e.checked).length ?? 0;
+          const totalNames = entries?.length ?? 0;
 
           return (
             <div key={item.id} className="px-5 py-3">
@@ -118,8 +191,18 @@ export default function ProjectChecklist({
                   }`}
                 >
                   {item.completed && (
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                   )}
                 </button>
@@ -136,21 +219,28 @@ export default function ProjectChecklist({
                 {/* Name list controls */}
                 {item.item_type === "name_list" && (
                   <div className="flex items-center gap-2">
-                    {names && names.length > 0 && (
+                    {totalNames > 0 && (
                       <button
                         onClick={() =>
                           setExpandedItem(isExpanded ? null : item.id)
                         }
                         className="flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/30"
                       >
-                        {names.length} nombres
+                        {checkedNames}/{totalNames}
                         <svg
-                          className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          className={`h-3 w-3 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
                         </svg>
                       </button>
                     )}
@@ -164,19 +254,48 @@ export default function ProjectChecklist({
                 )}
               </div>
 
-              {/* Expanded name list */}
-              {item.item_type === "name_list" && isExpanded && names && (
+              {/* Expanded checkable name list */}
+              {item.item_type === "name_list" && isExpanded && entries && (
                 <div className="mt-2 ml-8 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                  <ul className="space-y-1">
-                    {names.map((name, idx) => (
-                      <li
+                  <div className="space-y-1.5">
+                    {entries.map((entry, idx) => (
+                      <label
                         key={idx}
-                        className="text-xs text-zinc-700 dark:text-zinc-300"
+                        className="flex items-start gap-2 cursor-pointer group"
                       >
-                        {idx + 1}. {name}
-                      </li>
+                        <input
+                          type="checkbox"
+                          checked={entry.checked}
+                          onChange={() =>
+                            handleNameToggle(item.id, idx, !entry.checked)
+                          }
+                          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-700"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span
+                            className={`text-xs font-medium ${
+                              entry.checked
+                                ? "text-zinc-400 line-through dark:text-zinc-500"
+                                : "text-zinc-900 dark:text-white"
+                            }`}
+                          >
+                            {entry.line1}
+                          </span>
+                          {entry.line2 && (
+                            <span
+                              className={`block text-[11px] ${
+                                entry.checked
+                                  ? "text-zinc-400 line-through dark:text-zinc-500"
+                                  : "text-zinc-500 dark:text-zinc-400"
+                              }`}
+                            >
+                              {entry.line2}
+                            </span>
+                          )}
+                        </div>
+                      </label>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -201,19 +320,23 @@ export default function ProjectChecklist({
               Confirmar nombres
             </h3>
             <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              Se encontraron {csvPreview.names.length} nombres:
+              Se encontraron {csvPreview.entries.length} entradas:
             </p>
             <div className="mb-4 max-h-60 overflow-y-auto rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-              <ul className="space-y-1">
-                {csvPreview.names.map((name, idx) => (
-                  <li
-                    key={idx}
-                    className="text-xs text-zinc-700 dark:text-zinc-300"
-                  >
-                    {idx + 1}. {name}
-                  </li>
+              <div className="space-y-1.5">
+                {csvPreview.entries.map((entry, idx) => (
+                  <div key={idx} className="text-xs">
+                    <span className="font-medium text-zinc-900 dark:text-white">
+                      {idx + 1}. {entry.line1}
+                    </span>
+                    {entry.line2 && (
+                      <span className="ml-2 text-zinc-500 dark:text-zinc-400">
+                        — {entry.line2}
+                      </span>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <button
