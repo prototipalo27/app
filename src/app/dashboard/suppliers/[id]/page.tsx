@@ -5,6 +5,8 @@ import { deleteSupplier } from "../actions";
 import PaymentForm from "./payment-form";
 import Reconciliation from "./reconciliation";
 import DeleteButton from "./delete-button";
+import SupplierEditForm from "./supplier-edit-form";
+import SupplierProducts from "./supplier-products";
 import { requireRole } from "@/lib/rbac";
 
 export default async function SupplierDetailPage({
@@ -31,6 +33,20 @@ export default async function SupplierDetailPage({
     .eq("supplier_id", id)
     .order("payment_date", { ascending: false });
 
+  const { data: products } = await supabase
+    .from("supplier_products")
+    .select("*")
+    .eq("supplier_id", id)
+    .order("category")
+    .order("name");
+
+  const deleteForm = (
+    <form action={deleteSupplier}>
+      <input type="hidden" name="id" value={supplier.id} />
+      <DeleteButton />
+    </form>
+  );
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6">
@@ -42,76 +58,14 @@ export default async function SupplierDetailPage({
         </Link>
       </div>
 
-      {/* Supplier info card */}
-      <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-              {supplier.name}
-            </h1>
-            {supplier.holded_contact_id && (
-              <span className="mt-1 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                Holded vinculado
-              </span>
-            )}
-          </div>
-          <form action={deleteSupplier}>
-            <input type="hidden" name="id" value={supplier.id} />
-            <DeleteButton />
-          </form>
-        </div>
+      {/* Supplier info card (editable) */}
+      <SupplierEditForm supplier={supplier} deleteForm={deleteForm} />
 
-        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 md:grid-cols-3">
-          {supplier.email && (
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400">Email: </span>
-              <span className="text-zinc-900 dark:text-white">
-                {supplier.email}
-              </span>
-            </div>
-          )}
-          {supplier.phone && (
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400">Tel: </span>
-              <span className="text-zinc-900 dark:text-white">
-                {supplier.phone}
-              </span>
-            </div>
-          )}
-          {supplier.nif_cif && (
-            <div>
-              <span className="text-zinc-500 dark:text-zinc-400">
-                NIF/CIF:{" "}
-              </span>
-              <span className="text-zinc-900 dark:text-white">
-                {supplier.nif_cif}
-              </span>
-            </div>
-          )}
-          {supplier.address && (
-            <div className="sm:col-span-2">
-              <span className="text-zinc-500 dark:text-zinc-400">
-                Direccion:{" "}
-              </span>
-              <span className="text-zinc-900 dark:text-white">
-                {[supplier.address, supplier.city, supplier.country]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-            </div>
-          )}
-          {supplier.notes && (
-            <div className="sm:col-span-3">
-              <span className="text-zinc-500 dark:text-zinc-400">
-                Notas:{" "}
-              </span>
-              <span className="text-zinc-900 dark:text-white">
-                {supplier.notes}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Supplier products */}
+      <SupplierProducts
+        supplierId={supplier.id}
+        products={products || []}
+      />
 
       {/* Payment form + Payments table */}
       <PaymentForm

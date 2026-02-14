@@ -1009,6 +1009,47 @@ export type Database = {
           },
         ]
       }
+      supplier_products: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          price: number | null
+          supplier_id: string
+          url: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          price?: number | null
+          supplier_id: string
+          url?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          price?: number | null
+          supplier_id?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null

@@ -205,3 +205,57 @@ export async function deletePayment(paymentId: string, supplierId: string) {
 
   revalidatePath(`/dashboard/suppliers/${supplierId}`);
 }
+
+export async function addSupplierProduct(formData: FormData) {
+  await requireRole("manager");
+
+  const supabase = await createClient();
+
+  const supplierId = formData.get("supplier_id") as string;
+  const name = (formData.get("name") as string)?.trim();
+
+  if (!name) {
+    return { success: false, error: "El nombre del producto es obligatorio" };
+  }
+
+  const { error } = await supabase.from("supplier_products").insert({
+    supplier_id: supplierId,
+    name,
+    category: (formData.get("category") as string)?.trim() || null,
+    url: (formData.get("url") as string)?.trim() || null,
+    price: formData.get("price")
+      ? parseFloat(formData.get("price") as string)
+      : null,
+    notes: (formData.get("notes") as string)?.trim() || null,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/suppliers/${supplierId}`);
+  revalidatePath("/dashboard/suppliers/products");
+  return { success: true };
+}
+
+export async function deleteSupplierProduct(
+  productId: string,
+  supplierId: string
+) {
+  await requireRole("manager");
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("supplier_products")
+    .delete()
+    .eq("id", productId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/suppliers/${supplierId}`);
+  revalidatePath("/dashboard/suppliers/products");
+  return { success: true };
+}

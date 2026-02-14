@@ -71,12 +71,20 @@ export default async function SuppliersPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
           Proveedores
         </h1>
-        <Link
-          href="/dashboard/suppliers/new"
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-        >
-          + Nuevo proveedor
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/suppliers/products"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Catalogo
+          </Link>
+          <Link
+            href="/dashboard/suppliers/new"
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            + Nuevo proveedor
+          </Link>
+        </div>
       </div>
 
       {/* Suppliers table */}
@@ -91,7 +99,7 @@ export default async function SuppliersPage() {
                 Email
               </th>
               <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
-                NIF/CIF
+                Telefono
               </th>
               <th className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">
                 Sin factura
@@ -122,7 +130,16 @@ export default async function SuppliersPage() {
                       {s.email || "—"}
                     </td>
                     <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
-                      {s.nif_cif || "—"}
+                      {s.phone ? (
+                        <a
+                          href={`tel:${s.phone}`}
+                          className="hover:text-green-600 dark:hover:text-green-400"
+                        >
+                          {s.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {pending && pending.count > 0 ? (
