@@ -23,6 +23,7 @@ export default function ContactSelector() {
   const [selected, setSelected] = useState<SelectedContact | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -94,11 +95,44 @@ export default function ContactSelector() {
     setError(null);
   }
 
+  async function handleSync() {
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/holded/contacts/sync", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Sync failed");
+      }
+      // Re-run the current search if there's a query
+      if (query.trim().length >= 2) {
+        await fetchContacts(query.trim());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error syncing contacts");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div ref={wrapperRef} className="space-y-3">
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        Client (Holded)
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Client (Holded)
+        </label>
+        <button
+          type="button"
+          onClick={handleSync}
+          disabled={syncing}
+          title="Sincronizar contactos de Holded"
+          className="text-xs text-zinc-400 hover:text-green-500 disabled:opacity-50 transition-colors"
+        >
+          <svg className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
 
       <div className="relative">
         <input

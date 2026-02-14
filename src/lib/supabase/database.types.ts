@@ -116,6 +116,63 @@ export type Database = {
         }
         Relationships: []
       }
+      holded_contacts: {
+        Row: {
+          address: string | null
+          city: string | null
+          code: string | null
+          contact_type: string | null
+          country: string | null
+          country_code: string | null
+          email: string | null
+          holded_id: string
+          mobile: string | null
+          name: string
+          note: string | null
+          phone: string | null
+          postal_code: string | null
+          province: string | null
+          trade_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          code?: string | null
+          contact_type?: string | null
+          country?: string | null
+          country_code?: string | null
+          email?: string | null
+          holded_id: string
+          mobile?: string | null
+          name: string
+          note?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          province?: string | null
+          trade_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          code?: string | null
+          contact_type?: string | null
+          country?: string | null
+          country_code?: string | null
+          email?: string | null
+          holded_id?: string
+          mobile?: string | null
+          name?: string
+          note?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          province?: string | null
+          trade_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       improvement_requests: {
         Row: {
           confirmed_at: string | null
