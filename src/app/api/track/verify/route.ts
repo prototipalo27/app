@@ -52,11 +52,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const code = generateCode();
-    const pendingJwt = await createPendingToken(code, email, project.id);
-    await setPendingCookie(pendingJwt);
-
     try {
+      const code = generateCode();
+      const pendingJwt = await createPendingToken(code, email, project.id);
+      await setPendingCookie(pendingJwt);
+
       await sendEmail({
         to: email,
         subject: "Tu codigo de verificacion — Prototipalo",
@@ -70,15 +70,16 @@ export async function POST(request: NextRequest) {
           </div>
         `,
       });
+
+      return NextResponse.json({ ok: true });
     } catch (err) {
-      console.error("Error sending verification email:", err);
+      console.error("Error in verification send:", err);
+      const message = err instanceof Error ? err.message : "Error desconocido";
       return NextResponse.json(
-        { error: "No se pudo enviar el email. Inténtalo de nuevo." },
+        { error: `No se pudo enviar el código: ${message}` },
         { status: 500 },
       );
     }
-
-    return NextResponse.json({ ok: true });
   }
 
   if (action === "check") {
