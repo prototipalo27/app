@@ -166,15 +166,11 @@ export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
       </div>
 
       {/* Discard zone — fixed at viewport bottom, visible only while dragging */}
-      <div
-        className={`fixed right-0 bottom-0 left-0 z-50 px-4 pb-4 transition-all duration-200 md:left-64 ${
-          dragging
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-full opacity-0"
-        }`}
-      >
-        <DiscardZone />
-      </div>
+      {dragging && (
+        <div className="fixed right-0 bottom-0 left-0 z-50 px-4 pb-4 md:left-64">
+          <DiscardZone />
+        </div>
+      )}
     </DragDropProvider>
   );
 }

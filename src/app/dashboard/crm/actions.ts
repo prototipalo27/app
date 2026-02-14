@@ -224,6 +224,32 @@ export async function searchLeads(query: string) {
   return data || [];
 }
 
+// ── Block Email & Delete Lead ────────────────────────────
+
+export async function blockEmailAndDeleteLead(
+  leadId: string,
+  email: string,
+  reason?: string
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!email?.trim()) throw new Error("Email es obligatorio");
+
+  // Insert into blocked_emails (ignore if already blocked)
+  await supabase
+    .from("blocked_emails")
+    .insert({ email: email.toLowerCase().trim(), reason: reason || null })
+    .single();
+
+  // Delete the lead
+  const { error } = await supabase.from("leads").delete().eq("id", leadId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard/crm");
+  redirect("/dashboard/crm");
+}
+
 // ── Delete Lead ──────────────────────────────────────────
 
 export async function deleteLead(id: string) {

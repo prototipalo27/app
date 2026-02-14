@@ -82,6 +82,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
+    // Check if this sender is blocked (exact email or @domain)
+    const domain = from.split("@")[1];
+    const { data: blocked } = await supabase
+      .from("blocked_emails")
+      .select("id")
+      .or(`email.ilike.${from},email.ilike.@${domain}`)
+      .limit(1)
+      .single();
+
+    if (blocked) {
+      return NextResponse.json({
+        ok: true,
+        blocked: true,
+        reason: "sender_blocked",
+      });
+    }
+
     // Find lead by sender email
     const { data: lead } = await supabase
       .from("leads")

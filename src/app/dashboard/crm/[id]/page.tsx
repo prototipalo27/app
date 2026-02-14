@@ -329,6 +329,7 @@ export default async function LeadDetailPage({
         <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <LeadActions
             leadId={lead.id}
+            leadEmail={lead.email}
             currentStatus={lead.status as LeadStatus}
             managers={managers || []}
             assignedTo={lead.assigned_to}

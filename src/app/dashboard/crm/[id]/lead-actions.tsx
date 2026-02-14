@@ -7,6 +7,7 @@ import {
   assignLead,
   addNote,
   deleteLead,
+  blockEmailAndDeleteLead,
 } from "../actions";
 import {
   LEAD_COLUMNS,
@@ -16,6 +17,7 @@ import {
 
 interface LeadActionsProps {
   leadId: string;
+  leadEmail: string | null;
   currentStatus: LeadStatus;
   managers: { id: string; email: string }[];
   assignedTo: string | null;
@@ -23,6 +25,7 @@ interface LeadActionsProps {
 
 export default function LeadActions({
   leadId,
+  leadEmail,
   currentStatus,
   managers,
   assignedTo,
@@ -39,6 +42,9 @@ export default function LeadActions({
 
   // Delete confirmation
   const [showDelete, setShowDelete] = useState(false);
+
+  // Block confirmation
+  const [showBlock, setShowBlock] = useState(false);
 
   const handleStatusChange = (newStatus: LeadStatus) => {
     if (newStatus === "lost") {
@@ -186,8 +192,51 @@ export default function LeadActions({
         </button>
       </div>
 
-      {/* Delete */}
-      <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+      {/* Block + Delete */}
+      <div className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+        {/* Block sender */}
+        {leadEmail && (
+          <>
+            {!showBlock ? (
+              <button
+                onClick={() => setShowBlock(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Bloquear remitente
+              </button>
+            ) : (
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-900/10">
+                <p className="text-sm text-orange-700 dark:text-orange-400">
+                  Bloquear <strong>{leadEmail}</strong> y eliminar este lead. Los futuros emails de esta direccion no crearan leads.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => {
+                      startTransition(async () => {
+                        await blockEmailAndDeleteLead(leadId, leadEmail, "Bloqueado manualmente");
+                      });
+                    }}
+                    disabled={isPending}
+                    className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                  >
+                    Bloquear y eliminar
+                  </button>
+                  <button
+                    onClick={() => setShowBlock(false)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Delete */}
         {!showDelete ? (
           <button
             onClick={() => setShowDelete(true)}

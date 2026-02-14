@@ -62,12 +62,12 @@ export default async function DashboardLayout({
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-50 md:flex-row dark:bg-black">
+    <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
       {/* Mobile sidebar + top bar */}
       <MobileSidebar role={profile.role} isManager={isManager}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 p-5 dark:border-zinc-800">
           <Link href="/dashboard">
             <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-20 w-auto dark:hidden" priority />
@@ -83,7 +83,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-8">
+      <main className="flex min-w-0 flex-1 flex-col p-4 md:p-8">
         {children}
       </main>
     </div>
