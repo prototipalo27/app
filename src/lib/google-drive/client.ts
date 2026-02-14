@@ -219,6 +219,35 @@ export async function uploadFile(
 }
 
 /**
+ * Download a file's binary content from Drive.
+ * Returns { buffer, mimeType, name }.
+ */
+export async function downloadFile(
+  fileId: string,
+): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
+  const drive = getDriveClient();
+
+  // Get metadata first for name and mimeType
+  const meta = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: "name, mimeType",
+  });
+
+  // Download binary
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" },
+  );
+
+  return {
+    buffer: Buffer.from(res.data as ArrayBuffer),
+    mimeType: meta.data.mimeType ?? "application/octet-stream",
+    name: meta.data.name ?? "file",
+  };
+}
+
+/**
  * Get a thumbnail/preview URL for a file.
  */
 export async function getFilePreviewUrl(

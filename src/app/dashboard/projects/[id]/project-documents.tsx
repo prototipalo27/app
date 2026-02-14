@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import * as THREE from "three";
 
 interface DriveFile {
   id: string;
@@ -31,8 +35,19 @@ interface UploadItem {
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-function isPreviewable(mimeType: string): boolean {
-  return mimeType.startsWith("image/") || mimeType === "application/pdf";
+const STL_MIME_TYPES = ["model/stl", "application/vnd.ms-pki.stl"];
+
+function isStlFile(file: DriveFile): boolean {
+  if (STL_MIME_TYPES.includes(file.mimeType)) return true;
+  return file.name.toLowerCase().endsWith(".stl");
+}
+
+function isPreviewable(file: DriveFile): boolean {
+  return (
+    file.mimeType.startsWith("image/") ||
+    file.mimeType === "application/pdf" ||
+    isStlFile(file)
+  );
 }
 
 function formatBytes(bytes: string | null): string {
@@ -53,8 +68,22 @@ function FolderIcon() {
   );
 }
 
-function FileIcon({ mimeType }: { mimeType: string }) {
+function StlFileIcon() {
+  return (
+    <svg className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  );
+}
+
+function FileIcon({ mimeType, fileName }: { mimeType: string; fileName?: string }) {
   if (mimeType === FOLDER_MIME) return <FolderIcon />;
+  if (
+    STL_MIME_TYPES.includes(mimeType) ||
+    (fileName && fileName.toLowerCase().endsWith(".stl"))
+  ) {
+    return <StlFileIcon />;
+  }
   if (mimeType.startsWith("image/")) {
     return (
       <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -114,6 +143,79 @@ function Breadcrumbs({
   );
 }
 
+// ── STL Viewer ─────────────────────────────────────────
+
+function StlModel({ url }: { url: string }) {
+  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loader = new STLLoader();
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error("Error al descargar el archivo");
+        return res.arrayBuffer();
+      })
+      .then((buffer) => {
+        const geo = loader.parse(buffer);
+        geo.center();
+        geo.computeBoundingSphere();
+        const scale =
+          2 / (geo.boundingSphere?.radius ?? 1);
+        geo.scale(scale, scale, scale);
+        geo.computeVertexNormals();
+        setGeometry(geo);
+      })
+      .catch((err) => setError(err.message));
+  }, [url]);
+
+  if (error) {
+    return null;
+  }
+
+  if (!geometry) return null;
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial color="#a0a0a0" metalness={0.3} roughness={0.6} />
+    </mesh>
+  );
+}
+
+function StlViewer({ fileId }: { fileId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const url = `/api/drive/download/${fileId}`;
+
+  return (
+    <div className="relative h-[85vh] w-[85vw] max-w-4xl rounded-lg bg-zinc-900">
+      {loading && !error && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-green-500" />
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
+      )}
+      <Canvas
+        camera={{ position: [3, 3, 3], fov: 45 }}
+        onCreated={() => setLoading(false)}
+        onError={() => setError("Error al renderizar el modelo 3D")}
+      >
+        <ambientLight intensity={0.5} />
+        <directionalLight position={[5, 5, 5]} intensity={1} />
+        <directionalLight position={[-5, -5, -5]} intensity={0.3} />
+        <Suspense fallback={null}>
+          <StlModel url={url} />
+        </Suspense>
+        <OrbitControls enableDamping dampingFactor={0.1} />
+      </Canvas>
+    </div>
+  );
+}
+
 // ── File Preview Modal ─────────────────────────────────
 
 function FilePreviewModal({
@@ -145,6 +247,7 @@ function FilePreviewModal({
 
   const isImage = file.mimeType.startsWith("image/");
   const isPdf = file.mimeType === "application/pdf";
+  const isStl = isStlFile(file);
 
   // For images: use a high-res thumbnail (replace s220 with s1600) or webContentLink
   const imageUrl = file.thumbnailLink
@@ -215,6 +318,7 @@ function FilePreviewModal({
             allow="autoplay"
           />
         )}
+        {isStl && <StlViewer fileId={file.id} />}
       </div>
     </div>
   );
@@ -247,7 +351,7 @@ function FileCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <FileIcon mimeType={file.mimeType} />
+          <FileIcon mimeType={file.mimeType} fileName={file.name} />
         )}
       </div>
 
@@ -355,7 +459,7 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
   const dragCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const previewableFiles = files.filter((f) => isPreviewable(f.mimeType));
+  const previewableFiles = files.filter((f) => isPreviewable(f));
 
   // Initialize breadcrumbs when folderId is set
   useEffect(() => {
@@ -400,7 +504,7 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
       return;
     }
 
-    if (isPreviewable(file.mimeType)) {
+    if (isPreviewable(file)) {
       const idx = previewableFiles.findIndex((f) => f.id === file.id);
       setPreviewIndex(idx >= 0 ? idx : null);
       return;
