@@ -6,6 +6,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 import PrinterCard from "./printer-card";
 
 type Printer = Tables<"printers">;
+type PrinterType = Tables<"printer_types">;
 
 interface PrinterJob {
   id: string;
@@ -20,7 +21,7 @@ interface PrinterJob {
 
 const SYNC_INTERVAL = 5 * 60_000; // 5 minutes (matches Vercel Cron)
 
-export default function PrinterGrid({ initialPrinters, initialJobs = [] }: { initialPrinters: Printer[]; initialJobs?: PrinterJob[] }) {
+export default function PrinterGrid({ initialPrinters, initialJobs = [], printerTypes = [] }: { initialPrinters: Printer[]; initialJobs?: PrinterJob[]; printerTypes?: PrinterType[] }) {
   const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -132,7 +133,7 @@ export default function PrinterGrid({ initialPrinters, initialJobs = [] }: { ini
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((printer) => (
-            <PrinterCard key={printer.id} printer={printer} jobs={initialJobs.filter((j) => j.printer_id === printer.id)} />
+            <PrinterCard key={printer.id} printer={printer} jobs={initialJobs.filter((j) => j.printer_id === printer.id)} printerTypes={printerTypes} />
           ))}
         </div>
       )}

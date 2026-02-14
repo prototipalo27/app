@@ -13,6 +13,11 @@ export default async function PrintersPage() {
     .select("*")
     .order("name");
 
+  const { data: printerTypes } = await supabase
+    .from("printer_types")
+    .select("*")
+    .order("name");
+
   // Fetch active print jobs for all printers
   const { data: jobs } = await supabase
     .from("print_jobs")
@@ -67,7 +72,7 @@ export default async function PrintersPage() {
       <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
         Printers
       </h1>
-      <PrinterGrid initialPrinters={printers ?? []} initialJobs={enrichedJobs} />
+      <PrinterGrid initialPrinters={printers ?? []} initialJobs={enrichedJobs} printerTypes={printerTypes ?? []} />
     </div>
   );
 }

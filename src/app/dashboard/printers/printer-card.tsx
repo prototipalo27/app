@@ -1,8 +1,11 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type Printer = Tables<"printers">;
+type PrinterType = Tables<"printer_types">;
 
 interface PrinterJob {
   id: string;
@@ -73,9 +76,24 @@ function formatQueueTime(jobs: PrinterJob[]) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-export default function PrinterCard({ printer, jobs = [] }: { printer: Printer; jobs?: PrinterJob[] }) {
+export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: { printer: Printer; jobs?: PrinterJob[]; printerTypes?: PrinterType[] }) {
   const isOffline = !printer.online;
   const isRunning = printer.gcode_state === "RUNNING";
+  const [typeId, setTypeId] = useState(printer.printer_type_id || "");
+  const [saving, setSaving] = useState(false);
+
+  const typeName = printerTypes.find((t) => t.id === typeId)?.name;
+
+  async function handleTypeChange(newTypeId: string) {
+    setTypeId(newTypeId);
+    setSaving(true);
+    const supabase = createClient();
+    await supabase
+      .from("printers")
+      .update({ printer_type_id: newTypeId || null })
+      .eq("id", printer.id);
+    setSaving(false);
+  }
 
   return (
     <div
@@ -92,6 +110,21 @@ export default function PrinterCard({ printer, jobs = [] }: { printer: Printer; 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {printer.model} · {printer.serial_number}
           </p>
+          {printerTypes.length > 0 && (
+            <select
+              value={typeId}
+              onChange={(e) => handleTypeChange(e.target.value)}
+              disabled={saving}
+              className="mt-1 w-full rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-xs text-zinc-600 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-400"
+            >
+              <option value="">Sin tipo</option>
+              {printerTypes.map((pt) => (
+                <option key={pt.id} value={pt.id}>
+                  {pt.name} ({pt.bed_width_mm}x{pt.bed_depth_mm}mm{pt.multicolor ? " MC" : ""})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <StateBadge state={isOffline ? null : printer.gcode_state} />
       </div>
