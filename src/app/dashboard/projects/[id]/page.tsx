@@ -155,7 +155,7 @@ export default async function ProjectDetailPage({
     .from("shipping_info")
     .select("*")
     .eq("project_id", id)
-    .single();
+    .maybeSingle();
 
   // Fetch linked lead and their email activities
   let linkedLead: { id: string; full_name: string; email: string | null } | null = null;

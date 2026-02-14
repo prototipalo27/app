@@ -93,6 +93,19 @@ export async function generatePrintJobs(itemId: string) {
     }
   }
 
+  // Calculate existing job counts per printer for position tracking
+  const printerPositions: Record<string, number> = {};
+  for (const p of printers) {
+    printerPositions[p.id] = 0;
+  }
+  if (existingJobs) {
+    for (const job of existingJobs) {
+      if (job.printer_id) {
+        printerPositions[job.printer_id] = (printerPositions[job.printer_id] || 0) + 1;
+      }
+    }
+  }
+
   // Generate and assign batches with greedy load balancing
   const jobs: Array<{
     project_item_id: string;
@@ -117,13 +130,6 @@ export async function generatePrintJobs(itemId: string) {
       }
     }
 
-    // Get next position for this printer
-    const { count } = await supabase
-      .from("print_jobs")
-      .select("*", { count: "exact", head: true })
-      .eq("printer_id", minPrinterId)
-      .in("status", ["queued", "printing"]);
-
     jobs.push({
       project_item_id: itemId,
       printer_id: minPrinterId,
@@ -131,10 +137,11 @@ export async function generatePrintJobs(itemId: string) {
       batch_number: b + 1,
       pieces_in_batch: piecesInBatch,
       estimated_minutes: item.print_time_minutes,
-      position: (count || 0) + jobs.filter((j) => j.printer_id === minPrinterId).length,
+      position: printerPositions[minPrinterId],
     });
 
     printerLoads[minPrinterId] += item.print_time_minutes;
+    printerPositions[minPrinterId] += 1;
   }
 
   // Insert all jobs
