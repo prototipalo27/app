@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode }) {
+function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon, actionTitle }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode; actionTitle?: string }) {
   const pathname = usePathname();
   const isActive = (exact ? pathname === href : pathname?.startsWith(href)) || (alsoMatch && pathname?.startsWith(alsoMatch));
   const isActionActive = actionHref && pathname?.startsWith(actionHref);
@@ -29,7 +29,7 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
               ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
               : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           }`}
-          title="Cola de impresión"
+          title={actionTitle}
         >
           {actionIcon}
         </Link>
@@ -49,9 +49,9 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boolean; isSuperAdmin: boolean }) {
+export default function DesktopNav({ isManager }: { isManager: boolean }) {
   return (
-    <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+    <nav className="flex-1 space-y-1 p-3">
       {/* ── VENTAS ── */}
       {isManager && (
         <>
@@ -80,6 +80,13 @@ export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boo
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
         }
+        actionHref={isManager ? "/dashboard/settings/templates" : undefined}
+        actionTitle="Plantillas"
+        actionIcon={
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        }
       />
       <NavLink
         href="/dashboard/printers"
@@ -90,6 +97,7 @@ export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boo
           </svg>
         }
         actionHref="/dashboard/queue"
+        actionTitle="Cola de impresión"
         actionIcon={
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -141,37 +149,6 @@ export default function DesktopNav({ isManager, isSuperAdmin }: { isManager: boo
         </>
       )}
 
-      {/* ── CONFIGURACIÓN ── */}
-      {isManager && (
-        <>
-          <SectionLabel label="Configuracion" />
-          <NavLink
-            href="/dashboard/settings/templates"
-            label="Plantillas"
-            icon={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            }
-          />
-        </>
-      )}
-
-      {/* ── ADMIN ── */}
-      {isSuperAdmin && (
-        <>
-          <SectionLabel label="Admin" />
-          <NavLink
-            href="/dashboard/users"
-            label="Usuarios"
-            icon={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            }
-          />
-        </>
-      )}
     </nav>
   );
 }

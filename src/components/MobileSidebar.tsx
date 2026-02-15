@@ -7,11 +7,9 @@ import Link from "next/link";
 
 export default function MobileSidebar({
   children,
-  role,
   isManager,
 }: {
   children: React.ReactNode;
-  role?: string;
   isManager?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -66,7 +64,7 @@ export default function MobileSidebar({
           </Link>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-1 p-3">
           {/* ── VENTAS ── */}
           {isManager && (
             <>
@@ -96,20 +94,38 @@ export default function MobileSidebar({
           <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Producción
           </p>
-          <Link
-            href="/dashboard"
-            onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-              pathname === "/dashboard" || pathname?.startsWith("/dashboard/projects")
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            }`}
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-            Proyectos
-          </Link>
+          <div className="flex items-center gap-0.5">
+            <Link
+              href="/dashboard"
+              onClick={handleNavClick}
+              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                pathname === "/dashboard" || pathname?.startsWith("/dashboard/projects")
+                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              Proyectos
+            </Link>
+            {isManager && (
+              <Link
+                href="/dashboard/settings/templates"
+                onClick={handleNavClick}
+                className={`flex items-center rounded-lg p-2 ${
+                  pathname?.startsWith("/dashboard/settings/templates")
+                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                }`}
+                title="Plantillas"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </Link>
+            )}
+          </div>
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard/printers"
@@ -207,29 +223,6 @@ export default function MobileSidebar({
             </>
           )}
 
-          {/* ── ADMIN ── */}
-          {role === "super_admin" && (
-            <>
-              <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Admin
-              </p>
-              <Link
-                href="/dashboard/users"
-                onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-                  pathname?.startsWith("/dashboard/users")
-                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                Usuarios
-              </Link>
-            </>
-          )}
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-200 p-3 dark:border-zinc-800">

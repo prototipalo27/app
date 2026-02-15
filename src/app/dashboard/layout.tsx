@@ -46,7 +46,20 @@ export default async function DashboardLayout({
         </svg>
         Solicitudes
       </Link>
-      <NotificationBell />
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        {isSuperAdmin && (
+          <Link
+            href="/dashboard/users"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            Usuarios
+          </Link>
+        )}
+      </div>
       <form action={signOut}>
         <button
           type="submit"
@@ -64,7 +77,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
       {/* Mobile sidebar + top bar */}
-      <MobileSidebar role={profile.role} isManager={isManager}>{bottomSection}</MobileSidebar>
+      <MobileSidebar isManager={isManager}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
@@ -75,7 +88,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
 
-        <DesktopNav isManager={isManager} isSuperAdmin={isSuperAdmin} />
+        <DesktopNav isManager={isManager} />
 
         <div className="shrink-0 border-t border-zinc-200 p-3 dark:border-zinc-800">
           {bottomSection}
