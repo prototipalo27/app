@@ -244,6 +244,33 @@ export type Database = {
         }
         Relationships: []
       }
+      holded_sync_exclusions: {
+        Row: {
+          created_at: string | null
+          doc_type: string
+          holded_document_id: string
+          id: string
+          project_name: string | null
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          doc_type: string
+          holded_document_id: string
+          id?: string
+          project_name?: string | null
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          doc_type?: string
+          holded_document_id?: string
+          id?: string
+          project_name?: string | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
       improvement_requests: {
         Row: {
           confirmed_at: string | null

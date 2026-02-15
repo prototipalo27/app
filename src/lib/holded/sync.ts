@@ -52,6 +52,22 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const result: SyncResult = { newUpcoming: 0, converted: 0, newFromInvoice: 0, errors: [] };
 
+  // ── Load exclusions (deleted projects blocklist) ─────────
+  const { data: exclusionRows } = await supabase
+    .from("holded_sync_exclusions")
+    .select("holded_document_id, doc_type");
+
+  const excludedProformaIds = new Set(
+    (exclusionRows ?? [])
+      .filter((e) => e.doc_type === "proforma")
+      .map((e) => e.holded_document_id),
+  );
+  const excludedInvoiceIds = new Set(
+    (exclusionRows ?? [])
+      .filter((e) => e.doc_type === "invoice")
+      .map((e) => e.holded_document_id),
+  );
+
   // ── Phase A: New proformas → upcoming projects ───────────
 
   const allProformas = await listDocuments("proform");
@@ -66,7 +82,9 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     (existingProjects ?? []).map((p) => p.holded_proforma_id),
   );
 
-  const newProformas = allProformas.filter((p) => !syncedIds.has(p.id));
+  const newProformas = allProformas.filter(
+    (p) => !syncedIds.has(p.id) && !excludedProformaIds.has(p.id),
+  );
 
   for (const proforma of newProformas) {
     const { data: project, error } = await supabase
@@ -232,7 +250,9 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     (projectsWithInvoice ?? []).map((p) => p.holded_invoice_id),
   );
 
-  const newInvoices = allInvoices.filter((inv) => !syncedInvoiceIds.has(inv.id));
+  const newInvoices = allInvoices.filter(
+    (inv) => !syncedInvoiceIds.has(inv.id) && !excludedInvoiceIds.has(inv.id),
+  );
 
   for (const invoice of newInvoices) {
     const { data: project, error } = await supabase

@@ -335,6 +335,40 @@ export async function deleteProject(formData: FormData) {
 
   const id = formData.get("id") as string;
 
+  // Read the project before deleting to save Holded IDs as exclusions
+  const { data: project } = await supabase
+    .from("projects")
+    .select("name, holded_proforma_id, holded_invoice_id")
+    .eq("id", id)
+    .single();
+
+  if (project) {
+    const exclusions: { holded_document_id: string; doc_type: string; reason: string; project_name: string | null }[] = [];
+
+    if (project.holded_proforma_id) {
+      exclusions.push({
+        holded_document_id: project.holded_proforma_id,
+        doc_type: "proforma",
+        reason: "Eliminado manualmente",
+        project_name: project.name,
+      });
+    }
+    if (project.holded_invoice_id) {
+      exclusions.push({
+        holded_document_id: project.holded_invoice_id,
+        doc_type: "invoice",
+        reason: "Eliminado manualmente",
+        project_name: project.name,
+      });
+    }
+
+    if (exclusions.length > 0) {
+      await supabase.from("holded_sync_exclusions").upsert(exclusions, {
+        onConflict: "holded_document_id,doc_type",
+      });
+    }
+  }
+
   const { error } = await supabase.from("projects").delete().eq("id", id);
 
   if (error) {
