@@ -306,6 +306,28 @@ export async function togglePortalVisibility(
   return { success: true };
 }
 
+export async function revokeApproval(
+  projectId: string,
+  field: "design_approved_at" | "deliverable_approved_at" | "payment_confirmed_at",
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ [field]: null })
+    .eq("id", projectId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function deleteProject(formData: FormData) {
   await requireRole("manager");
 

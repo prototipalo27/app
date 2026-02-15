@@ -47,6 +47,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Rate limit: max 5 codes per project+email in 15 minutes
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("client_verifications")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id)
+      .eq("email", email.toLowerCase())
+      .gte("created_at", fifteenMinAgo);
+
+    if (count !== null && count >= 5) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Espera unos minutos antes de solicitar otro código." },
+        { status: 429 },
+      );
+    }
+
     try {
       const code = generateCode();
       await createVerification(project.id, email, code);

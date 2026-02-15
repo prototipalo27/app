@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface FileItem {
   id: string;
@@ -44,6 +44,7 @@ export default function ClientPortal({
   const [code, setCode] = useState("");
   const [verifyError, setVerifyError] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Section data
   const [briefingFiles, setBriefingFiles] = useState<FileItem[]>([]);
@@ -67,6 +68,13 @@ export default function ClientPortal({
   const [lightboxSection, setLightboxSection] = useState<string>("deliverable");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Cooldown timer for resend
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   const isVerified = verifyState === "verified";
 
   // ── Verification flow ──
@@ -85,6 +93,7 @@ export default function ClientPortal({
         return;
       }
       setVerifyState("code-input");
+      setResendCooldown(60);
     } catch {
       setVerifyError("Error de conexión. Inténtalo de nuevo.");
     } finally {
@@ -266,9 +275,18 @@ export default function ClientPortal({
               </button>
             </div>
             {verifyError && <p className="mt-2 text-sm text-red-500">{verifyError}</p>}
-            <button onClick={() => { setVerifyState("email-input"); setCode(""); setVerifyError(""); }} className="mt-3 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-              Usar otro email
-            </button>
+            <div className="mt-3 flex items-center gap-3">
+              <button onClick={() => { setVerifyState("email-input"); setCode(""); setVerifyError(""); }} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                Usar otro email
+              </button>
+              <button
+                onClick={sendCode}
+                disabled={verifyLoading || resendCooldown > 0}
+                className="text-xs text-green-600 hover:text-green-700 disabled:text-zinc-400 disabled:cursor-not-allowed dark:text-green-500 dark:hover:text-green-400"
+              >
+                {resendCooldown > 0 ? `Reenviar código (${resendCooldown}s)` : "Reenviar código"}
+              </button>
+            </div>
           </>
         )}
       </div>

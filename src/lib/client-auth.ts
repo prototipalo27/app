@@ -26,6 +26,14 @@ export async function createVerification(
     .eq("email", email)
     .is("session_token", null);
 
+  // Cleanup: delete all expired verifications older than 24h (any project)
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  await supabase
+    .from("client_verifications")
+    .delete()
+    .lt("expires_at", twentyFourHoursAgo)
+    .is("session_token", null);
+
   const { data, error } = await supabase
     .from("client_verifications")
     .insert({

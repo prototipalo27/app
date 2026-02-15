@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { getVerifiedSession } from "@/lib/client-auth";
 import ClientNamesForm from "./client-names-form";
 
 export async function generateMetadata({
@@ -36,6 +37,12 @@ export default async function ClientNamesPage({
     .single();
 
   if (!project) notFound();
+
+  // Require verified client session
+  const session = await getVerifiedSession();
+  if (!session || session.projectId !== project.id) {
+    redirect(`/track/${token}?verify=1`);
+  }
 
   // Find name_list checklist items
   const { data: nameItems } = await supabase

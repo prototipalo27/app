@@ -35,9 +35,6 @@ export async function POST(request: NextRequest) {
     if (!project.design_visible) {
       return NextResponse.json({ error: "Sección no disponible" }, { status: 403 });
     }
-    if (project.design_approved_at) {
-      return NextResponse.json({ error: "Ya aprobado" }, { status: 409 });
-    }
 
     await supabase
       .from("projects")
@@ -50,9 +47,6 @@ export async function POST(request: NextRequest) {
   // deliverable
   if (!project.deliverable_visible) {
     return NextResponse.json({ error: "Sección no disponible" }, { status: 403 });
-  }
-  if (project.deliverable_approved_at) {
-    return NextResponse.json({ error: "Ya aprobado" }, { status: 409 });
   }
 
   const update: Record<string, string> = { deliverable_approved_at: now };

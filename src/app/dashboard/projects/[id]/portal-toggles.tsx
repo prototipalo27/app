@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { togglePortalVisibility } from "../actions";
+import { togglePortalVisibility, revokeApproval } from "../actions";
 
 interface PortalTogglesProps {
   projectId: string;
@@ -15,14 +15,28 @@ interface PortalTogglesProps {
 export default function PortalToggles({
   projectId,
   designVisible: initialDesignVisible,
-  designApprovedAt,
+  designApprovedAt: initialDesignApprovedAt,
   deliverableVisible: initialDeliverableVisible,
-  deliverableApprovedAt,
-  paymentConfirmedAt,
+  deliverableApprovedAt: initialDeliverableApprovedAt,
+  paymentConfirmedAt: initialPaymentConfirmedAt,
 }: PortalTogglesProps) {
   const [designVisible, setDesignVisible] = useState(initialDesignVisible);
   const [deliverableVisible, setDeliverableVisible] = useState(initialDeliverableVisible);
+  const [designApprovedAt, setDesignApprovedAt] = useState(initialDesignApprovedAt);
+  const [deliverableApprovedAt, setDeliverableApprovedAt] = useState(initialDeliverableApprovedAt);
+  const [paymentConfirmedAt, setPaymentConfirmedAt] = useState(initialPaymentConfirmedAt);
   const [isPending, startTransition] = useTransition();
+
+  const handleRevoke = (field: "design_approved_at" | "deliverable_approved_at" | "payment_confirmed_at") => {
+    startTransition(async () => {
+      const result = await revokeApproval(projectId, field);
+      if (result.success) {
+        if (field === "design_approved_at") setDesignApprovedAt(null);
+        else if (field === "deliverable_approved_at") setDeliverableApprovedAt(null);
+        else setPaymentConfirmedAt(null);
+      }
+    });
+  };
 
   const handleToggle = (field: "design_visible" | "deliverable_visible", value: boolean) => {
     if (field === "design_visible") setDesignVisible(value);
@@ -53,6 +67,16 @@ export default function PortalToggles({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
                 Aprobado por cliente
+                <button
+                  onClick={() => handleRevoke("design_approved_at")}
+                  disabled={isPending}
+                  className="ml-1 rounded-full p-0.5 text-green-600 hover:bg-green-200 hover:text-green-800 disabled:opacity-50 dark:hover:bg-green-800/50 dark:hover:text-green-300"
+                  title="Revocar aprobación"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </span>
             )}
           </div>
@@ -81,11 +105,31 @@ export default function PortalToggles({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
                 Aprobado
+                <button
+                  onClick={() => handleRevoke("deliverable_approved_at")}
+                  disabled={isPending}
+                  className="ml-1 rounded-full p-0.5 text-green-600 hover:bg-green-200 hover:text-green-800 disabled:opacity-50 dark:hover:bg-green-800/50 dark:hover:text-green-300"
+                  title="Revocar aprobación"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </span>
             )}
             {paymentConfirmedAt && (
-              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                 Pago confirmado
+                <button
+                  onClick={() => handleRevoke("payment_confirmed_at")}
+                  disabled={isPending}
+                  className="ml-1 rounded-full p-0.5 text-blue-600 hover:bg-blue-200 hover:text-blue-800 disabled:opacity-50 dark:hover:bg-blue-800/50 dark:hover:text-blue-300"
+                  title="Revocar confirmación de pago"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </span>
             )}
           </div>
