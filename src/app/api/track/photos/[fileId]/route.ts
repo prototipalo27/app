@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/client-auth";
+import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveSectionFolder, listFolderFiles, downloadFile } from "@/lib/google-drive/client";
-import { cookies } from "next/headers";
 
 const VALID_SECTIONS = ["briefing", "design", "deliverable"] as const;
 type Section = (typeof VALID_SECTIONS)[number];
@@ -18,16 +17,9 @@ export async function GET(
     return NextResponse.json({ error: "Sección inválida" }, { status: 400 });
   }
 
-  // Verify client cookie
-  const cookieStore = await cookies();
-  const token = cookieStore.get("client_verified")?.value;
-  if (!token) {
+  const session = await getVerifiedSession();
+  if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return NextResponse.json({ error: "Token expirado" }, { status: 401 });
   }
 
   // Get project and check permissions
@@ -35,7 +27,7 @@ export async function GET(
   const { data: project } = await supabase
     .from("projects")
     .select("google_drive_folder_id, design_visible, deliverable_visible")
-    .eq("id", payload.projectId)
+    .eq("id", session.projectId)
     .single();
 
   if (!project?.google_drive_folder_id) {

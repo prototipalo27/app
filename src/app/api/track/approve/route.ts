@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/client-auth";
+import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
 
 export async function POST(request: NextRequest) {
-  // Verify client cookie
-  const cookieStore = await cookies();
-  const token = cookieStore.get("client_verified")?.value;
-  if (!token) {
+  const session = await getVerifiedSession();
+  if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return NextResponse.json({ error: "Token expirado" }, { status: 401 });
   }
 
   const body = await request.json();
@@ -30,7 +22,7 @@ export async function POST(request: NextRequest) {
   const { data: project } = await supabase
     .from("projects")
     .select("design_visible, design_approved_at, deliverable_visible, deliverable_approved_at, payment_confirmed_at")
-    .eq("id", payload.projectId)
+    .eq("id", session.projectId)
     .single();
 
   if (!project) {
@@ -50,7 +42,7 @@ export async function POST(request: NextRequest) {
     await supabase
       .from("projects")
       .update({ design_approved_at: now })
-      .eq("id", payload.projectId);
+      .eq("id", session.projectId);
 
     return NextResponse.json({ ok: true, approved_at: now });
   }
@@ -71,7 +63,7 @@ export async function POST(request: NextRequest) {
   await supabase
     .from("projects")
     .update(update)
-    .eq("id", payload.projectId);
+    .eq("id", session.projectId);
 
   return NextResponse.json({ ok: true, approved_at: now });
 }

@@ -1,29 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/client-auth";
+import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { resolveSectionFolder, uploadFile, getOrCreateSubfolder } from "@/lib/google-drive/client";
-import { cookies } from "next/headers";
 
 const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
 
 export async function POST(request: NextRequest) {
-  // Verify client cookie
-  const cookieStore = await cookies();
-  const token = cookieStore.get("client_verified")?.value;
-  if (!token) {
+  const session = await getVerifiedSession();
+  if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return NextResponse.json({ error: "Token expirado" }, { status: 401 });
   }
 
   const supabase = createServiceClient();
   const { data: project } = await supabase
     .from("projects")
     .select("google_drive_folder_id")
-    .eq("id", payload.projectId)
+    .eq("id", session.projectId)
     .single();
 
   if (!project?.google_drive_folder_id) {

@@ -3,13 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import {
   generateCode,
-  createPendingToken,
-  createVerifiedToken,
-  verifyToken,
-  setPendingCookie,
-  setVerifiedCookie,
-  deletePendingCookie,
-  getPendingToken,
+  createVerification,
+  checkVerification,
 } from "@/lib/client-auth";
 
 export async function POST(request: NextRequest) {
@@ -54,8 +49,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const code = generateCode();
-      const pendingJwt = await createPendingToken(code, email, project.id);
-      await setPendingCookie(pendingJwt);
+      await createVerification(project.id, email, code);
 
       await sendEmail({
         to: email,
@@ -88,32 +82,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Codigo requerido" }, { status: 400 });
     }
 
-    const pendingJwt = await getPendingToken();
-    if (!pendingJwt) {
+    const email = await checkVerification(project.id, code);
+    if (!email) {
       return NextResponse.json(
-        { error: "No hay codigo pendiente. Solicita uno nuevo." },
-        { status: 400 },
-      );
-    }
-
-    const pending = await verifyToken(pendingJwt);
-    if (!pending || !pending.code) {
-      return NextResponse.json(
-        { error: "Codigo expirado. Solicita uno nuevo." },
-        { status: 400 },
-      );
-    }
-
-    if (pending.code !== code) {
-      return NextResponse.json(
-        { error: "Codigo incorrecto" },
+        { error: "Código incorrecto o expirado" },
         { status: 403 },
       );
     }
-
-    const verifiedJwt = await createVerifiedToken(pending.email, pending.projectId);
-    await setVerifiedCookie(verifiedJwt);
-    await deletePendingCookie();
 
     return NextResponse.json({ ok: true });
   }
