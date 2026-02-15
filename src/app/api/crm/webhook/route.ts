@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 
@@ -9,14 +10,30 @@ function getSupabase() {
   );
 }
 
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+const SAFE_LOG_HEADERS = new Set([
+  "content-type", "user-agent", "accept", "host",
+  "x-forwarded-for", "x-real-ip", "origin", "referer",
+]);
+
 async function logWebhook(method: string, headers: Record<string, string>, body: string) {
   try {
     const supabase = getSupabase();
+    const sanitizedHeaders: Record<string, string> = {};
+    for (const [k, v] of Object.entries(headers)) {
+      if (SAFE_LOG_HEADERS.has(k.toLowerCase())) {
+        sanitizedHeaders[k] = v;
+      }
+    }
     await supabase.from("webhook_logs").insert({
       endpoint: "/api/crm/webhook",
       method,
-      headers,
-      body,
+      headers: sanitizedHeaders,
+      body: body.length > 2000 ? body.slice(0, 2000) + "...[truncated]" : body,
     });
   } catch (e) {
     console.error("Failed to log webhook:", e);
@@ -24,10 +41,10 @@ async function logWebhook(method: string, headers: Record<string, string>, body:
 }
 
 /**
- * POST /api/crm/webhook?secret=CRM_WEBHOOK_SECRET
+ * POST /api/crm/webhook
  *
  * Receives form submissions from Webflow and creates leads.
- * Protected by CRM_WEBHOOK_SECRET query param.
+ * Protected by CRM_WEBHOOK_SECRET via Authorization header or query param.
  */
 export async function POST(request: NextRequest) {
   // Capture raw body first for debugging
@@ -35,14 +52,15 @@ export async function POST(request: NextRequest) {
   const headerObj: Record<string, string> = {};
   request.headers.forEach((v, k) => { headerObj[k] = v; });
 
-  // Log everything that arrives, before any validation
+  // Log sanitized data before validation
   await logWebhook("POST", headerObj, rawBody);
 
   const secret = process.env.CRM_WEBHOOK_SECRET;
   if (secret) {
-    const url = new URL(request.url);
-    const token = url.searchParams.get("secret");
-    if (token !== secret) {
+    const bearer = request.headers.get("authorization")?.replace("Bearer ", "");
+    const queryToken = new URL(request.url).searchParams.get("secret");
+    const token = bearer || queryToken || "";
+    if (!token || !safeCompare(token, secret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }

@@ -15,23 +15,27 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data: upcomingProjects } = await supabase
-    .from("projects")
-    .select("*, project_items(id, name, quantity, completed)")
-    .eq("project_type", "upcoming")
-    .order("created_at", { ascending: false });
-
-  const { data: confirmedProjects } = await supabase
-    .from("projects")
-    .select("*, project_items(id, name, quantity, completed)")
-    .eq("project_type", "confirmed")
-    .order("created_at", { ascending: false });
-
-  const { data: syncMeta } = await supabase
-    .from("app_metadata")
-    .select("value")
-    .eq("key", "last_holded_sync")
-    .single();
+  const [
+    { data: upcomingProjects },
+    { data: confirmedProjects },
+    { data: syncMeta },
+  ] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("*, project_items(id, name, quantity, completed)")
+      .eq("project_type", "upcoming")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("projects")
+      .select("*, project_items(id, name, quantity, completed)")
+      .eq("project_type", "confirmed")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("app_metadata")
+      .select("value")
+      .eq("key", "last_holded_sync")
+      .single(),
+  ]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">

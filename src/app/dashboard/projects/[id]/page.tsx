@@ -74,20 +74,71 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const { data: projectItems } = await supabase
-    .from("project_items")
-    .select("*")
-    .eq("project_id", id)
-    .order("created_at", { ascending: true });
+  // Phase 1: Parallel queries that only depend on project.id
+  const [
+    { data: projectItems },
+    { data: printerTypes },
+    { data: shippingInfo },
+    { data: checklistItems },
+  ] = await Promise.all([
+    supabase
+      .from("project_items")
+      .select("*")
+      .eq("project_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("printer_types")
+      .select("*")
+      .order("name"),
+    supabase
+      .from("shipping_info")
+      .select("*")
+      .eq("project_id", id)
+      .maybeSingle(),
+    supabase
+      .from("project_checklist_items")
+      .select("*")
+      .eq("project_id", id)
+      .order("position", { ascending: true }),
+  ]);
 
-  // Fetch printer types for queue UI
-  const { data: printerTypes } = await supabase
-    .from("printer_types")
-    .select("*")
-    .order("name");
-
-  // Fetch print jobs for all items in this project
+  // Phase 2: Parallel fetches that depend on project fields
   const itemIds = (projectItems ?? []).map((i) => i.id);
+
+  // Build parallel promises for external APIs and conditional queries
+  const printJobsPromise = itemIds.length > 0
+    ? supabase
+        .from("print_jobs")
+        .select("*, printers(name)")
+        .in("project_item_id", itemIds)
+        .order("batch_number", { ascending: true })
+    : Promise.resolve({ data: null });
+
+  const driveFilesPromise = project.google_drive_folder_id
+    ? listFolderFiles(project.google_drive_folder_id).catch(() => [])
+    : Promise.resolve([]);
+
+  const holdedContactPromise = project.holded_contact_id
+    ? getContact(project.holded_contact_id).catch(() => null)
+    : Promise.resolve(null);
+
+  const leadPromise = project.lead_id
+    ? supabase.from("leads").select("id, full_name, email").eq("id", project.lead_id).single()
+    : Promise.resolve({ data: null });
+
+  const templatePromise = project.template_id
+    ? supabase.from("project_templates").select("name").eq("id", project.template_id).single()
+    : Promise.resolve({ data: null });
+
+  const [jobsResult, driveFilesRaw, holdedContact, leadResult, templateResult] = await Promise.all([
+    printJobsPromise,
+    driveFilesPromise,
+    holdedContactPromise,
+    leadPromise,
+    templatePromise,
+  ]);
+
+  // Process print jobs
   let printJobs: Array<{
     id: string;
     project_item_id: string;
@@ -105,63 +156,30 @@ export default async function ProjectDetailPage({
     printer_name?: string;
   }> = [];
 
-  if (itemIds.length > 0) {
-    const { data: jobs } = await supabase
-      .from("print_jobs")
-      .select("*")
-      .in("project_item_id", itemIds)
-      .order("batch_number", { ascending: true });
-
-    if (jobs) {
-      // Enrich with printer names
-      const printerIds = [...new Set(jobs.filter((j) => j.printer_id).map((j) => j.printer_id!))];
-      let printerNames: Record<string, string> = {};
-      if (printerIds.length > 0) {
-        const { data: printers } = await supabase
-          .from("printers")
-          .select("id, name")
-          .in("id", printerIds);
-        if (printers) {
-          printerNames = Object.fromEntries(printers.map((p) => [p.id, p.name]));
-        }
-      }
-      printJobs = jobs.map((j) => ({
-        ...j,
-        printer_name: j.printer_id ? printerNames[j.printer_id] : undefined,
-      }));
-    }
+  if (jobsResult.data) {
+    printJobs = jobsResult.data.map((j: Record<string, unknown>) => ({
+      id: j.id as string,
+      project_item_id: j.project_item_id as string,
+      printer_id: j.printer_id as string | null,
+      printer_type_id: j.printer_type_id as string,
+      batch_number: j.batch_number as number,
+      pieces_in_batch: j.pieces_in_batch as number,
+      estimated_minutes: j.estimated_minutes as number,
+      status: j.status as string,
+      position: j.position as number,
+      scheduled_start: j.scheduled_start as string | null,
+      started_at: j.started_at as string | null,
+      completed_at: j.completed_at as string | null,
+      created_at: j.created_at as string | null,
+      printer_name: (j.printers as { name: string } | null)?.name,
+    }));
   }
 
-  // Fetch drive files for STL estimation
-  let driveFiles: Array<{ id: string; name: string }> = [];
-  if (project.google_drive_folder_id) {
-    try {
-      const files = await listFolderFiles(project.google_drive_folder_id);
-      driveFiles = files.map((f) => ({ id: f.id, name: f.name }));
-    } catch {
-      // Drive unavailable
-    }
-  }
+  const driveFiles = driveFilesRaw.map((f: { id: string; name: string }) => ({ id: f.id, name: f.name }));
+  const linkedLead = leadResult.data;
+  const templateName = templateResult.data?.name ?? null;
 
-  // Fetch Holded contact if linked
-  let holdedContact: HoldedContact | null = null;
-  if (project.holded_contact_id) {
-    try {
-      holdedContact = await getContact(project.holded_contact_id);
-    } catch {
-      // Holded API unavailable — fall back to cached fields
-    }
-  }
-
-  // Fetch shipping info
-  const { data: shippingInfo } = await supabase
-    .from("shipping_info")
-    .select("*")
-    .eq("project_id", id)
-    .maybeSingle();
-
-  // Fetch linked lead and their email activities
-  let linkedLead: { id: string; full_name: string; email: string | null } | null = null;
+  // Fetch lead activities (depends on lead existing)
   let leadActivities: Array<{
     id: string;
     activity_type: string;
@@ -172,43 +190,15 @@ export default async function ProjectDetailPage({
     created_by: string | null;
   }> = [];
 
-  if (project.lead_id) {
-    const { data: lead } = await supabase
-      .from("leads")
-      .select("id, full_name, email")
-      .eq("id", project.lead_id)
-      .single();
+  if (linkedLead) {
+    const { data: activities } = await supabase
+      .from("lead_activities")
+      .select("id, activity_type, content, metadata, thread_id, created_at, created_by")
+      .eq("lead_id", linkedLead.id)
+      .in("activity_type", ["email_sent", "email_received"])
+      .order("created_at", { ascending: false });
 
-    if (lead) {
-      linkedLead = lead;
-
-      const { data: activities } = await supabase
-        .from("lead_activities")
-        .select("id, activity_type, content, metadata, thread_id, created_at, created_by")
-        .eq("lead_id", lead.id)
-        .in("activity_type", ["email_sent", "email_received"])
-        .order("created_at", { ascending: false });
-
-      leadActivities = activities || [];
-    }
-  }
-
-  // Fetch checklist items
-  const { data: checklistItems } = await supabase
-    .from("project_checklist_items")
-    .select("*")
-    .eq("project_id", id)
-    .order("position", { ascending: true });
-
-  // Fetch template name if linked
-  let templateName: string | null = null;
-  if (project.template_id) {
-    const { data: tmpl } = await supabase
-      .from("project_templates")
-      .select("name")
-      .eq("id", project.template_id)
-      .single();
-    templateName = tmpl?.name ?? null;
+    leadActivities = activities || [];
   }
 
   const clientEmail = linkedLead?.email || project.client_email || null;
