@@ -1,6 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { is3DFile } from "@/components/stl-viewer";
+
+const ModelViewer = dynamic(
+  () => import("@/components/stl-viewer").then((m) => m.ModelViewer),
+  { ssr: false },
+);
 
 interface FileItem {
   id: string;
@@ -66,6 +73,7 @@ export default function ClientPortal({
   const [confirmPayCheck, setConfirmPayCheck] = useState(false);
   const [lightboxId, setLightboxId] = useState<string | null>(null);
   const [lightboxSection, setLightboxSection] = useState<string>("deliverable");
+  const [lightboxFileName, setLightboxFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cooldown timer for resend
@@ -307,7 +315,7 @@ export default function ClientPortal({
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
           <>
-            <FileList files={briefingFiles} section="briefing" onOpenLightbox={(id, sec) => { setLightboxId(id); setLightboxSection(sec); }} />
+            <FileList files={briefingFiles} section="briefing" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
 
             <div className="mt-3">
               <input
@@ -349,7 +357,7 @@ export default function ClientPortal({
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
           <>
-            <FileList files={designFiles} section="design" onOpenLightbox={(id, sec) => { setLightboxId(id); setLightboxSection(sec); }} />
+            <FileList files={designFiles} section="design" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
 
             {!designApproved && designFiles.length > 0 && (
               <button
@@ -379,7 +387,7 @@ export default function ClientPortal({
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
           <>
-            <PhotoGrid files={deliverableFiles} onOpenLightbox={(id) => { setLightboxId(id); setLightboxSection("deliverable"); }} />
+            <PhotoGrid files={deliverableFiles} onOpenLightbox={(id, name) => { setLightboxId(id); setLightboxSection("deliverable"); setLightboxFileName(name); }} />
 
             {!deliverableApproved && deliverableFiles.length > 0 && (
               <div className="mt-4 space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -422,19 +430,28 @@ export default function ClientPortal({
         >
           <button
             onClick={() => setLightboxId(null)}
-            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            className="absolute top-4 right-4 z-10 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/track/photos/${lightboxId}?section=${lightboxSection}`}
-            alt="Archivo ampliado"
-            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {lightboxFileName && is3DFile(lightboxFileName) ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ModelViewer
+                url={`/api/track/photos/${lightboxId}?section=${lightboxSection}`}
+                fileName={lightboxFileName}
+              />
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={`/api/track/photos/${lightboxId}?section=${lightboxSection}`}
+              alt="Archivo ampliado"
+              className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </div>
@@ -450,7 +467,7 @@ function FileList({
 }: {
   files: FileItem[];
   section: string;
-  onOpenLightbox: (id: string, section: string) => void;
+  onOpenLightbox: (id: string, section: string, fileName: string) => void;
 }) {
   if (files.length === 0) {
     return <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay archivos.</p>;
@@ -460,6 +477,7 @@ function FileList({
     <div className="space-y-1.5">
       {files.map((f) => {
         const isImage = f.mimeType.startsWith("image/");
+        const is3D = is3DFile(f.mimeType) || is3DFile(f.name);
         return (
           <div
             key={f.id}
@@ -467,12 +485,22 @@ function FileList({
           >
             {isImage ? (
               <button
-                onClick={() => onOpenLightbox(f.id, section)}
+                onClick={() => onOpenLightbox(f.id, section, f.name)}
                 className="shrink-0 text-zinc-400 hover:text-green-600"
                 title="Ver imagen"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            ) : is3D ? (
+              <button
+                onClick={() => onOpenLightbox(f.id, section, f.name)}
+                className="shrink-0 text-purple-400 hover:text-green-600"
+                title="Ver modelo 3D"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
                 </svg>
               </button>
             ) : (
@@ -498,7 +526,7 @@ function PhotoGrid({
   onOpenLightbox,
 }: {
   files: FileItem[];
-  onOpenLightbox: (id: string) => void;
+  onOpenLightbox: (id: string, name: string) => void;
 }) {
   const images = files.filter((f) => f.mimeType.startsWith("image/"));
   if (images.length === 0) {
@@ -510,7 +538,7 @@ function PhotoGrid({
       {images.map((photo) => (
         <button
           key={photo.id}
-          onClick={() => onOpenLightbox(photo.id)}
+          onClick={() => onOpenLightbox(photo.id, photo.name)}
           className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

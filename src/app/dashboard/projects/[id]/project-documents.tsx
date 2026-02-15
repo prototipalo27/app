@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import * as THREE from "three";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { isStlFile as isStlFileCheck, isObjFile, is3DFile } from "@/components/stl-viewer";
+
+const ModelViewer = dynamic(
+  () => import("@/components/stl-viewer").then((m) => m.ModelViewer),
+  { ssr: false },
+);
 
 interface DriveFile {
   id: string;
@@ -35,18 +38,16 @@ interface UploadItem {
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-const STL_MIME_TYPES = ["model/stl", "application/vnd.ms-pki.stl"];
-
 function isStlFile(file: DriveFile): boolean {
-  if (STL_MIME_TYPES.includes(file.mimeType)) return true;
-  return file.name.toLowerCase().endsWith(".stl");
+  return isStlFileCheck(file.mimeType) || isStlFileCheck(file.name);
 }
 
 function isPreviewable(file: DriveFile): boolean {
   return (
     file.mimeType.startsWith("image/") ||
     file.mimeType === "application/pdf" ||
-    isStlFile(file)
+    is3DFile(file.mimeType) ||
+    is3DFile(file.name)
   );
 }
 
@@ -79,8 +80,8 @@ function StlFileIcon() {
 function FileIcon({ mimeType, fileName }: { mimeType: string; fileName?: string }) {
   if (mimeType === FOLDER_MIME) return <FolderIcon />;
   if (
-    STL_MIME_TYPES.includes(mimeType) ||
-    (fileName && fileName.toLowerCase().endsWith(".stl"))
+    is3DFile(mimeType) ||
+    (fileName && is3DFile(fileName))
   ) {
     return <StlFileIcon />;
   }
@@ -143,79 +144,6 @@ function Breadcrumbs({
   );
 }
 
-// ── STL Viewer ─────────────────────────────────────────
-
-function StlModel({ url }: { url: string }) {
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loader = new STLLoader();
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error("Error al descargar el archivo");
-        return res.arrayBuffer();
-      })
-      .then((buffer) => {
-        const geo = loader.parse(buffer);
-        geo.center();
-        geo.computeBoundingSphere();
-        const scale =
-          2 / (geo.boundingSphere?.radius ?? 1);
-        geo.scale(scale, scale, scale);
-        geo.computeVertexNormals();
-        setGeometry(geo);
-      })
-      .catch((err) => setError(err.message));
-  }, [url]);
-
-  if (error) {
-    return null;
-  }
-
-  if (!geometry) return null;
-
-  return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial color="#a0a0a0" metalness={0.3} roughness={0.6} />
-    </mesh>
-  );
-}
-
-function StlViewer({ fileId }: { fileId: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const url = `/api/drive/download/${fileId}`;
-
-  return (
-    <div className="relative h-[85vh] w-[85vw] max-w-4xl rounded-lg bg-zinc-900">
-      {loading && !error && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-green-500" />
-        </div>
-      )}
-      {error && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <p className="text-sm text-red-400">{error}</p>
-        </div>
-      )}
-      <Canvas
-        camera={{ position: [3, 3, 3], fov: 45 }}
-        onCreated={() => setLoading(false)}
-        onError={() => setError("Error al renderizar el modelo 3D")}
-      >
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[5, 5, 5]} intensity={1} />
-        <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-        <Suspense fallback={null}>
-          <StlModel url={url} />
-        </Suspense>
-        <OrbitControls enableDamping dampingFactor={0.1} />
-      </Canvas>
-    </div>
-  );
-}
-
 // ── File Preview Modal ─────────────────────────────────
 
 function FilePreviewModal({
@@ -247,7 +175,7 @@ function FilePreviewModal({
 
   const isImage = file.mimeType.startsWith("image/");
   const isPdf = file.mimeType === "application/pdf";
-  const isStl = isStlFile(file);
+  const is3D = is3DFile(file.mimeType) || is3DFile(file.name);
 
   // For images: use a high-res thumbnail (replace s220 with s1600) or webContentLink
   const imageUrl = file.thumbnailLink
@@ -318,7 +246,7 @@ function FilePreviewModal({
             allow="autoplay"
           />
         )}
-        {isStl && <StlViewer fileId={file.id} />}
+        {is3D && <ModelViewer url={`/api/drive/download/${file.id}`} fileName={file.name} />}
       </div>
     </div>
   );
