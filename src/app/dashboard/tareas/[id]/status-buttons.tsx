@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTaskStatus } from "../actions";
+import { updateTaskStatus, deleteTask } from "../actions";
 
 const TRANSITIONS: Record<string, { label: string; next: string }[]> = {
   pending: [{ label: "Iniciar", next: "in_progress" }],
@@ -51,5 +51,24 @@ export function TaskStatusButtons({
         </button>
       ))}
     </div>
+  );
+}
+
+export function DeleteTaskButton({ taskId }: { taskId: string }) {
+  return (
+    <form
+      action={deleteTask}
+      onSubmit={(e) => {
+        if (!confirm("¿Eliminar esta tarea?")) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="id" value={taskId} />
+      <button
+        type="submit"
+        className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+      >
+        Eliminar tarea
+      </button>
+    </form>
   );
 }
