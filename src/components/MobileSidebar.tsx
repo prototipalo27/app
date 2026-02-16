@@ -191,6 +191,26 @@ export default function MobileSidebar({
             Tareas
           </Link>
 
+          {/* ── EQUIPO ── */}
+          <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
+          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Equipo
+          </p>
+          <Link
+            href="/dashboard/equipo"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/equipo")
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            Equipo
+          </Link>
+
           {/* ── COMPRAS ── */}
           {isManager && (
             <>

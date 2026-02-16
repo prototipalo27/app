@@ -1213,6 +1213,24 @@ export type Database = {
           },
         ]
       }
+      skills: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       supplier_payments: {
         Row: {
           amount: number
@@ -1483,6 +1501,36 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      user_skills: {
+        Row: {
+          skill_id: string
+          user_id: string
+        }
+        Insert: {
+          skill_id: string
+          user_id: string
+        }
+        Update: {
+          skill_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_skills_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vendor_mappings: {
         Row: {
