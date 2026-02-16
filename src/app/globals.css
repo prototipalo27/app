@@ -11,6 +11,14 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Brand colors — Prototipalo */
+  --color-brand: #e9473f;
+  --color-brand-dark: #d63a32;
+  --color-brand-light: #fce8e7;
+  --color-brand-yellow: #fdc52c;
+  --color-brand-blue: #009edc;
+  --color-brand-blue-light: #e0f4fd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,7 +35,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Custom range slider — large green thumb, touch-draggable */
+/* Custom range slider — large brand thumb, touch-draggable */
 .item-slider {
   touch-action: none;          /* prevent page scroll while dragging */
   -webkit-appearance: none;
@@ -46,7 +54,7 @@ body {
   height: 28px;
   margin-top: -8px;            /* center thumb on track */
   border-radius: 50%;
-  background: #22c55e;
+  background: #e9473f;
   border: 3px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: grab;
@@ -65,7 +73,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #22c55e;
+  background: #e9473f;
   border: 3px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: grab;
