@@ -238,7 +238,7 @@ export async function createQuoteRequest(
   }
 
   // Build public URL
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.com";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const quoteUrl = `${baseUrl}/quote/${qr.token}`;
 
   // Send email
