@@ -5,6 +5,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sendPushToUser } from "@/lib/push-notifications/server";
 
+async function isSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("id", userId)
+    .single();
+  return data?.role === "super_admin";
+}
+
 export async function createTask(formData: FormData) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -40,13 +49,16 @@ export async function createTask(formData: FormData) {
     throw new Error(error.message);
   }
 
-  // Notify assigned user
-  if (assignedTo && assignedTo !== userData.user.id) {
-    sendPushToUser(assignedTo, {
-      title: "Nueva tarea asignada",
-      body: title.trim(),
-      url: `/dashboard/tareas/${task.id}`,
-    }).catch(() => {});
+  // Notify assigned user (super_admin always gets notified, even self-assign)
+  if (assignedTo) {
+    const isSelf = assignedTo === userData.user.id;
+    if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
+      sendPushToUser(assignedTo, {
+        title: "Nueva tarea asignada",
+        body: title.trim(),
+        url: `/dashboard/tareas/${task.id}`,
+      }).catch(() => {});
+    }
   }
 
   revalidatePath("/dashboard/tareas");
@@ -96,13 +108,16 @@ export async function updateTask(formData: FormData) {
     throw new Error(error.message);
   }
 
-  // Notify new assignee if reassigned
-  if (assignedTo && assignedTo !== current?.assigned_to && assignedTo !== userData.user.id) {
-    sendPushToUser(assignedTo, {
-      title: "Tarea asignada",
-      body: title.trim(),
-      url: `/dashboard/tareas/${id}`,
-    }).catch(() => {});
+  // Notify new assignee if reassigned (super_admin always gets notified)
+  if (assignedTo && assignedTo !== current?.assigned_to) {
+    const isSelf = assignedTo === userData.user.id;
+    if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
+      sendPushToUser(assignedTo, {
+        title: "Tarea asignada",
+        body: title.trim(),
+        url: `/dashboard/tareas/${id}`,
+      }).catch(() => {});
+    }
   }
 
   revalidatePath("/dashboard/tareas");
@@ -137,13 +152,16 @@ export async function updateTaskStatus(
     return { success: false, error: error.message };
   }
 
-  // Notify creator when task is completed (if someone else completed it)
-  if (status === "done" && task?.created_by && task.created_by !== userData.user.id) {
-    sendPushToUser(task.created_by, {
-      title: "Tarea completada",
-      body: task.title,
-      url: `/dashboard/tareas/${id}`,
-    }).catch(() => {});
+  // Notify creator when task is completed (super_admin always gets notified)
+  if (status === "done" && task?.created_by) {
+    const isSelf = task.created_by === userData.user.id;
+    if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
+      sendPushToUser(task.created_by, {
+        title: "Tarea completada",
+        body: task.title,
+        url: `/dashboard/tareas/${id}`,
+      }).catch(() => {});
+    }
   }
 
   revalidatePath("/dashboard/tareas");
