@@ -1159,6 +1159,68 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_requests: {
+        Row: {
+          billing_address: string | null
+          billing_city: string | null
+          billing_country: string | null
+          billing_name: string | null
+          billing_postal_code: string | null
+          billing_province: string | null
+          created_at: string | null
+          holded_contact_id: string | null
+          holded_proforma_id: string | null
+          id: string
+          lead_id: string
+          status: string
+          submitted_at: string | null
+          tax_id: string | null
+          token: string
+        }
+        Insert: {
+          billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_name?: string | null
+          billing_postal_code?: string | null
+          billing_province?: string | null
+          created_at?: string | null
+          holded_contact_id?: string | null
+          holded_proforma_id?: string | null
+          id?: string
+          lead_id: string
+          status?: string
+          submitted_at?: string | null
+          tax_id?: string | null
+          token?: string
+        }
+        Update: {
+          billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_name?: string | null
+          billing_postal_code?: string | null
+          billing_province?: string | null
+          created_at?: string | null
+          holded_contact_id?: string | null
+          holded_proforma_id?: string | null
+          id?: string
+          lead_id?: string
+          status?: string
+          submitted_at?: string | null
+          tax_id?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_requests_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shipping_info: {
         Row: {
           address_line: string | null

@@ -207,6 +207,84 @@ export async function linkLeadToProject(leadId: string, projectId: string) {
   revalidatePath("/dashboard");
 }
 
+// ── Quote Request ────────────────────────────────────────
+
+export async function createQuoteRequest(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get lead email
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  // Insert quote request
+  const { data: qr, error: insertError } = await supabase
+    .from("quote_requests")
+    .insert({ lead_id: leadId })
+    .select("token")
+    .single();
+
+  if (insertError || !qr) {
+    return { success: false, error: insertError?.message || "Error al crear solicitud" };
+  }
+
+  // Build public URL
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.com";
+  const quoteUrl = `${baseUrl}/quote/${qr.token}`;
+
+  // Send email
+  try {
+    await sendEmail({
+      to: lead.email,
+      subject: "Datos de facturación — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nPara preparar tu presupuesto necesitamos tus datos de facturación.\n\nPor favor, rellena el siguiente formulario:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Para preparar tu presupuesto necesitamos tus datos de facturación.</p><p>Por favor, rellena el siguiente formulario:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#16a34a;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Rellenar datos de facturación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+    });
+  } catch {
+    return { success: false, error: "Error al enviar el email" };
+  }
+
+  // Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: "Formulario de datos de facturación enviado",
+    metadata: {
+      email_to: lead.email,
+      email_subject: "Datos de facturación — Prototipalo",
+      quote_token: qr.token,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+export async function getQuoteRequest(leadId: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("quote_requests")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  return data;
+}
+
 // ── Search Leads ─────────────────────────────────────────
 
 export async function searchLeads(query: string) {

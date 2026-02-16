@@ -95,6 +95,60 @@ export async function listDocuments(
   return all;
 }
 
+// ── Contacts (write) ──────────────────────────────────────
+
+/** Update an existing contact */
+export async function updateContact(
+  id: string,
+  data: {
+    name?: string;
+    code?: string;
+    billAddress?: {
+      address?: string;
+      city?: string;
+      postalCode?: string;
+      province?: string;
+      country?: string;
+      countryCode?: string;
+    };
+  },
+): Promise<{ id: string }> {
+  const res = await fetch(`${HOLDED_API_BASE}/contacts/${id}`, {
+    method: "PUT",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as { id: string };
+}
+
+// ── Documents (write) ─────────────────────────────────────
+
+/** Create a proforma draft for a contact (no line items) */
+export async function createProforma(
+  contactId: string,
+): Promise<{ id: string }> {
+  const res = await fetch(`${HOLDED_API_BASE}/documents/proform`, {
+    method: "POST",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contactId,
+      date: Math.floor(Date.now() / 1000),
+      desc: "Borrador — pendiente de completar líneas",
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as { id: string };
+}
+
 // ── Contacts (search) ──────────────────────────────────────
 
 /** Search contacts by name (client-side filtering — Holded API has no search endpoint) */

@@ -8,7 +8,9 @@ import {
   addNote,
   deleteLead,
   blockEmailAndDeleteLead,
+  createQuoteRequest,
 } from "../actions";
+import type { Tables } from "@/lib/supabase/database.types";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -21,6 +23,7 @@ interface LeadActionsProps {
   currentStatus: LeadStatus;
   managers: { id: string; email: string }[];
   assignedTo: string | null;
+  quoteRequest: Tables<"quote_requests"> | null;
 }
 
 export default function LeadActions({
@@ -29,6 +32,7 @@ export default function LeadActions({
   currentStatus,
   managers,
   assignedTo,
+  quoteRequest,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -39,6 +43,11 @@ export default function LeadActions({
   // Lost reason
   const [showLostReason, setShowLostReason] = useState(false);
   const [lostReason, setLostReason] = useState("");
+
+  // Quote request
+  const [quoteSending, setQuoteSending] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Delete confirmation
   const [showDelete, setShowDelete] = useState(false);
@@ -169,6 +178,81 @@ export default function LeadActions({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Presupuesto */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+          Presupuesto
+        </h3>
+        {!quoteRequest ? (
+          leadEmail ? (
+            <div>
+              <button
+                onClick={() => {
+                  setQuoteSending(true);
+                  setQuoteError(null);
+                  startTransition(async () => {
+                    const result = await createQuoteRequest(leadId);
+                    setQuoteSending(false);
+                    if (!result.success) {
+                      setQuoteError(result.error || "Error");
+                    }
+                    router.refresh();
+                  });
+                }}
+                disabled={isPending || quoteSending}
+                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {quoteSending ? "Enviando..." : "Enviar formulario presupuesto"}
+              </button>
+              {quoteError && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{quoteError}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              El lead necesita un email para enviar el formulario.
+            </p>
+          )
+        ) : quoteRequest.status === "pending" ? (
+          <div className="space-y-2">
+            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+              Formulario enviado — pendiente
+            </span>
+            <button
+              onClick={() => {
+                const baseUrl = window.location.origin;
+                navigator.clipboard.writeText(`${baseUrl}/quote/${quoteRequest.token}`);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {copied ? "Copiado!" : "Copiar enlace del formulario"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              Datos recibidos
+            </span>
+            <div className="text-xs text-zinc-600 dark:text-zinc-400">
+              <p><strong>Razón social:</strong> {quoteRequest.billing_name}</p>
+              <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
+            </div>
+            {quoteRequest.holded_proforma_id && (
+              <a
+                href={`https://app.holded.com/invoicing/proform/${quoteRequest.holded_proforma_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Ver proforma en Holded
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add note */}

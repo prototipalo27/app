@@ -71,6 +71,15 @@ export default async function LeadDetailPage({
     userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
 
+  // Fetch latest quote request
+  const { data: quoteRequest } = await supabase
+    .from("quote_requests")
+    .select("*")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
   const STATUS_COLORS: Record<string, string> = {
@@ -333,6 +342,7 @@ export default async function LeadDetailPage({
             currentStatus={lead.status as LeadStatus}
             managers={managers || []}
             assignedTo={lead.assigned_to}
+            quoteRequest={quoteRequest}
           />
         </div>
       </div>
