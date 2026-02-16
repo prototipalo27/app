@@ -18,7 +18,7 @@ import requests
 
 # ── Config ──────────────────────────────────────────────────────────────────────
 
-API_URL = os.environ.get("PROTOTIPALO_URL", "https://tu-app.vercel.app")
+API_URL = os.environ.get("PROTOTIPALO_URL", "https://app.prototipalo.es")
 SECRET = os.environ.get("ELEGOO_HUB_SECRET", "changeme")
 POLL_INTERVAL = 30  # seconds
 
