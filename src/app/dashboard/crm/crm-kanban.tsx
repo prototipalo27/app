@@ -6,6 +6,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus } from "./actions";
+import Link from "next/link";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
@@ -140,11 +141,91 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
     setLostReason("");
   };
 
+  const newLeads = leads.filter((l) => l.status === "new");
+  const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
+
   return (
     <>
+      {/* ── New leads strip ── */}
+      {newLeads.length > 0 && (
+        <div className="mb-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+            <span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Nuevos
+            </h3>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+              {newLeads.length}
+            </span>
+          </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {newLeads.map((lead) => (
+              <div
+                key={lead.id}
+                className="flex items-center gap-4 px-4 py-3"
+              >
+                {/* Name + company */}
+                <Link
+                  href={`/dashboard/crm/${lead.id}`}
+                  className="min-w-0 shrink-0 basis-44"
+                >
+                  <p className="truncate text-sm font-semibold text-zinc-900 hover:underline dark:text-white">
+                    {lead.full_name}
+                  </p>
+                  {lead.company && (
+                    <p className="truncate text-xs text-zinc-400">
+                      {lead.company}
+                    </p>
+                  )}
+                </Link>
+
+                {/* Message */}
+                <p className="min-w-0 flex-1 truncate text-sm text-zinc-500 dark:text-zinc-400">
+                  {lead.message || "—"}
+                </p>
+
+                {/* Phone */}
+                {lead.phone ? (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="shrink-0 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {lead.phone}
+                  </a>
+                ) : (
+                  <span className="shrink-0 text-sm text-zinc-300 dark:text-zinc-600">
+                    Sin tel.
+                  </span>
+                )}
+
+                {/* Contactar button */}
+                {lead.email ? (
+                  <a
+                    href={`mailto:${lead.email}`}
+                    className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Contactar
+                  </a>
+                ) : (
+                  <Link
+                    href={`/dashboard/crm/${lead.id}`}
+                    className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    Ver lead
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Kanban ── */}
       <DragDropProvider onDragEnd={handleDragEnd}>
-        <div className="grid min-h-0 flex-1 auto-cols-[240px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-5 md:auto-cols-auto">
-          {LEAD_COLUMNS.map((column) => (
+        <div className="grid min-h-0 flex-1 auto-cols-[240px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto">
+          {kanbanColumns.map((column) => (
             <CrmColumn
               key={column.id}
               column={column}
