@@ -42,7 +42,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/track/") ||
-    pathname.startsWith("/quote/");
+    pathname.startsWith("/quote/") ||
+    pathname === "/offline";
 
   // Not authenticated + protected route -> redirect to login
   if (!user && !isPublic) {

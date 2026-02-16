@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import NotificationBell from "@/components/NotificationBell";
 import MobileSidebar from "@/components/MobileSidebar";
+import SessionRefresh from "@/components/SessionRefresh";
 import { getUserProfile, hasRole, type UserRole } from "@/lib/rbac";
 import DesktopNav from "./desktop-nav";
 
@@ -99,6 +100,8 @@ export default async function DashboardLayout({
       <main className="flex min-w-0 flex-1 flex-col p-4 md:p-8">
         {children}
       </main>
+
+      <SessionRefresh />
     </div>
   );
 }
