@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { sendPushToUser } from "@/lib/push-notifications/server";
 
 export async function createTask(formData: FormData) {
   const supabase = await createClient();
@@ -21,18 +22,31 @@ export async function createTask(formData: FormData) {
   const projectId = (formData.get("project_id") as string)?.trim() || null;
   const dueDate = (formData.get("due_date") as string)?.trim() || null;
 
-  const { error } = await supabase.from("tasks").insert({
-    title: title.trim(),
-    description: (formData.get("description") as string)?.trim() || null,
-    priority: (formData.get("priority") as string) || "medium",
-    assigned_to: assignedTo,
-    project_id: projectId,
-    due_date: dueDate,
-    created_by: userData.user.id,
-  });
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .insert({
+      title: title.trim(),
+      description: (formData.get("description") as string)?.trim() || null,
+      priority: (formData.get("priority") as string) || "medium",
+      assigned_to: assignedTo,
+      project_id: projectId,
+      due_date: dueDate,
+      created_by: userData.user.id,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // Notify assigned user
+  if (assignedTo && assignedTo !== userData.user.id) {
+    sendPushToUser(assignedTo, {
+      title: "Nueva tarea asignada",
+      body: title.trim(),
+      url: `/dashboard/tareas/${task.id}`,
+    }).catch(() => {});
   }
 
   revalidatePath("/dashboard/tareas");
@@ -57,6 +71,13 @@ export async function updateTask(formData: FormData) {
   const projectId = (formData.get("project_id") as string)?.trim() || null;
   const dueDate = (formData.get("due_date") as string)?.trim() || null;
 
+  // Check current assignee to detect reassignment
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("assigned_to")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("tasks")
     .update({
@@ -75,6 +96,15 @@ export async function updateTask(formData: FormData) {
     throw new Error(error.message);
   }
 
+  // Notify new assignee if reassigned
+  if (assignedTo && assignedTo !== current?.assigned_to && assignedTo !== userData.user.id) {
+    sendPushToUser(assignedTo, {
+      title: "Tarea asignada",
+      body: title.trim(),
+      url: `/dashboard/tareas/${id}`,
+    }).catch(() => {});
+  }
+
   revalidatePath("/dashboard/tareas");
   revalidatePath(`/dashboard/tareas/${id}`);
   redirect(`/dashboard/tareas/${id}`);
@@ -91,6 +121,13 @@ export async function updateTaskStatus(
     return { success: false, error: "Unauthorized" };
   }
 
+  // Fetch task details for notification
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("title, created_by, assigned_to")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("tasks")
     .update({ status, updated_at: new Date().toISOString() })
@@ -98,6 +135,15 @@ export async function updateTaskStatus(
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  // Notify creator when task is completed (if someone else completed it)
+  if (status === "done" && task?.created_by && task.created_by !== userData.user.id) {
+    sendPushToUser(task.created_by, {
+      title: "Tarea completada",
+      body: task.title,
+      url: `/dashboard/tareas/${id}`,
+    }).catch(() => {});
   }
 
   revalidatePath("/dashboard/tareas");
