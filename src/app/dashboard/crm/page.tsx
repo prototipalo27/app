@@ -17,6 +17,18 @@ export default async function CrmPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
+  // Fetch managers for filter
+  const { data: allManagers } = await supabase
+    .from("user_profiles")
+    .select("id, email")
+    .in("role", ["manager", "super_admin"])
+    .eq("is_active", true);
+
+  const managers = (allManagers || []).map((m) => ({
+    id: m.id,
+    name: m.email.split("@")[0],
+  }));
+
   // Fetch assignee emails
   const assigneeIds = [
     ...new Set((leads || []).map((l) => l.assigned_to).filter(Boolean)),
@@ -61,7 +73,7 @@ export default async function CrmPage() {
         </div>
       </div>
 
-      <CrmKanban initialLeads={leadsWithAssignee} />
+      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} />
     </div>
   );
 }

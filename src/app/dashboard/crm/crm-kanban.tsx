@@ -10,6 +10,13 @@ import Link from "next/link";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
+  managers: { id: string; name: string }[];
+}
+
+function truncateWords(text: string, maxWords: number): string {
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(" ") + "…";
 }
 
 function CrmColumn({
@@ -51,8 +58,9 @@ function CrmColumn({
   );
 }
 
-export function CrmKanban({ initialLeads }: CrmKanbanProps) {
+export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const [leads, setLeads] = useState(initialLeads);
+  const [filterManager, setFilterManager] = useState<string>("all");
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -153,11 +161,39 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
     setDismissingId(null);
   };
 
-  const newLeads = leads.filter((l) => l.status === "new");
+  const filteredLeads = filterManager === "all"
+    ? leads
+    : filterManager === "unassigned"
+      ? leads.filter((l) => !l.assigned_to)
+      : leads.filter((l) => l.assigned_to === filterManager);
+
+  const newLeads = filteredLeads.filter((l) => l.status === "new");
   const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
 
   return (
     <>
+      {/* ── Commercial filter ── */}
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Comercial:</span>
+        {[
+          { id: "all", label: "Todos" },
+          ...managers.map((m) => ({ id: m.id, label: m.name })),
+          { id: "unassigned", label: "Sin asignar" },
+        ].map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setFilterManager(opt.id)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              filterManager === opt.id
+                ? "bg-green-600 text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* ── New leads strip ── */}
       {newLeads.length > 0 && (
         <div className="mb-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -191,9 +227,9 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
                   )}
                 </Link>
 
-                {/* Message */}
-                <p className="min-w-0 flex-1 truncate text-sm text-zinc-500 dark:text-zinc-400">
-                  {lead.message || "—"}
+                {/* Message (~30 words max) */}
+                <p className="min-w-0 flex-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                  {lead.message ? truncateWords(lead.message, 30) : "—"}
                 </p>
 
                 {/* Phone */}
@@ -251,7 +287,7 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
             <CrmColumn
               key={column.id}
               column={column}
-              leads={leads.filter((l) => l.status === column.id)}
+              leads={filteredLeads.filter((l) => l.status === column.id)}
             />
           ))}
         </div>
