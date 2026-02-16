@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   isOfficeHour,
@@ -81,30 +82,125 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 }
 
-/** Fixed 48-hour window for the timeline */
-const TIMELINE_HOURS = 48;
-const TIMELINE_MINUTES = TIMELINE_HOURS * 60;
+/** Minimum visible window */
+const MIN_TIMELINE_HOURS = 48;
 /** Label column width in pixels */
 const LABEL_WIDTH = 160;
+/** Pixels per hour — controls how "zoomed in" the scrollable timeline is */
+const PX_PER_HOUR = 60;
+
+/** Tooltip rendered via portal so it's never clipped by overflow */
+function JobTooltip({
+  job,
+  jobStart,
+  jobEnd,
+  anchorRect,
+}: {
+  job: JobInfo;
+  jobStart: Date;
+  jobEnd: Date;
+  anchorRect: DOMRect;
+}) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const tw = el.offsetWidth;
+    const th = el.offsetHeight;
+
+    let top = anchorRect.bottom + 6;
+    let left = anchorRect.left;
+
+    // Flip up if overflows bottom
+    if (top + th > window.innerHeight - 8) {
+      top = anchorRect.top - th - 6;
+    }
+    // Keep within viewport horizontally
+    if (left + tw > window.innerWidth - 8) {
+      left = window.innerWidth - tw - 8;
+    }
+    if (left < 8) left = 8;
+
+    setPos({ top, left });
+  }, [anchorRect]);
+
+  return createPortal(
+    <div
+      ref={tooltipRef}
+      className="fixed z-50 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+      style={{ top: `${pos.top}px`, left: `${pos.left}px` }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-zinc-900 dark:text-white">
+          {job.project_name}
+        </span>
+        {(job.queue_priority ?? 0) > 0 && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+              job.queue_priority === 2
+                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+            }`}
+          >
+            {PRIORITY_LABEL[job.queue_priority ?? 0]}
+          </span>
+        )}
+      </div>
+      <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        {job.item_name} · Batch {job.batch_number}
+      </div>
+      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        {job.pieces_in_batch} piezas · ~{formatMinutes(job.estimated_minutes)}
+      </div>
+      <div className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+        Inicio: {formatTime(jobStart)} {formatDate(jobStart)}
+      </div>
+      <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
+        Fin est.: {formatTime(jobEnd)} {formatDate(jobEnd)}
+      </div>
+      {job.project_id && (
+        <Link
+          href={`/dashboard/projects/${job.project_id}`}
+          className="mt-1.5 block text-xs text-green-600 hover:underline dark:text-green-400"
+        >
+          Ver proyecto
+        </Link>
+      )}
+    </div>,
+    document.body
+  );
+}
 
 export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps) {
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
+  const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
   const origin = useMemo(() => new Date(startTime), [startTime]);
 
-  // Measure available width and recalc on resize
-  useEffect(() => {
-    function measure() {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
+  // Calculate timeline duration: max(48h, latest job end)
+  const totalWallMinutes = useMemo(() => {
+    let maxEndMs = origin.getTime() + MIN_TIMELINE_HOURS * 60 * 60000;
+
+    for (const job of jobs) {
+      if (job.scheduled_start) {
+        const jobStart = new Date(job.scheduled_start);
+        const jobEnd = addWorkMinutes(jobStart, job.estimated_minutes);
+        if (jobEnd.getTime() > maxEndMs) {
+          maxEndMs = jobEnd.getTime();
+        }
       }
     }
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+
+    // Add 2h padding after the latest job
+    const totalMin = (maxEndMs - origin.getTime()) / 60000 + 120;
+    return totalMin;
+  }, [origin, jobs]);
+
+  // Fixed px/min from PX_PER_HOUR — timeline scrolls horizontally
+  const pxPerMin = PX_PER_HOUR / 60;
+  const timelineWidth = totalWallMinutes * pxPerMin;
 
   // Group jobs by printer
   const jobsByPrinter: Record<string, JobInfo[]> = {};
@@ -119,19 +215,26 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
 
   const unassignedJobs = jobs.filter((j) => !j.printer_id);
 
-  const totalWallMinutes = TIMELINE_MINUTES;
-  const timelineWidth = Math.max(containerWidth - LABEL_WIDTH, 200);
-  const pxPerMin = timelineWidth / totalWallMinutes;
+  const handleJobHover = useCallback((jobId: string, el: HTMLElement) => {
+    setHoveredJob(jobId);
+    setHoveredRect(el.getBoundingClientRect());
+  }, []);
 
-  // Generate hour markers — skip labels when space is tight
+  const handleJobLeave = useCallback(() => {
+    setHoveredJob(null);
+    setHoveredRect(null);
+  }, []);
+
+  // Find the hovered job data for the tooltip
+  const hoveredJobData = hoveredJob ? jobs.find((j) => j.id === hoveredJob) : null;
+
+  // Generate hour markers
   const hourMarkers = useMemo(() => {
     const pxPerHour = pxPerMin * 60;
-    // Show every hour if >=40px/h, every 3h if >=15px/h, else every 6h
     const step = pxPerHour >= 40 ? 1 : pxPerHour >= 15 ? 3 : 6;
 
     const markers: { label: string; offsetPx: number; isNewDay: boolean }[] = [];
     const cursor = new Date(origin);
-    // Round up to next full hour
     cursor.setMinutes(0, 0, 0);
     cursor.setHours(cursor.getHours() + 1);
 
@@ -170,7 +273,6 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         }
         cursor = new Date(deadEnd);
       } else {
-        // Advance to end of today's office hours
         const eod = new Date(cursor);
         eod.setHours(OFFICE_END_H, OFFICE_END_M, 0, 0);
         cursor = eod;
@@ -242,7 +344,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         {/* Day labels row */}
         <div className="flex border-b border-zinc-100 dark:border-zinc-800">
           <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-1 dark:border-zinc-800" />
-          <div className="relative flex-1" style={{ minWidth: `${timelineWidth}px` }}>
+          <div className="relative" style={{ width: `${timelineWidth}px` }}>
             {dayLabels.map((d, i) => (
               <div
                 key={i}
@@ -260,7 +362,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
           <div className="w-40 shrink-0 border-r border-zinc-100 px-3 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Impresora
           </div>
-          <div className="relative flex-1" style={{ minWidth: `${timelineWidth}px`, height: "28px" }}>
+          <div className="relative" style={{ width: `${timelineWidth}px`, height: "28px" }}>
             {hourMarkers.map((m, i) => (
               <div
                 key={i}
@@ -297,8 +399,8 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
 
               {/* Jobs positioned absolutely on the timeline */}
               <div
-                className="relative flex-1 py-2"
-                style={{ minWidth: `${timelineWidth}px`, height: "48px" }}
+                className="relative py-2"
+                style={{ width: `${timelineWidth}px`, height: "48px" }}
               >
                 {/* Dead zone bands */}
                 {deadZones.map((z, i) => (
@@ -316,63 +418,25 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
                     : origin;
                   const jobEnd = addWorkMinutes(jobStart, job.estimated_minutes);
 
-                  // Wall-clock width (includes dead hours visually)
                   const leftMin = (jobStart.getTime() - origin.getTime()) / 60000;
                   const widthMin = (jobEnd.getTime() - jobStart.getTime()) / 60000;
                   const leftPx = Math.max(0, leftMin * pxPerMin);
                   const widthPx = Math.max(24, widthMin * pxPerMin);
-                  const isHovered = hoveredJob === job.id;
                   const priorityRing = PRIORITY_RING[job.queue_priority ?? 0] ?? "";
 
                   return (
                     <div
                       key={job.id}
-                      className={`absolute top-2 h-8 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} ${priorityRing} transition-all ${isHovered ? "z-10 scale-y-125 brightness-110" : "z-[1]"}`}
+                      className={`absolute top-2 h-8 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} ${priorityRing} transition-all ${hoveredJob === job.id ? "z-10 scale-y-125 brightness-110" : "z-[1]"}`}
                       style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
-                      onMouseEnter={() => setHoveredJob(job.id)}
-                      onMouseLeave={() => setHoveredJob(null)}
+                      onMouseEnter={(e) => handleJobHover(job.id, e.currentTarget)}
+                      onMouseLeave={handleJobLeave}
                     >
                       <span className="absolute inset-0 flex items-center justify-center overflow-hidden px-1 text-[10px] font-medium text-white">
                         {widthPx >= 80
                           ? `B${job.batch_number} · ${job.pieces_in_batch}pzs`
                           : `B${job.batch_number}`}
                       </span>
-
-                      {/* Tooltip */}
-                      {isHovered && (
-                        <div className="absolute top-full left-0 z-20 mt-1 w-60 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-zinc-900 dark:text-white">
-                              {job.project_name}
-                            </span>
-                            {(job.queue_priority ?? 0) > 0 && (
-                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${job.queue_priority === 2 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"}`}>
-                                {PRIORITY_LABEL[job.queue_priority ?? 0]}
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            {job.item_name} · Batch {job.batch_number}
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                            {job.pieces_in_batch} piezas · ~{formatMinutes(job.estimated_minutes)}
-                          </div>
-                          <div className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                            Inicio: {formatTime(jobStart)} {formatDate(jobStart)}
-                          </div>
-                          <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                            Fin est.: {formatTime(jobEnd)} {formatDate(jobEnd)}
-                          </div>
-                          {job.project_id && (
-                            <Link
-                              href={`/dashboard/projects/${job.project_id}`}
-                              className="mt-1.5 block text-xs text-green-600 hover:underline dark:text-green-400"
-                            >
-                              Ver proyecto
-                            </Link>
-                          )}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -388,6 +452,19 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
           </div>
         )}
       </div>
+
+      {/* Tooltip via portal — renders above everything */}
+      {hoveredJobData && hoveredRect && (
+        <JobTooltip
+          job={hoveredJobData}
+          jobStart={hoveredJobData.scheduled_start ? new Date(hoveredJobData.scheduled_start) : origin}
+          jobEnd={addWorkMinutes(
+            hoveredJobData.scheduled_start ? new Date(hoveredJobData.scheduled_start) : origin,
+            hoveredJobData.estimated_minutes
+          )}
+          anchorRect={hoveredRect}
+        />
+      )}
 
       {/* Idle printers */}
       {printersWithoutJobs.length > 0 && (

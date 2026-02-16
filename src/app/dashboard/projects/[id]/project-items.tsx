@@ -240,31 +240,39 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
       </h2>
 
       {/* Add form */}
-      <form action={handleAdd} className="mb-4 flex gap-2">
-        <input
-          type="text"
-          name="name"
-          placeholder="Item name"
-          required
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
-        />
-        <input
-          type="number"
-          name="quantity"
-          min={1}
-          defaultValue={1}
-          title="Cantidad total"
-          className="w-18 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-        />
-        <input
-          type="number"
-          name="batch_size"
-          min={1}
-          defaultValue={1}
-          title="Uds. por bandeja"
-          placeholder="×"
-          className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-        />
+      <form action={handleAdd} className="mb-4 flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <input
+            type="text"
+            name="name"
+            placeholder="Item name"
+            required
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+          />
+        </div>
+        <div className="w-18">
+          <label className="mb-1 block text-[10px] font-medium text-zinc-400 dark:text-zinc-500">Uds. total</label>
+          <input
+            type="number"
+            name="quantity"
+            min={1}
+            defaultValue={1}
+            title="Cantidad total"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          />
+        </div>
+        <div className="w-14">
+          <label className="mb-1 block text-[10px] font-medium text-zinc-400 dark:text-zinc-500">x batch</label>
+          <input
+            type="number"
+            name="batch_size"
+            min={1}
+            defaultValue={1}
+            title="Uds. por bandeja"
+            placeholder="×"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          />
+        </div>
         <button
           type="submit"
           disabled={isPending}
