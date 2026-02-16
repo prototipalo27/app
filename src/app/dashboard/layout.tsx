@@ -84,8 +84,8 @@ export default async function DashboardLayout({
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <Link href={isManager ? "/dashboard/control" : "/dashboard"}>
-            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-14 w-auto dark:hidden" priority />
-            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-14 w-auto dark:block" priority />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-[5.25rem] w-auto dark:hidden" priority />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-[5.25rem] w-auto dark:block" priority />
           </Link>
         </div>
 

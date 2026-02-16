@@ -359,6 +359,45 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
   }
 
+  // ── Phase D: Backfill invoice_date for existing projects ─
+  // Uses the already-fetched proforma/invoice lists to fill NULL invoice_dates.
+
+  const proformaDateMap = new Map<string, string>();
+  for (const p of allProformas) {
+    if (p.date) {
+      proformaDateMap.set(p.id, new Date(p.date * 1000).toISOString().slice(0, 10));
+    }
+  }
+  const invoiceDateMap = new Map<string, string>();
+  for (const inv of allInvoices) {
+    if (inv.date) {
+      invoiceDateMap.set(inv.id, new Date(inv.date * 1000).toISOString().slice(0, 10));
+    }
+  }
+
+  const { data: missingDateProjects } = await supabase
+    .from("projects")
+    .select("id, holded_proforma_id, holded_invoice_id")
+    .is("invoice_date", null)
+    .or("holded_proforma_id.not.is.null,holded_invoice_id.not.is.null");
+
+  for (const proj of missingDateProjects ?? []) {
+    const dateFromInvoice = proj.holded_invoice_id
+      ? invoiceDateMap.get(proj.holded_invoice_id)
+      : undefined;
+    const dateFromProforma = proj.holded_proforma_id
+      ? proformaDateMap.get(proj.holded_proforma_id)
+      : undefined;
+    const resolvedDate = dateFromInvoice ?? dateFromProforma;
+
+    if (resolvedDate) {
+      await supabase
+        .from("projects")
+        .update({ invoice_date: resolvedDate })
+        .eq("id", proj.id);
+    }
+  }
+
   // ── Record sync timestamp ──────────────────────────────
   await supabase
     .from("app_metadata")

@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/rbac";
 import { COLUMNS } from "@/lib/kanban-config";
 import { getNextTaxDeadline } from "@/lib/finance/tax-calendar";
 import Link from "next/link";
+import { BillingBreakdown } from "./billing-breakdown";
+import { LeadsChart } from "../leads-chart";
 
 /* ── helpers ── */
 
@@ -64,6 +66,20 @@ export default async function ControlPage() {
   await requireRole("manager");
   const supabase = await createClient();
 
+  // Date ranges for billing using invoice_date
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth();
+  const curStart = `${curYear}-${String(curMonth + 1).padStart(2, "0")}-01`;
+  const nextM = new Date(curYear, curMonth + 1, 1);
+  const nextStart = `${nextM.getFullYear()}-${String(nextM.getMonth() + 1).padStart(2, "0")}-01`;
+  const prevM = new Date(curYear, curMonth - 1, 1);
+  const prevStart = `${prevM.getFullYear()}-${String(prevM.getMonth() + 1).padStart(2, "0")}-01`;
+
+  // Leads: last 30 days
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+
   const [
     { data: projects },
     { data: projectItems },
@@ -74,10 +90,13 @@ export default async function ControlPage() {
     { data: purchaseItems },
     { data: fixedExpenses },
     { data: taxPayments },
+    { data: curBillingProjects },
+    { data: prevBillingProjects },
+    { data: leadsRaw },
   ] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, name, status, project_type, price, deadline, client_name, created_at")
+      .select("id, name, status, project_type, price, deadline, client_name, created_at, invoice_date")
       .neq("project_type", "discarded"),
     supabase.from("project_items").select("id, project_id, quantity, completed, print_time_minutes"),
     supabase.from("print_jobs").select("id, status, estimated_minutes, printer_id, started_at, completed_at"),
@@ -90,6 +109,25 @@ export default async function ControlPage() {
     supabase.from("purchase_items").select("id, status, actual_price, estimated_price"),
     supabase.from("fixed_expenses").select("id, amount, frequency").eq("is_active", true),
     supabase.from("tax_payments").select("model, period, due_date, status").order("due_date"),
+    supabase
+      .from("projects")
+      .select("id, name, client_name, price, invoice_date")
+      .not("price", "is", null)
+      .not("invoice_date", "is", null)
+      .gte("invoice_date", curStart)
+      .lt("invoice_date", nextStart),
+    supabase
+      .from("projects")
+      .select("id, name, client_name, price, invoice_date")
+      .not("price", "is", null)
+      .not("invoice_date", "is", null)
+      .gte("invoice_date", prevStart)
+      .lt("invoice_date", curStart),
+    supabase
+      .from("leads")
+      .select("created_at")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+      .order("created_at", { ascending: true }),
   ]);
 
   const allProjects = projects ?? [];
@@ -109,9 +147,6 @@ export default async function ControlPage() {
     (p) => p.online && (p.gcode_state === "RUNNING" || p.gcode_state === "PAUSE")
   );
   const queuedJobs = allJobs.filter((j) => j.status === "queued");
-  const billingThisMonth = allProjects
-    .filter((p) => p.project_type === "confirmed" && isThisMonth(p.created_at))
-    .reduce((sum, p) => sum + (p.price ?? 0), 0);
   const openLeads = allLeads.filter((l) => l.status !== "won" && l.status !== "lost");
   const pendingShipments = allShipments.filter(
     (s) => s.shipment_status && s.shipment_status !== "delivered" && !s.shipment_status.includes("transit")
@@ -145,16 +180,33 @@ export default async function ControlPage() {
     (p) => p.deadline && new Date(p.deadline) < new Date() && p.status !== "delivered"
   );
 
-  /* ── Ingresos y gastos ── */
+  /* ── Ingresos y gastos (basado en invoice_date) ── */
 
-  const revenueThisMonth = allProjects
-    .filter((p) => p.project_type === "confirmed" && isThisMonth(p.created_at))
-    .reduce((s, p) => s + (p.price ?? 0), 0);
-  const revenueLastMonth = allProjects
-    .filter((p) => p.project_type === "confirmed" && isLastMonth(p.created_at))
-    .reduce((s, p) => s + (p.price ?? 0), 0);
+  const MONTH_NAMES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+
+  const curBillingList = curBillingProjects ?? [];
+  const prevBillingList = prevBillingProjects ?? [];
+  const revenueThisMonth = curBillingList.reduce((s, p) => s + (p.price ?? 0), 0);
+  const revenueLastMonth = prevBillingList.reduce((s, p) => s + (p.price ?? 0), 0);
   const revenueDelta =
     revenueLastMonth > 0 ? ((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100 : 0;
+
+  // Leads per day (last 30 days)
+  const leadsPerDay: { date: string; count: number }[] = [];
+  const dayMap = new Map<string, number>();
+  for (const lead of leadsRaw ?? []) {
+    const day = lead.created_at.slice(0, 10);
+    dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+  }
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(thirtyDaysAgo);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    leadsPerDay.push({ date: key, count: dayMap.get(key) ?? 0 });
+  }
 
   const pendingPurchases = allPurchases.filter((p) => p.status === "pending");
   const receivedPurchases = allPurchases.filter((p) => p.status === "received");
@@ -220,7 +272,7 @@ export default async function ControlPage() {
         <KpiCard label="Proyectos activos" value={confirmedProjects.length} />
         <KpiCard label="Impresoras activas" value={`${activePrinters.length}/${allPrinters.length}`} />
         <KpiCard label="Jobs en cola" value={queuedJobs.length} />
-        <KpiCard label="Facturación mes" value={formatEur(billingThisMonth)} />
+        <KpiCard label="Facturación mes" value={formatEur(revenueThisMonth)} />
         <KpiCard label="Leads abiertos" value={openLeads.length} />
         <KpiCard label="Envíos pendientes" value={pendingShipments.length} />
       </div>
@@ -365,28 +417,26 @@ export default async function ControlPage() {
         </div>
       </div>
 
-      {/* ── 4. Ingresos y gastos ── */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Ingresos */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Ingresos</h2>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{formatEur(revenueThisMonth)}</p>
-          <p className="text-xs text-zinc-400">Este mes</p>
-          <div className="mt-3 flex items-center gap-2">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">{formatEur(revenueLastMonth)}</p>
-            <span className="text-xs text-zinc-400">mes anterior</span>
-          </div>
-          {revenueLastMonth > 0 && (
-            <p
-              className={`mt-1 text-xs font-medium ${
-                revenueDelta >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"
-              }`}
-            >
-              {revenueDelta >= 0 ? "+" : ""}
-              {revenueDelta.toFixed(0)}%
-            </p>
-          )}
-        </div>
+      {/* ── 4. Facturacion + Leads ── */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <BillingBreakdown
+          currentMonth={{
+            label: MONTH_NAMES[curMonth],
+            total: revenueThisMonth,
+            projects: curBillingList.map((p) => ({ name: p.name, client_name: p.client_name, price: p.price ?? 0 })),
+          }}
+          previousMonth={{
+            label: MONTH_NAMES[prevM.getMonth()],
+            total: revenueLastMonth,
+            projects: prevBillingList.map((p) => ({ name: p.name, client_name: p.client_name, price: p.price ?? 0 })),
+          }}
+          delta={revenueDelta}
+        />
+        <LeadsChart data={leadsPerDay} />
+      </div>
+
+      {/* ── 5. Gastos ── */}
+      <div className="grid gap-4 md:grid-cols-2">
 
         {/* Gastos */}
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
