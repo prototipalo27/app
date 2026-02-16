@@ -187,6 +187,59 @@ export type Database = {
           },
         ]
       }
+      fixed_expenses: {
+        Row: {
+          amount: number
+          bank_vendor_name: string | null
+          category: string
+          created_at: string | null
+          day_of_month: number | null
+          frequency: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          bank_vendor_name?: string | null
+          category?: string
+          created_at?: string | null
+          day_of_month?: number | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          bank_vendor_name?: string | null
+          category?: string
+          created_at?: string | null
+          day_of_month?: number | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_expenses_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holded_contacts: {
         Row: {
           address: string | null
@@ -1436,6 +1489,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tax_payments: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          due_date: string
+          id: string
+          model: string
+          notes: string | null
+          paid_date: string | null
+          period: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          due_date: string
+          id?: string
+          model: string
+          notes?: string | null
+          paid_date?: string | null
+          period: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          due_date?: string
+          id?: string
+          model?: string
+          notes?: string | null
+          paid_date?: string | null
+          period?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       template_checklist_items: {
         Row: {

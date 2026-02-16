@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { COLUMNS } from "@/lib/kanban-config";
+import { getNextTaxDeadline } from "@/lib/finance/tax-calendar";
 import Link from "next/link";
 
 /* ── helpers ── */
@@ -71,6 +72,8 @@ export default async function ControlPage() {
     { data: leads },
     { data: shipments },
     { data: purchaseItems },
+    { data: fixedExpenses },
+    { data: taxPayments },
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -85,6 +88,8 @@ export default async function ControlPage() {
       .select("id, shipment_status, shipped_at, delivered_at, price, project_id, created_at")
       .order("created_at", { ascending: false }),
     supabase.from("purchase_items").select("id, status, actual_price, estimated_price"),
+    supabase.from("fixed_expenses").select("id, amount, frequency").eq("is_active", true),
+    supabase.from("tax_payments").select("model, period, due_date, status").order("due_date"),
   ]);
 
   const allProjects = projects ?? [];
@@ -158,8 +163,19 @@ export default async function ControlPage() {
   const shippingCosts = allShipments
     .filter((s) => isThisMonth(s.created_at))
     .reduce((s, sh) => s + (sh.price ?? 0), 0);
-  const totalExpenses = receivedPurchasesCost + shippingCosts;
+
+  const allFixed = fixedExpenses ?? [];
+  const monthlyFixedCost = allFixed.reduce((sum, e) => {
+    if (e.frequency === "monthly") return sum + e.amount;
+    if (e.frequency === "quarterly") return sum + e.amount / 3;
+    if (e.frequency === "annual") return sum + e.amount / 12;
+    return sum + e.amount;
+  }, 0);
+
+  const totalExpenses = receivedPurchasesCost + shippingCosts + monthlyFixedCost;
   const balance = revenueThisMonth - totalExpenses;
+
+  const nextTax = getNextTaxDeadline(taxPayments ?? []);
 
   /* ── Leads funnel ── */
 
@@ -394,6 +410,12 @@ export default async function ControlPage() {
                 {formatEur(shippingCosts)}
               </span>
             </div>
+            <div className="flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
+              <span className="text-xs text-zinc-400">Gastos fijos (mensual)</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {formatEur(monthlyFixedCost)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -407,9 +429,47 @@ export default async function ControlPage() {
           >
             {formatEur(balance)}
           </p>
-          <p className="text-xs text-zinc-400">Ingresos - Gastos (este mes)</p>
+          <p className="text-xs text-zinc-400">Ingresos - Gastos variables - Gastos fijos</p>
         </div>
       </div>
+
+      {/* ── Alerta fiscal ── */}
+      {nextTax && (
+        <div
+          className={`rounded-xl border p-4 ${
+            nextTax.daysLeft <= 7
+              ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
+              : nextTax.daysLeft <= 30
+                ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20"
+                : "border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p
+                className={`text-sm font-semibold ${
+                  nextTax.daysLeft <= 7
+                    ? "text-red-700 dark:text-red-400"
+                    : nextTax.daysLeft <= 30
+                      ? "text-amber-700 dark:text-amber-400"
+                      : "text-zinc-700 dark:text-zinc-300"
+                }`}
+              >
+                Proximo impuesto: {nextTax.name}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Vence el {new Date(nextTax.dueDate).toLocaleDateString("es-ES")} ({nextTax.daysLeft} dias)
+              </p>
+            </div>
+            <Link
+              href="/dashboard/finanzas"
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Ver finanzas
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── 5. Embudo de leads ── */}
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
