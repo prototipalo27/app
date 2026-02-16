@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
 import EmailPanel from "./email-panel";
+import AttachmentGallery from "./attachment-gallery";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -181,46 +182,9 @@ export default async function LeadDetailPage({
               </div>
             )}
 
-            {lead.attachments && (() => {
-              const url = lead.attachments.trim();
-              // Uploadcare group URL: contains ~N/ where N = number of files
-              const groupMatch = url.match(/~(\d+)\/?$/);
-              const fileCount = groupMatch ? parseInt(groupMatch[1]) : 0;
-              const baseUrl = url.replace(/\/$/, "");
-
-              const fileUrls = fileCount > 0
-                ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
-                : [url];
-
-              return (
-                <div className="mt-4 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800">
-                  <p className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-                    Archivos adjuntos ({fileUrls.length})
-                  </p>
-                  <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {fileUrls.map((fileUrl, i) => (
-                      <a
-                        key={i}
-                        href={fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group relative overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`${fileUrl}-/preview/400x400/-/quality/lighter/`}
-                          alt={`Adjunto ${i + 1}`}
-                          className="h-32 w-full object-cover transition group-hover:scale-105"
-                        />
-                        <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
-                          Abrir archivo {i + 1}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
+            {lead.attachments && (
+              <AttachmentGallery attachments={lead.attachments} />
+            )}
 
             {lead.lost_reason && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/10">

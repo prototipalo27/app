@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus, dismissLead } from "./actions";
-import Link from "next/link";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
@@ -59,6 +59,7 @@ function CrmColumn({
 }
 
 export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
+  const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [filterManager, setFilterManager] = useState<string>("all");
   const [lostModal, setLostModal] = useState<{
@@ -210,14 +211,12 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             {newLeads.map((lead) => (
               <div
                 key={lead.id}
-                className="flex items-center gap-4 px-4 py-3"
+                className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
               >
                 {/* Name + company */}
-                <Link
-                  href={`/dashboard/crm/${lead.id}`}
-                  className="min-w-0 shrink-0 basis-44"
-                >
-                  <p className="truncate text-sm font-semibold text-zinc-900 hover:underline dark:text-white">
+                <div className="min-w-0 shrink-0 basis-44">
+                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
                     {lead.full_name}
                   </p>
                   {lead.company && (
@@ -225,7 +224,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                       {lead.company}
                     </p>
                   )}
-                </Link>
+                </div>
 
                 {/* Message (~30 words max) + attachment icon */}
                 <div className="min-w-0 flex-1">
@@ -259,7 +258,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
                 {/* Descartar */}
                 <button
-                  onClick={() => handleDismiss(lead)}
+                  onClick={(e) => { e.stopPropagation(); handleDismiss(lead); }}
                   disabled={dismissingId === lead.id}
                   className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                   title={lead.email ? `Bloquear ${lead.email} y eliminar` : "Eliminar lead"}
@@ -267,23 +266,16 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   {dismissingId === lead.id ? "..." : "Descartar"}
                 </button>
 
-                {/* Contactar button */}
-                {lead.email ? (
-                  <a
-                    href={`mailto:${lead.email}`}
-                    className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Contactar
-                  </a>
-                ) : (
-                  <Link
-                    href={`/dashboard/crm/${lead.id}`}
-                    className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                  >
-                    Ver lead
-                  </Link>
-                )}
+                {/* Contactar button → opens lead detail with email composer */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/dashboard/crm/${lead.id}#email-compose`);
+                  }}
+                  className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
+                >
+                  {lead.email ? "Contactar" : "Ver lead"}
+                </button>
               </div>
             ))}
           </div>
