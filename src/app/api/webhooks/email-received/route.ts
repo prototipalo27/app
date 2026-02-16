@@ -124,9 +124,8 @@ export async function POST(request: NextRequest) {
       leadId = lead.id;
     } else {
       // Only auto-create leads from emails sent to info@prototipalo.com
-      // If "to" is provided, check it; if not provided, skip auto-creation
-      const isToInfo = to.includes("info@prototipalo.com");
-      if (!isToInfo) {
+      // If "to" is not provided, assume it's valid (n8n only monitors info@)
+      if (to && !to.includes("info@prototipalo.com")) {
         return NextResponse.json({
           ok: true,
           skipped: true,
