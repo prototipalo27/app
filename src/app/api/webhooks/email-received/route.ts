@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const from = (payload.from || "").toLowerCase().trim();
     const fromName = payload.from_name || from;
+    const to = (payload.to || "").toLowerCase().trim();
     const subject = payload.subject || "(sin asunto)";
     const body = (payload.body || "").slice(0, 10_000);
     const messageId = payload.message_id || null;
@@ -82,12 +83,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
+    // Skip emails from @prototipalo.com (internal/outgoing)
+    const fromDomain = from.split("@")[1];
+    if (fromDomain === "prototipalo.com") {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "internal_sender",
+      });
+    }
+
     // Check if this sender is blocked (exact email or @domain)
-    const domain = from.split("@")[1];
     const { data: blocked } = await supabase
       .from("blocked_emails")
       .select("id")
-      .or(`email.ilike.${from},email.ilike.@${domain}`)
+      .or(`email.ilike.${from},email.ilike.@${fromDomain}`)
       .limit(1)
       .single();
 
@@ -113,6 +123,17 @@ export async function POST(request: NextRequest) {
     if (lead) {
       leadId = lead.id;
     } else {
+      // Only auto-create leads from emails sent to info@prototipalo.com
+      // If "to" is provided, check it; if not provided, skip auto-creation
+      const isToInfo = to.includes("info@prototipalo.com");
+      if (!isToInfo) {
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          reason: "not_to_info",
+        });
+      }
+
       // Auto-create lead from unknown sender
       const displayName = fromName !== from
         ? fromName
@@ -125,6 +146,7 @@ export async function POST(request: NextRequest) {
           email: from,
           source: "email",
           status: "new",
+          message: body || null,
         })
         .select("id")
         .single();
