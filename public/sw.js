@@ -76,9 +76,12 @@ self.addEventListener("notificationclick", (event) => {
   const url = event.notification.data?.url || "/dashboard";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      // If app is already open, navigate it to the target URL
       for (const client of windowClients) {
-        if (client.url.includes(url) && "focus" in client) {
-          return client.focus();
+        if ("focus" in client) {
+          client.focus();
+          client.navigate(url);
+          return;
         }
       }
       return clients.openWindow(url);
