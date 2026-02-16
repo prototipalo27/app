@@ -59,8 +59,8 @@ body {
   height: 28px;
   margin-top: -8px;            /* center thumb on track */
   border-radius: 50%;
-  background: #e9473f;
-  border: 3px solid #fff;
+  background: #ffffff;
+  border: 3px solid #d4d4d8;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: grab;
 }
@@ -78,8 +78,8 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #e9473f;
-  border: 3px solid #fff;
+  background: #ffffff;
+  border: 3px solid #d4d4d8;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   cursor: grab;
 }
@@ -90,9 +90,11 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .item-slider::-webkit-slider-thumb {
-    border-color: #27272a;
+    background: #e4e4e7;
+    border-color: #3f3f46;
   }
   .item-slider::-moz-range-thumb {
-    border-color: #27272a;
+    background: #e4e4e7;
+    border-color: #3f3f46;
   }
 }
