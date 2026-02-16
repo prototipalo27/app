@@ -98,6 +98,9 @@ export async function POST(request: NextRequest) {
     const message = findField(data, [
       "Mensaje", "mensaje", "message", "comentario", "comentarios",
     ]);
+    const attachments = findField(data, [
+      "Archivos", "archivos", "files", "attachments", "archivo", "file",
+    ]);
     const emailSubjectTag = findField(data, [
       "email_subject_tag", "emailSubjectTag",
     ]);
@@ -138,6 +141,7 @@ export async function POST(request: NextRequest) {
         email: email?.trim() || null,
         phone: phone?.trim() || null,
         message: message?.trim() || null,
+        attachments: attachments?.trim() || null,
         email_subject_tag: emailSubjectTag?.trim() || null,
         source: "webflow",
         status: "new",
