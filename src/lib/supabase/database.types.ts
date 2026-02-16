@@ -942,6 +942,7 @@ export type Database = {
           holded_invoice_id: string | null
           holded_proforma_id: string | null
           id: string
+          invoice_date: string | null
           lead_id: string | null
           material: string | null
           name: string
@@ -973,6 +974,7 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          invoice_date?: string | null
           lead_id?: string | null
           material?: string | null
           name: string
@@ -1004,6 +1006,7 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          invoice_date?: string | null
           lead_id?: string | null
           material?: string | null
           name?: string

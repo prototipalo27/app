@@ -98,6 +98,9 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         client_name: proforma.contactName,
         holded_contact_id: proforma.contact,
         holded_proforma_id: proforma.id,
+        invoice_date: proforma.date
+          ? new Date(proforma.date * 1000).toISOString().slice(0, 10)
+          : null,
       })
       .select("id")
       .single();
@@ -266,6 +269,9 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         client_name: invoice.contactName,
         holded_contact_id: invoice.contact,
         holded_invoice_id: invoice.id,
+        invoice_date: invoice.date
+          ? new Date(invoice.date * 1000).toISOString().slice(0, 10)
+          : null,
       })
       .select("id")
       .single();
