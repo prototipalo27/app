@@ -26,6 +26,15 @@ async function runSync() {
       return NextResponse.json({ synced: 0, message: "No printers found" });
     }
 
+    // Read previous error states BEFORE upserting new data
+    const { data: prevStates } = await supabase
+      .from("printers")
+      .select("serial_number, print_error");
+
+    const prevErrorMap = new Map(
+      (prevStates ?? []).map((p) => [p.serial_number, p.print_error ?? 0])
+    );
+
     const { error } = await supabase.from("printers").upsert(
       results.map((r) => ({
         serial_number: r.serial_number,
@@ -58,14 +67,18 @@ async function runSync() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Send push notifications for printer errors
-    const printersWithErrors = results.filter((r) => r.print_error);
-    for (const printer of printersWithErrors) {
-      sendPushToAll({
-        title: "Alerta impresora",
-        body: `${printer.name}: error de impresion`,
-        url: "/dashboard/printers",
-      }).catch(() => {});
+    // Send push notifications only for NEW printer errors
+    // (error code that wasn't present in the previous sync)
+    for (const printer of results) {
+      if (!printer.print_error) continue;
+      const prevError = prevErrorMap.get(printer.serial_number) ?? 0;
+      if (prevError !== printer.print_error) {
+        sendPushToAll({
+          title: "Alerta impresora",
+          body: `${printer.name}: error de impresion`,
+          url: "/dashboard/printers",
+        }).catch(() => {});
+      }
     }
 
     return NextResponse.json({ synced: results.length });
