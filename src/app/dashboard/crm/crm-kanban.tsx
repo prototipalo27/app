@@ -5,7 +5,7 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, type LeadWithAssignee } from "./crm-card";
-import { updateLeadStatus } from "./actions";
+import { updateLeadStatus, dismissLead } from "./actions";
 import Link from "next/link";
 
 interface CrmKanbanProps {
@@ -141,6 +141,18 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
     setLostReason("");
   };
 
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+
+  const handleDismiss = async (lead: LeadWithAssignee) => {
+    if (!confirm(lead.email ? `Bloquear ${lead.email} y eliminar este lead?` : "Eliminar este lead?")) return;
+    setDismissingId(lead.id);
+    const result = await dismissLead(lead.id, lead.email);
+    if (result.success) {
+      setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+    }
+    setDismissingId(null);
+  };
+
   const newLeads = leads.filter((l) => l.status === "new");
   const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
 
@@ -198,6 +210,16 @@ export function CrmKanban({ initialLeads }: CrmKanbanProps) {
                     Sin tel.
                   </span>
                 )}
+
+                {/* Descartar */}
+                <button
+                  onClick={() => handleDismiss(lead)}
+                  disabled={dismissingId === lead.id}
+                  className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                  title={lead.email ? `Bloquear ${lead.email} y eliminar` : "Eliminar lead"}
+                >
+                  {dismissingId === lead.id ? "..." : "Descartar"}
+                </button>
 
                 {/* Contactar button */}
                 {lead.email ? (

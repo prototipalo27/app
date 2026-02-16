@@ -263,3 +263,26 @@ export async function deleteLead(id: string) {
   revalidatePath("/dashboard/crm");
   redirect("/dashboard/crm");
 }
+
+// ── Dismiss Lead (block email if exists + delete, no redirect) ──
+
+export async function dismissLead(
+  leadId: string,
+  email: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  if (email?.trim()) {
+    await supabase
+      .from("blocked_emails")
+      .insert({ email: email.toLowerCase().trim(), reason: "Descartado desde bandeja de nuevos" })
+      .single();
+  }
+
+  const { error } = await supabase.from("leads").delete().eq("id", leadId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
