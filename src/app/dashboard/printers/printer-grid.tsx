@@ -131,7 +131,7 @@ export default function PrinterGrid({ initialPrinters, initialJobs = [], printer
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((printer) => (
             <PrinterCard key={printer.id} printer={printer} jobs={initialJobs.filter((j) => j.printer_id === printer.id)} printerTypes={printerTypes} />
           ))}

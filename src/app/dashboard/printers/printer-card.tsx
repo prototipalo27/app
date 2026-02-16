@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
+import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { reorderPrintJobs } from "../projects/queue-actions";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -42,25 +42,6 @@ function StateBadge({ state }: { state: string | null }) {
   );
 }
 
-function TempRow({ label, current, target }: { label: string; current: number | null; target?: number | null }) {
-  if (current === null) return null;
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
-      <span className="font-mono text-zinc-900 dark:text-zinc-100">
-        {current.toFixed(0)}°C
-        {target !== null && target !== undefined && (
-          <span className="text-zinc-400 dark:text-zinc-500"> / {target.toFixed(0)}°C</span>
-        )}
-      </span>
-    </div>
-  );
-}
-
-function formatTime(date: string) {
-  return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
 function formatRemaining(minutes: number | null) {
   if (minutes === null) return null;
   if (minutes < 60) return `${minutes}m`;
@@ -84,12 +65,9 @@ export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: {
   const [saving, setSaving] = useState(false);
   const [reordering, startReorder] = useTransition();
 
-  const typeName = printerTypes.find((t) => t.id === typeId)?.name;
-
   function handleMoveJob(jobIndex: number, direction: "up" | "down") {
     const queuedJobs = jobs.filter((j) => j.status !== "printing");
     const printingJobs = jobs.filter((j) => j.status === "printing");
-    // jobIndex is relative to the full jobs list; find position in queuedJobs
     const job = jobs[jobIndex];
     if (!job || job.status === "printing") return;
     const queuedIndex = queuedJobs.findIndex((j) => j.id === job.id);
@@ -119,25 +97,25 @@ export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: {
 
   return (
     <div
-      className={`rounded-xl border p-4 transition-colors ${
+      className={`rounded-xl border p-3 sm:p-4 transition-colors ${
         isOffline
           ? "border-zinc-200 bg-zinc-50 opacity-60 dark:border-zinc-800 dark:bg-zinc-900/50"
           : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
       }`}
     >
       {/* Header */}
-      <div className="mb-3 flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold text-zinc-900 dark:text-white">{printer.name}</h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {printer.model} · {printer.serial_number}
+      <div className="mb-2 sm:mb-3 flex items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-white truncate">{printer.name}</h3>
+          <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+            {printer.model}
           </p>
           {printerTypes.length > 0 && (
             <select
               value={typeId}
               onChange={(e) => handleTypeChange(e.target.value)}
               disabled={saving}
-              className="mt-1 w-full rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-xs text-zinc-600 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:text-zinc-400"
+              className="mt-1 w-full rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-[10px] sm:text-xs text-zinc-600 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:text-zinc-400"
             >
               <option value="">Sin tipo</option>
               {printerTypes.map((pt) => (
@@ -153,21 +131,21 @@ export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: {
 
       {/* Progress section (only when printing) */}
       {isRunning && printer.current_file && (
-        <div className="mb-3">
-          <div className="mb-1 flex items-center justify-between text-sm">
+        <div className="mb-2 sm:mb-3">
+          <div className="mb-1 flex items-center justify-between text-xs sm:text-sm">
             <span className="truncate text-zinc-700 dark:text-zinc-300">{printer.current_file}</span>
             <span className="ml-2 font-mono text-zinc-900 dark:text-zinc-100">{printer.print_percent}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+          <div className="h-1.5 sm:h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
             <div
               className="h-full rounded-full bg-green-500 transition-all duration-500"
               style={{ width: `${printer.print_percent}%` }}
             />
           </div>
-          <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="mt-1 flex justify-between text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
             <span>
               {printer.layer_current !== null && printer.layer_total !== null
-                ? `Layer ${printer.layer_current}/${printer.layer_total}`
+                ? `L${printer.layer_current}/${printer.layer_total}`
                 : ""}
             </span>
             <span>{formatRemaining(printer.remaining_minutes)}</span>
@@ -175,83 +153,61 @@ export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: {
         </div>
       )}
 
-      {/* Temperatures */}
-      {!isOffline && (
-        <div className="mb-3 space-y-1">
-          <TempRow label="Nozzle" current={printer.nozzle_temp} target={printer.nozzle_target} />
-          <TempRow label="Bed" current={printer.bed_temp} target={printer.bed_target} />
-          <TempRow label="Chamber" current={printer.chamber_temp} />
-        </div>
-      )}
-
       {/* Print Queue */}
       {jobs.length > 0 && (
-        <div className="mb-3 space-y-1">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            Cola ({jobs.length} jobs, ~{formatQueueTime(jobs)})
+        <div className="space-y-1">
+          <p className="text-[10px] sm:text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            Cola: {jobs.length} jobs · ~{formatQueueTime(jobs)}
           </p>
-          {jobs.slice(0, 5).map((job, idx) => {
-            const isQueued = job.status === "queued";
-            const queuedJobs = jobs.filter((j) => j.status === "queued");
-            const queuedIdx = queuedJobs.findIndex((j) => j.id === job.id);
-            const canMoveUp = isQueued && queuedIdx > 0;
-            const canMoveDown = isQueued && queuedIdx < queuedJobs.length - 1;
+          {/* Detailed queue list — hidden on mobile */}
+          <div className="hidden sm:block">
+            {jobs.slice(0, 5).map((job, idx) => {
+              const isQueued = job.status === "queued";
+              const queuedJobs = jobs.filter((j) => j.status === "queued");
+              const queuedIdx = queuedJobs.findIndex((j) => j.id === job.id);
+              const canMoveUp = isQueued && queuedIdx > 0;
+              const canMoveDown = isQueued && queuedIdx < queuedJobs.length - 1;
 
-            return (
-              <div key={job.id} className="flex items-center gap-1.5 text-xs">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${job.status === "printing" ? "bg-green-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
-                <span className="truncate text-zinc-600 dark:text-zinc-300">
-                  {job.project_name} - B{job.batch_number}
-                </span>
-                <span className="ml-auto flex shrink-0 items-center gap-1 text-zinc-400">
-                  {isQueued && (
-                    <span className="flex gap-0.5">
-                      <button
-                        onClick={() => handleMoveJob(idx, "up")}
-                        disabled={!canMoveUp || reordering}
-                        className="rounded p-0.5 hover:bg-zinc-200 disabled:opacity-30 dark:hover:bg-zinc-700"
-                        title="Mover arriba"
-                      >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-                      </button>
-                      <button
-                        onClick={() => handleMoveJob(idx, "down")}
-                        disabled={!canMoveDown || reordering}
-                        className="rounded p-0.5 hover:bg-zinc-200 disabled:opacity-30 dark:hover:bg-zinc-700"
-                        title="Mover abajo"
-                      >
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-                    </span>
-                  )}
-                  {job.pieces_in_batch}pzs · {formatRemaining(job.estimated_minutes)}
-                </span>
-              </div>
-            );
-          })}
-          {jobs.length > 5 && (
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-              +{jobs.length - 5} mas
-            </p>
-          )}
+              return (
+                <div key={job.id} className="flex items-center gap-1.5 text-xs">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${job.status === "printing" ? "bg-green-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+                  <span className="truncate text-zinc-600 dark:text-zinc-300">
+                    {job.project_name} - B{job.batch_number}
+                  </span>
+                  <span className="ml-auto flex shrink-0 items-center gap-1 text-zinc-400">
+                    {isQueued && (
+                      <span className="flex gap-0.5">
+                        <button
+                          onClick={() => handleMoveJob(idx, "up")}
+                          disabled={!canMoveUp || reordering}
+                          className="rounded p-0.5 hover:bg-zinc-200 disabled:opacity-30 dark:hover:bg-zinc-700"
+                          title="Mover arriba"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                        </button>
+                        <button
+                          onClick={() => handleMoveJob(idx, "down")}
+                          disabled={!canMoveDown || reordering}
+                          className="rounded p-0.5 hover:bg-zinc-200 disabled:opacity-30 dark:hover:bg-zinc-700"
+                          title="Mover abajo"
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                      </span>
+                    )}
+                    {formatRemaining(job.estimated_minutes)}
+                  </span>
+                </div>
+              );
+            })}
+            {jobs.length > 5 && (
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                +{jobs.length - 5} mas
+              </p>
+            )}
+          </div>
         </div>
       )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {printer.last_sync_at ? `Synced ${formatTime(printer.last_sync_at)}` : "Never synced"}
-        </span>
-        {!isOffline && printer.mqtt_connected && (
-          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-            MQTT
-          </span>
-        )}
-        {isOffline && (
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">Offline</span>
-        )}
-      </div>
     </div>
   );
 }
