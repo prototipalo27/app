@@ -218,24 +218,24 @@ export default async function ProjectDetailPage({
       </div>
 
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
+      <div className="mb-6 space-y-3">
+        <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
             {project.name}
           </h1>
-          {project.description && (
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {project.description}
-            </p>
-          )}
+          <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
+            {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
+          </span>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        {project.description && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {project.description}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
           <PrioritySelector projectId={project.id} currentPriority={project.queue_priority} />
           <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
           <CopyTrackingLink trackingToken={project.tracking_token} />
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
-            {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
-          </span>
         </div>
       </div>
 
