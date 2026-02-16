@@ -328,6 +328,33 @@ export async function revokeApproval(
   return { success: true };
 }
 
+export async function updateProjectPriority(
+  projectId: string,
+  priority: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  if (priority < 0 || priority > 2) {
+    return { success: false, error: "Prioridad invalida" };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ queue_priority: priority })
+    .eq("id", projectId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
 export async function deleteProject(formData: FormData) {
   await requireRole("manager");
 

@@ -635,6 +635,7 @@ export type Database = {
           bed_depth_mm: number
           bed_height_mm: number
           bed_width_mm: number
+          compatible_types: string[] | null
           created_at: string | null
           id: string
           multicolor: boolean
@@ -644,6 +645,7 @@ export type Database = {
           bed_depth_mm: number
           bed_height_mm: number
           bed_width_mm: number
+          compatible_types?: string[] | null
           created_at?: string | null
           id?: string
           multicolor?: boolean
@@ -653,6 +655,7 @@ export type Database = {
           bed_depth_mm?: number
           bed_height_mm?: number
           bed_width_mm?: number
+          compatible_types?: string[] | null
           created_at?: string | null
           id?: string
           multicolor?: boolean
@@ -947,6 +950,7 @@ export type Database = {
           price: number | null
           print_time_minutes: number | null
           project_type: string
+          queue_priority: number
           status: string
           template_id: string | null
           tracking_token: string
@@ -977,6 +981,7 @@ export type Database = {
           price?: number | null
           print_time_minutes?: number | null
           project_type?: string
+          queue_priority?: number
           status?: string
           template_id?: string | null
           tracking_token?: string
@@ -1007,6 +1012,7 @@ export type Database = {
           price?: number | null
           print_time_minutes?: number | null
           project_type?: string
+          queue_priority?: number
           status?: string
           template_id?: string | null
           tracking_token?: string

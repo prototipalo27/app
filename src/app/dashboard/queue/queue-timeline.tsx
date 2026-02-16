@@ -32,7 +32,20 @@ interface JobInfo {
   item_name: string;
   project_name: string;
   project_id: string | null;
+  queue_priority?: number;
 }
+
+const PRIORITY_RING: Record<number, string> = {
+  0: "",
+  1: "ring-2 ring-yellow-400",
+  2: "ring-2 ring-red-500",
+};
+
+const PRIORITY_LABEL: Record<number, string> = {
+  0: "Normal",
+  1: "Alta",
+  2: "Urgente",
+};
 
 interface QueueTimelineProps {
   printers: PrinterInfo[];
@@ -309,11 +322,12 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
                   const leftPx = Math.max(0, leftMin * pxPerMin);
                   const widthPx = Math.max(24, widthMin * pxPerMin);
                   const isHovered = hoveredJob === job.id;
+                  const priorityRing = PRIORITY_RING[job.queue_priority ?? 0] ?? "";
 
                   return (
                     <div
                       key={job.id}
-                      className={`absolute top-2 h-8 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} transition-all ${isHovered ? "z-10 scale-y-125 brightness-110" : "z-[1]"}`}
+                      className={`absolute top-2 h-8 cursor-pointer rounded border ${STATUS_COLORS[job.status]} ${STATUS_BORDER[job.status]} ${priorityRing} transition-all ${isHovered ? "z-10 scale-y-125 brightness-110" : "z-[1]"}`}
                       style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
                       onMouseEnter={() => setHoveredJob(job.id)}
                       onMouseLeave={() => setHoveredJob(null)}
@@ -327,8 +341,15 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
                       {/* Tooltip */}
                       {isHovered && (
                         <div className="absolute top-full left-0 z-20 mt-1 w-60 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                          <div className="text-xs font-semibold text-zinc-900 dark:text-white">
-                            {job.project_name}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-900 dark:text-white">
+                              {job.project_name}
+                            </span>
+                            {(job.queue_priority ?? 0) > 0 && (
+                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${job.queue_priority === 2 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"}`}>
+                                {PRIORITY_LABEL[job.queue_priority ?? 0]}
+                              </span>
+                            )}
                           </div>
                           <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                             {job.item_name} · Batch {job.batch_number}

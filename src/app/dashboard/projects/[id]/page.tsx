@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { updateProjectStatus, deleteProject, updateProjectDeadline } from "../actions";
+import { updateProjectStatus, deleteProject, updateProjectDeadline, updateProjectPriority } from "../actions";
+import PrioritySelector from "./priority-selector";
 import PortalToggles from "./portal-toggles";
 import { DeadlinePicker } from "./deadline-picker";
 import { getUserProfile, hasRole } from "@/lib/rbac";
@@ -229,6 +230,7 @@ export default async function ProjectDetailPage({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          <PrioritySelector projectId={project.id} currentPriority={project.queue_priority} />
           <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
           <CopyTrackingLink trackingToken={project.tracking_token} />
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>

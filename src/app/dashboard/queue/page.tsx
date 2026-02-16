@@ -39,26 +39,30 @@ export default async function QueuePage() {
       .order("name"),
   ]);
 
-  // Fetch item + project names in a single query using nested selects
+  // Fetch item + project names + priority in a single query using nested selects
   const itemIds = [...new Set((jobs ?? []).map((j) => j.project_item_id))];
-  let itemMap: Record<string, { name: string; project_id: string; project_name: string }> = {};
+  let itemMap: Record<string, { name: string; project_id: string; project_name: string; queue_priority: number }> = {};
 
   if (itemIds.length > 0) {
     const { data: items } = await supabase
       .from("project_items")
-      .select("id, name, project_id, projects(name)")
+      .select("id, name, project_id, projects(name, queue_priority)")
       .in("id", itemIds);
 
     if (items) {
       itemMap = Object.fromEntries(
-        items.map((i) => [
-          i.id,
-          {
-            name: i.name,
-            project_id: i.project_id,
-            project_name: (i.projects as unknown as { name: string })?.name ?? "Unknown",
-          },
-        ])
+        items.map((i) => {
+          const proj = i.projects as unknown as { name: string; queue_priority: number } | null;
+          return [
+            i.id,
+            {
+              name: i.name,
+              project_id: i.project_id,
+              project_name: proj?.name ?? "Unknown",
+              queue_priority: proj?.queue_priority ?? 0,
+            },
+          ];
+        })
       );
     }
   }
@@ -75,6 +79,7 @@ export default async function QueuePage() {
       item_name: itemInfo?.name ?? "Unknown",
       project_name: itemInfo?.project_name ?? "Unknown",
       project_id: itemInfo?.project_id ?? null,
+      queue_priority: itemInfo?.queue_priority ?? 0,
     };
   });
 

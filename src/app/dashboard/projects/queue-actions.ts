@@ -65,11 +65,20 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
   const batchSize = item.batch_size || 1;
   const totalBatches = Math.ceil(item.quantity / batchSize);
 
-  // Find printers of this type
+  // Fetch selected printer type to get compatible_types
+  const { data: selectedType } = await supabase
+    .from("printer_types")
+    .select("id, compatible_types")
+    .eq("id", item.printer_type_id)
+    .single();
+
+  const typeIds = [item.printer_type_id, ...(selectedType?.compatible_types ?? [])];
+
+  // Find printers of this type OR compatible types
   const { data: printers } = await supabase
     .from("printers")
     .select("id")
-    .eq("printer_type_id", item.printer_type_id);
+    .in("printer_type_id", typeIds);
 
   if (!printers || printers.length === 0) {
     return { success: false, error: "No hay impresoras de este tipo disponibles" };
@@ -77,24 +86,65 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
 
   const now = new Date();
 
+  // Fetch project priority for the current item
+  const { data: project } = await supabase
+    .from("projects")
+    .select("queue_priority")
+    .eq("id", item.project_id)
+    .single();
+  const itemPriority = project?.queue_priority ?? 0;
+
   // Calculate current wall-clock end-time per printer
   const printerEndTimes: Record<string, Date> = {};
   for (const p of printers) {
     printerEndTimes[p.id] = new Date(now);
   }
 
+  // Fetch existing jobs with their project priority (via project_items → projects)
   const { data: existingJobs } = await supabase
     .from("print_jobs")
-    .select("printer_id, estimated_minutes")
+    .select("printer_id, estimated_minutes, project_item_id")
     .in("printer_id", printers.map((p) => p.id))
     .in("status", ["queued", "printing"]);
 
-  if (existingJobs) {
-    // Sum existing load per printer, then convert to wall-clock end time
+  if (existingJobs && existingJobs.length > 0) {
+    // Get unique item IDs to fetch their project priorities
+    const existingItemIds = [...new Set(existingJobs.map((j) => j.project_item_id))];
+    const { data: existingItems } = await supabase
+      .from("project_items")
+      .select("id, project_id")
+      .in("id", existingItemIds);
+
+    const itemProjectMap: Record<string, string> = {};
+    if (existingItems) {
+      for (const ei of existingItems) {
+        itemProjectMap[ei.id] = ei.project_id;
+      }
+    }
+
+    const projectIds = [...new Set(Object.values(itemProjectMap))];
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id, queue_priority")
+      .in("id", projectIds);
+
+    const projectPriorityMap: Record<string, number> = {};
+    if (projects) {
+      for (const p of projects) {
+        projectPriorityMap[p.id] = p.queue_priority;
+      }
+    }
+
+    // Only sum load from jobs with priority >= the current item's priority
+    // This way urgent jobs "skip ahead" of lower-priority ones
     const loadMinutes: Record<string, number> = {};
     for (const job of existingJobs) {
       if (job.printer_id) {
-        loadMinutes[job.printer_id] = (loadMinutes[job.printer_id] || 0) + job.estimated_minutes;
+        const jobProjectId = itemProjectMap[job.project_item_id];
+        const jobPriority = jobProjectId ? (projectPriorityMap[jobProjectId] ?? 0) : 0;
+        if (jobPriority >= itemPriority) {
+          loadMinutes[job.printer_id] = (loadMinutes[job.printer_id] || 0) + job.estimated_minutes;
+        }
       }
     }
     for (const [pid, mins] of Object.entries(loadMinutes)) {
@@ -268,4 +318,70 @@ export async function reassignPrintJob(jobId: string, newPrinterId: string) {
 
   revalidatePath("/dashboard/queue");
   revalidatePath("/dashboard/printers");
+}
+
+export async function reorderPrintJobs(
+  printerId: string,
+  orderedJobIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) redirect("/login");
+
+    // Fetch current queued/printing jobs for this printer
+    const { data: currentJobs } = await supabase
+      .from("print_jobs")
+      .select("id, status, estimated_minutes")
+      .eq("printer_id", printerId)
+      .in("status", ["queued", "printing"])
+      .order("position", { ascending: true });
+
+    if (!currentJobs) return { success: false, error: "No se pudieron obtener los jobs" };
+
+    // Validate IDs match
+    const currentIds = new Set(currentJobs.map((j) => j.id));
+    const orderedIds = new Set(orderedJobIds);
+    if (currentIds.size !== orderedIds.size || ![...currentIds].every((id) => orderedIds.has(id))) {
+      return { success: false, error: "Los IDs no coinciden con los jobs actuales" };
+    }
+
+    // Build a map for quick lookup
+    const jobMap = new Map(currentJobs.map((j) => [j.id, j]));
+
+    // Printing jobs stay at the top — collect them and remove from ordered list
+    const printingIds = currentJobs.filter((j) => j.status === "printing").map((j) => j.id);
+    const queuedOrder = orderedJobIds.filter((id) => !printingIds.includes(id));
+    const finalOrder = [...printingIds, ...queuedOrder];
+
+    // Recalculate position and scheduled_start
+    const now = new Date();
+    let cursor = new Date(now);
+
+    const updates: Array<{ id: string; position: number; scheduled_start: string }> = [];
+    for (let i = 0; i < finalOrder.length; i++) {
+      const job = jobMap.get(finalOrder[i])!;
+      updates.push({
+        id: job.id,
+        position: i,
+        scheduled_start: cursor.toISOString(),
+      });
+      cursor = addWorkMinutes(cursor, job.estimated_minutes);
+    }
+
+    // Apply updates
+    for (const u of updates) {
+      const { error } = await supabase
+        .from("print_jobs")
+        .update({ position: u.position, scheduled_start: u.scheduled_start })
+        .eq("id", u.id);
+      if (error) return { success: false, error: error.message };
+    }
+
+    revalidatePath("/dashboard/queue");
+    revalidatePath("/dashboard/printers");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Error desconocido" };
+  }
 }
