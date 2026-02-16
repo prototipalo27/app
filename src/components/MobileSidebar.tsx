@@ -57,25 +57,25 @@ export default function MobileSidebar({
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="border-b border-zinc-200 p-5 dark:border-zinc-800">
+        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <Link href={logoHref} onClick={handleNavClick}>
-            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-18 w-auto dark:hidden" />
-            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-18 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-14 w-auto dark:hidden" />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-14 w-auto dark:block" />
           </Link>
         </div>
 
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-0.5 overflow-hidden p-3">
           {/* ── VENTAS ── */}
           {isManager && (
             <>
-              <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+              <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Ventas
               </p>
               <Link
                 href="/dashboard/crm"
                 onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                   pathname?.startsWith("/dashboard/crm")
                     ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                     : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -90,15 +90,15 @@ export default function MobileSidebar({
           )}
 
           {/* ── PRODUCCIÓN ── */}
-          <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+          <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Producción
           </p>
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard"
               onClick={handleNavClick}
-              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                 pathname === "/dashboard" || pathname?.startsWith("/dashboard/projects")
                   ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                   : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -130,7 +130,7 @@ export default function MobileSidebar({
             <Link
               href="/dashboard/printers"
               onClick={handleNavClick}
-              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                 pathname?.startsWith("/dashboard/printers")
                   ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                   : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -159,7 +159,7 @@ export default function MobileSidebar({
           <Link
             href="/dashboard/shipments"
             onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
               pathname?.startsWith("/dashboard/shipments")
                 ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                 : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -172,14 +172,14 @@ export default function MobileSidebar({
           </Link>
 
           {/* ── TAREAS ── */}
-          <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+          <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Tareas
           </p>
           <Link
             href="/dashboard/tareas"
             onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
               pathname?.startsWith("/dashboard/tareas")
                 ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                 : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -192,14 +192,14 @@ export default function MobileSidebar({
           </Link>
 
           {/* ── EQUIPO ── */}
-          <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+          <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Equipo
           </p>
           <Link
             href="/dashboard/equipo"
             onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
               pathname?.startsWith("/dashboard/equipo")
                 ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                 : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -214,14 +214,14 @@ export default function MobileSidebar({
           {/* ── COMPRAS ── */}
           {isManager && (
             <>
-              <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+              <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Compras
               </p>
               <Link
                 href="/dashboard/purchases"
                 onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                   pathname?.startsWith("/dashboard/purchases")
                     ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                     : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -235,7 +235,7 @@ export default function MobileSidebar({
               <Link
                 href="/dashboard/suppliers"
                 onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                   pathname === "/dashboard/suppliers"
                     ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                     : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -252,15 +252,15 @@ export default function MobileSidebar({
           {/* ── FINANZAS ── */}
           {isManager && (
             <>
-              <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+              <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Finanzas
               </p>
               <div className="flex items-center gap-0.5">
                 <Link
                   href="/dashboard/finanzas"
                   onClick={handleNavClick}
-                  className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                  className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
                     pathname === "/dashboard/finanzas"
                       ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
                       : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
