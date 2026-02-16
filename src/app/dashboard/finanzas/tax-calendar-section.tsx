@@ -144,7 +144,7 @@ export default function TaxCalendarSection({
                                 <button
                                   onClick={() => handleMarkPaid(p.id)}
                                   disabled={loading}
-                                  className="rounded bg-green-600 px-1.5 py-0.5 text-[10px] text-white hover:bg-green-700"
+                                  className="rounded bg-brand px-1.5 py-0.5 text-[10px] text-white hover:bg-brand-dark"
                                 >
                                   OK
                                 </button>

@@ -60,7 +60,7 @@ export default function PaymentForm({
           <button
             type="button"
             onClick={() => setShowForm(!showForm)}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
           >
             {showForm ? "Cancelar" : "+ Añadir pago"}
           </button>
@@ -88,7 +88,7 @@ export default function PaymentForm({
                 name="payment_date"
                 required
                 defaultValue={new Date().toISOString().split("T")[0]}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
             <div>
@@ -102,7 +102,7 @@ export default function PaymentForm({
                   required
                   step="0.01"
                   min="0"
-                  className="block w-full rounded-lg border border-zinc-300 bg-white py-2 pr-3 pl-7 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="block w-full rounded-lg border border-zinc-300 bg-white py-2 pr-3 pl-7 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 />
                 <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-zinc-400">
                   &euro;
@@ -116,7 +116,7 @@ export default function PaymentForm({
               <input
                 type="text"
                 name="description"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
                 placeholder="Descripcion del gasto"
               />
             </div>
@@ -128,7 +128,7 @@ export default function PaymentForm({
                 type="checkbox"
                 id="has_invoice"
                 name="has_invoice"
-                className="h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800"
+                className="h-4 w-4 rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600 dark:bg-zinc-800"
               />
               <label
                 htmlFor="has_invoice"
@@ -144,7 +144,7 @@ export default function PaymentForm({
               <input
                 type="text"
                 name="invoice_number"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
               />
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function PaymentForm({
               <input
                 type="date"
                 name="invoice_date"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
           </div>
@@ -166,14 +166,14 @@ export default function PaymentForm({
             <input
               type="text"
               name="notes"
-              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
           </div>
 
           <div className="flex justify-end">
             <button
               type="submit"
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
             >
               Guardar pago
             </button>
@@ -277,7 +277,7 @@ export default function PaymentForm({
                                 <button
                                   type="button"
                                   onClick={() => handleMarkInvoice(p.id)}
-                                  className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                                  className="rounded bg-brand px-2 py-1 text-xs text-white hover:bg-brand-dark"
                                 >
                                   OK
                                 </button>

@@ -420,7 +420,7 @@ export default function StatementProcessor({
             </div>
 
             {/* Upload for auto-detect */}
-            <label className="cursor-pointer rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+            <label className="cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
               {loading ? "Procesando..." : "Subir extracto"}
               <input
                 type="file"
@@ -464,7 +464,7 @@ export default function StatementProcessor({
                           <button
                             onClick={() => handleLoadMonth(month)}
                             disabled={loading}
-                            className="flex-1 rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                            className="flex-1 rounded-lg bg-brand px-2 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
                           >
                             Abrir
                           </button>
@@ -583,7 +583,7 @@ export default function StatementProcessor({
                 type="checkbox"
                 checked={filterPending}
                 onChange={(e) => setFilterPending(e.target.checked)}
-                className="rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600"
+                className="rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600"
               />
               Solo movimientos pendientes
             </label>
@@ -607,7 +607,7 @@ export default function StatementProcessor({
             <button
               onClick={handleSaveMappings}
               disabled={loading}
-              className="rounded-lg bg-green-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              className="rounded-lg bg-brand px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
             >
               {loading ? "Guardando..." : "Guardar mapeos y continuar"}
             </button>
@@ -659,7 +659,7 @@ export default function StatementProcessor({
                           checked={selectedVendors.has(group.vendorName)}
                           onChange={() => toggleVendorSelection(group.vendorName)}
                           disabled={isSent}
-                          className="rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600"
+                          className="rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600"
                         />
                         <div>
                           <p className="font-medium text-zinc-900 dark:text-white">
@@ -860,7 +860,7 @@ function VendorGroupCard({
           <select
             value={currentMapping}
             onChange={(e) => onMappingChange(e.target.value)}
-            className="w-48 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            className="w-48 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           >
             <option value="">— Sin mapear —</option>
             {suppliers.map((s) => (

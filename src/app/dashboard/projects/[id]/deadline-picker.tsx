@@ -30,7 +30,7 @@ export function DeadlinePicker({ projectId, currentDeadline }: DeadlinePickerPro
         type="date"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
-        className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+        className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
       />
       {saving && (
         <span className="text-xs text-zinc-400">...</span>

@@ -101,14 +101,14 @@ export default function ClientNamesForm({
                 value={entry.line1}
                 onChange={(e) => updateEntry(idx, "line1", e.target.value)}
                 placeholder="Linea 1 (ej: Premio MVP)"
-                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
               />
               <input
                 type="text"
                 value={entry.line2 ?? ""}
                 onChange={(e) => updateEntry(idx, "line2", e.target.value)}
                 placeholder="Linea 2 — opcional (ej: Ana Garcia)"
-                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                className="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
               />
             </div>
             {entries.length > 1 && (
@@ -145,7 +145,7 @@ export default function ClientNamesForm({
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {saving ? "Guardando..." : "Guardar nombres"}
         </button>

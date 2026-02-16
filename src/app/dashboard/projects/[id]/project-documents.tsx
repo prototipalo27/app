@@ -630,7 +630,7 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
               href={`https://drive.google.com/drive/folders/${currentFolderId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className="flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-dark dark:text-brand dark:hover:text-brand-dark"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -660,7 +660,7 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
             type="button"
             onClick={handleCreateFolder}
             disabled={creating}
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
           >
             {creating ? "Creando..." : "Crear carpeta en Drive"}
           </button>

@@ -169,7 +169,7 @@ export default function LeadActions({
           value={assignedTo || ""}
           onChange={(e) => handleAssign(e.target.value)}
           disabled={isPending}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
         >
           <option value="">Sin asignar</option>
           {managers.map((m) => (
@@ -202,7 +202,7 @@ export default function LeadActions({
                   });
                 }}
                 disabled={isPending || quoteSending}
-                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
               >
                 {quoteSending ? "Enviando..." : "Enviar formulario presupuesto"}
               </button>
@@ -264,7 +264,7 @@ export default function LeadActions({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Escribe una nota..."
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
           rows={3}
         />
         <button

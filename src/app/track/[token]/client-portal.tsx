@@ -222,7 +222,7 @@ export default function ClientPortal({
             </p>
             <button
               onClick={() => setVerifyState("email-input")}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark"
             >
               Verificar email
             </button>
@@ -240,13 +240,13 @@ export default function ClientPortal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+                className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
                 onKeyDown={(e) => e.key === "Enter" && !verifyLoading && email && sendCode()}
               />
               <button
                 onClick={sendCode}
                 disabled={verifyLoading || !email}
-                className="shrink-0 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
               >
                 {verifyLoading ? "Enviando..." : "Enviar código"}
               </button>
@@ -271,13 +271,13 @@ export default function ClientPortal({
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="000000"
-                className="w-36 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center font-mono text-lg tracking-widest text-zinc-900 placeholder:text-zinc-300 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-600"
+                className="w-36 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center font-mono text-lg tracking-widest text-zinc-900 placeholder:text-zinc-300 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-600"
                 onKeyDown={(e) => e.key === "Enter" && !verifyLoading && code.length === 6 && checkCode()}
               />
               <button
                 onClick={checkCode}
                 disabled={verifyLoading || code.length !== 6}
-                className="shrink-0 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="shrink-0 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
               >
                 {verifyLoading ? "Verificando..." : "Verificar"}
               </button>
@@ -290,7 +290,7 @@ export default function ClientPortal({
               <button
                 onClick={sendCode}
                 disabled={verifyLoading || resendCooldown > 0}
-                className="text-xs text-green-600 hover:text-green-700 disabled:text-zinc-400 disabled:cursor-not-allowed dark:text-green-500 dark:hover:text-green-400"
+                className="text-xs text-brand hover:text-brand-dark disabled:text-zinc-400 disabled:cursor-not-allowed dark:text-brand dark:hover:text-brand"
               >
                 {resendCooldown > 0 ? `Reenviar código (${resendCooldown}s)` : "Reenviar código"}
               </button>
@@ -363,7 +363,7 @@ export default function ClientPortal({
               <button
                 onClick={() => handleApprove("design")}
                 disabled={approving}
-                className="mt-3 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
               >
                 {approving ? "Aprobando..." : "Aprobar diseños"}
               </button>
@@ -396,7 +396,7 @@ export default function ClientPortal({
                     type="checkbox"
                     checked={approveDelivCheck}
                     onChange={(e) => setApproveDelivCheck(e.target.checked)}
-                    className="mt-0.5 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800"
+                    className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
                   />
                   <span className="text-zinc-700 dark:text-zinc-300">Apruebo el entregable y confirmo que las piezas son correctas</span>
                 </label>
@@ -405,14 +405,14 @@ export default function ClientPortal({
                     type="checkbox"
                     checked={confirmPayCheck}
                     onChange={(e) => setConfirmPayCheck(e.target.checked)}
-                    className="mt-0.5 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800"
+                    className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
                   />
                   <span className="text-zinc-700 dark:text-zinc-300">Confirmo que he realizado la transferencia bancaria</span>
                 </label>
                 <button
                   onClick={() => handleApprove("deliverable")}
                   disabled={approving || !approveDelivCheck}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                  className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
                 >
                   {approving ? "Confirmando..." : "Confirmar"}
                 </button>
@@ -486,7 +486,7 @@ function FileList({
             {isImage ? (
               <button
                 onClick={() => onOpenLightbox(f.id, section, f.name)}
-                className="shrink-0 text-zinc-400 hover:text-green-600"
+                className="shrink-0 text-zinc-400 hover:text-brand"
                 title="Ver imagen"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -496,7 +496,7 @@ function FileList({
             ) : is3D ? (
               <button
                 onClick={() => onOpenLightbox(f.id, section, f.name)}
-                className="shrink-0 text-purple-400 hover:text-green-600"
+                className="shrink-0 text-purple-400 hover:text-brand"
                 title="Ver modelo 3D"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

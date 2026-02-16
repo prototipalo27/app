@@ -350,7 +350,7 @@ export default function ProjectChecklist({
               </button>
               <button
                 onClick={confirmUpload}
-                className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
               >
                 Confirmar
               </button>

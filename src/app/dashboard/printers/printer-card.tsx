@@ -115,7 +115,7 @@ export default function PrinterCard({ printer, jobs = [], printerTypes = [] }: {
               value={typeId}
               onChange={(e) => handleTypeChange(e.target.value)}
               disabled={saving}
-              className="mt-1 w-full rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-xs text-zinc-600 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-400"
+              className="mt-1 w-full rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-xs text-zinc-600 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:text-zinc-400"
             >
               <option value="">Sin tipo</option>
               {printerTypes.map((pt) => (

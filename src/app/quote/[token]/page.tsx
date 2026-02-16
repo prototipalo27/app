@@ -28,18 +28,26 @@ export default async function QuotePage({
   if (quoteRequest.status === "submitted") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
-        <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+        <div className="w-full max-w-md">
+          <div className="mb-6 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-8 dark:block" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-light.png" alt="Prototipalo" className="block h-8 dark:hidden" />
           </div>
-          <h1 className="text-lg font-bold text-zinc-900 dark:text-white">
-            Datos ya enviados
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Gracias, ya hemos recibido tus datos de facturación. Nos pondremos en contacto contigo pronto.
-          </p>
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+              <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white">
+              Datos ya enviados
+            </h1>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Gracias, ya hemos recibido tus datos de facturación. Nos pondremos en contacto contigo pronto.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -49,6 +57,12 @@ export default async function QuotePage({
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-zinc-950">
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
+          <div className="mb-4 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-8 dark:block" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-light.png" alt="Prototipalo" className="block h-8 dark:hidden" />
+          </div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
             Datos de facturación
           </h1>

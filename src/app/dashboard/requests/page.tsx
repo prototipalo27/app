@@ -106,7 +106,7 @@ export default async function RequestsPage({
         </h1>
         <Link
           href="/dashboard/requests/new"
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
         >
           + Nueva solicitud
         </Link>

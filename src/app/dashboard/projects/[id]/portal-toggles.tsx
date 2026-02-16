@@ -83,8 +83,8 @@ export default function PortalToggles({
           <button
             onClick={() => handleToggle("design_visible", !designVisible)}
             disabled={isPending}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900 ${
-              designVisible ? "bg-green-600" : "bg-zinc-200 dark:bg-zinc-700"
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900 ${
+              designVisible ? "bg-brand" : "bg-zinc-200 dark:bg-zinc-700"
             }`}
           >
             <span
@@ -136,8 +136,8 @@ export default function PortalToggles({
           <button
             onClick={() => handleToggle("deliverable_visible", !deliverableVisible)}
             disabled={isPending}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900 ${
-              deliverableVisible ? "bg-green-600" : "bg-zinc-200 dark:bg-zinc-700"
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900 ${
+              deliverableVisible ? "bg-brand" : "bg-zinc-200 dark:bg-zinc-700"
             }`}
           >
             <span

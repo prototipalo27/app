@@ -117,7 +117,7 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
           <select
             value={printerTypeId}
             onChange={(e) => setPrinterTypeId(e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           >
             <option value="">Seleccionar...</option>
             {printerTypes.map((pt) => (
@@ -138,7 +138,7 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
             value={printTime}
             onChange={(e) => setPrintTime(e.target.value)}
             placeholder="min"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           />
         </div>
 
@@ -164,7 +164,7 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
                 id={`material-${item.id}`}
                 value={material}
                 onChange={(e) => setMaterial(e.target.value)}
-                className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               >
                 {SUPPORTED_MATERIALS.map((m) => (
                   <option key={m} value={m}>{m}</option>
@@ -198,7 +198,7 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
           type="button"
           onClick={handleGenerate}
           disabled={isPending || !canGenerate}
-          className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {isPending ? "Generando..." : "Generar cola"}
         </button>

@@ -103,7 +103,7 @@ export default async function TaskDetailPage({
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Proyecto vinculado</p>
           <Link
             href={`/dashboard/projects/${project.id}`}
-            className="mt-1 text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+            className="mt-1 text-sm font-medium text-brand hover:text-brand-dark dark:text-brand dark:hover:text-brand-dark"
           >
             {project.name}
           </Link>
@@ -136,7 +136,7 @@ export default async function TaskDetailPage({
                 name="title"
                 required
                 defaultValue={task.title}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
 
@@ -149,7 +149,7 @@ export default async function TaskDetailPage({
                 name="description"
                 rows={3}
                 defaultValue={task.description ?? ""}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
 
@@ -162,7 +162,7 @@ export default async function TaskDetailPage({
                   id="edit-priority"
                   name="priority"
                   defaultValue={task.priority}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="low">Baja</option>
                   <option value="medium">Media</option>
@@ -178,7 +178,7 @@ export default async function TaskDetailPage({
                   id="edit-status"
                   name="status"
                   defaultValue={task.status}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="pending">Pendiente</option>
                   <option value="in_progress">En curso</option>
@@ -196,7 +196,7 @@ export default async function TaskDetailPage({
                   id="edit-assigned"
                   name="assigned_to"
                   defaultValue={task.assigned_to ?? ""}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="">Sin asignar</option>
                   {users?.map((u) => (
@@ -215,7 +215,7 @@ export default async function TaskDetailPage({
                   id="edit-project"
                   name="project_id"
                   defaultValue={task.project_id ?? ""}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="">Ninguno</option>
                   {projects?.map((p) => (
@@ -236,13 +236,13 @@ export default async function TaskDetailPage({
                 name="due_date"
                 type="date"
                 defaultValue={task.due_date ?? ""}
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white sm:w-auto"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white sm:w-auto"
               />
             </div>
 
             <button
               type="submit"
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-black"
             >
               Guardar cambios
             </button>

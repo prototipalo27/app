@@ -145,7 +145,7 @@ export default function FixedExpensesSection({
         </div>
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
-          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
         >
           Anadir gasto
         </button>
@@ -225,7 +225,7 @@ export default function FixedExpensesSection({
             <button
               onClick={handleSubmit}
               disabled={loading || !form.name || !form.amount}
-              className="rounded-lg bg-green-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              className="rounded-lg bg-brand px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
             >
               {loading ? "Guardando..." : editingId ? "Actualizar" : "Crear"}
             </button>

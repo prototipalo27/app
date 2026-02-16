@@ -70,7 +70,7 @@ export default function SkillEditor({
               checked={userSkillIds.includes(skill.id)}
               onChange={(e) => handleToggle(skill.id, e.target.checked)}
               disabled={isPending}
-              className="rounded border-zinc-600 bg-zinc-700 text-green-500 focus:ring-green-500/30"
+              className="rounded border-zinc-600 bg-zinc-700 text-brand focus:ring-brand-blue/30"
             />
             {skill.name}
           </label>
@@ -85,12 +85,12 @@ export default function SkillEditor({
           onKeyDown={(e) => e.key === "Enter" && handleCreateSkill()}
           placeholder="Nuevo skill..."
           disabled={isPending}
-          className="flex-1 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-green-500 focus:outline-none"
+          className="flex-1 rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-brand-blue focus:outline-none"
         />
         <button
           onClick={handleCreateSkill}
           disabled={isPending || !newSkillName.trim()}
-          className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-50"
+          className="rounded bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           +
         </button>

@@ -46,7 +46,7 @@ function CrmColumn({
         ref={ref}
         className={`flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors ${
           isDropTarget
-            ? "rounded-b-xl ring-2 ring-green-500/50 ring-inset"
+            ? "rounded-b-xl ring-2 ring-brand/50 ring-inset"
             : ""
         }`}
       >
@@ -185,7 +185,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             onClick={() => setFilterManager(opt.id)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
               filterManager === opt.id
-                ? "bg-green-600 text-white"
+                ? "bg-brand text-white"
                 : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
             }`}
           >
@@ -271,7 +271,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 {lead.email ? (
                   <a
                     href={`mailto:${lead.email}`}
-                    className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+                    className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
                     onClick={(e) => e.stopPropagation()}
                   >
                     Contactar

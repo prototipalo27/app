@@ -246,7 +246,7 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
           name="name"
           placeholder="Item name"
           required
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
         />
         <input
           type="number"
@@ -254,7 +254,7 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
           min={1}
           defaultValue={1}
           title="Cantidad total"
-          className="w-18 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          className="w-18 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
         />
         <input
           type="number"
@@ -263,12 +263,12 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
           defaultValue={1}
           title="Uds. por bandeja"
           placeholder="×"
-          className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
         />
         <button
           type="submit"
           disabled={isPending}
-          className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           Add
         </button>

@@ -111,7 +111,7 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
             key={s.value}
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
               isCurrent
-                ? "bg-green-50 font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                ? "bg-brand-blue-light font-medium text-brand-blue dark:bg-brand-blue/10 dark:text-brand-blue"
                 : isPast
                   ? "text-zinc-400 line-through dark:text-zinc-500"
                   : "text-zinc-500 dark:text-zinc-400"
@@ -120,7 +120,7 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
             <span
               className={`h-2 w-2 shrink-0 rounded-full ${
                 isCurrent
-                  ? "bg-green-500"
+                  ? "bg-brand-blue"
                   : isPast
                     ? "bg-zinc-300 dark:bg-zinc-600"
                     : "bg-zinc-200 dark:bg-zinc-700"
@@ -279,9 +279,10 @@ export default async function TrackingPage({
       {/* Header */}
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
-          <span className="text-lg font-bold text-zinc-900 dark:text-white">
-            Prototipalo
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-7 dark:block" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-light.png" alt="Prototipalo" className="block h-7 dark:hidden" />
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             Seguimiento de proyecto
           </span>

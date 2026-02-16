@@ -66,7 +66,7 @@ export default async function CrmPage() {
           </Link>
           <Link
             href="/dashboard/crm/new"
-            className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark"
           >
             + Nuevo lead
           </Link>
