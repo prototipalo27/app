@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
   try {
     const payload = JSON.parse(rawBody);
 
-    // Webflow sends data nested under payload.data or directly
-    const data = payload?.data || payload;
+    // Webflow sends data nested under payload.payload.data, payload.data, or directly
+    const data = payload?.payload?.data || payload?.data || payload;
 
     // Helper: find a field value by checking multiple possible key names (case-insensitive)
     function findField(obj: Record<string, unknown>, keys: string[]): string | null {
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       "email_subject_tag", "emailSubjectTag",
     ]);
     const submissionId =
-      payload?._id || payload?.submissionId || data?._id || null;
+      payload?.payload?.id || payload?._id || payload?.submissionId || data?._id || null;
 
     if (!fullName?.trim()) {
       return NextResponse.json(
