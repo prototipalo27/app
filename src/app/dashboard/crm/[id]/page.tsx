@@ -78,7 +78,7 @@ export default async function LeadDetailPage({
     .eq("lead_id", id)
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
