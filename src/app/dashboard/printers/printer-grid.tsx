@@ -8,20 +8,9 @@ import PrinterCard from "./printer-card";
 type Printer = Tables<"printers">;
 type PrinterType = Tables<"printer_types">;
 
-interface PrinterJob {
-  id: string;
-  printer_id: string | null;
-  batch_number: number;
-  pieces_in_batch: number;
-  estimated_minutes: number;
-  status: string;
-  item_name: string;
-  project_name: string;
-}
-
 const SYNC_INTERVAL = 5 * 60_000; // 5 minutes (matches Vercel Cron)
 
-export default function PrinterGrid({ initialPrinters, initialJobs = [], printerTypes = [] }: { initialPrinters: Printer[]; initialJobs?: PrinterJob[]; printerTypes?: PrinterType[] }) {
+export default function PrinterGrid({ initialPrinters, printerTypes = [] }: { initialPrinters: Printer[]; printerTypes?: PrinterType[] }) {
   const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -73,7 +62,7 @@ export default function PrinterGrid({ initialPrinters, initialJobs = [], printer
     };
   }, []);
 
-  // Poll sync every 30 seconds
+  // Poll sync every 5 minutes
   useEffect(() => {
     // Initial sync on mount
     triggerSync();
@@ -133,7 +122,7 @@ export default function PrinterGrid({ initialPrinters, initialJobs = [], printer
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((printer) => (
-            <PrinterCard key={printer.id} printer={printer} jobs={initialJobs.filter((j) => j.printer_id === printer.id)} printerTypes={printerTypes} />
+            <PrinterCard key={printer.id} printer={printer} printerTypes={printerTypes} />
           ))}
         </div>
       )}

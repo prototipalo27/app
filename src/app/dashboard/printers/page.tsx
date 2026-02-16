@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import PrinterGrid from "./printer-grid";
+import { QueueTimeline } from "../queue/queue-timeline";
 
 export const metadata = {
   title: "Printers - Prototipalo",
@@ -15,12 +16,12 @@ export default async function PrintersPage() {
     supabase.from("printer_types").select("*").order("name"),
     supabase
       .from("print_jobs")
-      .select("id, printer_id, batch_number, pieces_in_batch, estimated_minutes, status, project_item_id")
+      .select("id, printer_id, batch_number, pieces_in_batch, estimated_minutes, status, project_item_id, position, scheduled_start")
       .in("status", ["queued", "printing"])
       .order("position", { ascending: true }),
   ]);
 
-  // Enrich with item + project names in a single query using nested selects
+  // Enrich with item + project names + priority in a single query using nested selects
   const itemIds = [...new Set((jobs ?? []).map((j) => j.project_item_id))];
   let enrichedJobs: Array<{
     id: string;
@@ -29,17 +30,35 @@ export default async function PrintersPage() {
     pieces_in_batch: number;
     estimated_minutes: number;
     status: string;
+    position: number;
+    scheduled_start: string | null;
+    project_item_id: string;
     item_name: string;
     project_name: string;
+    project_id: string | null;
+    queue_priority: number;
   }> = [];
 
   if (itemIds.length > 0) {
     const { data: items } = await supabase
       .from("project_items")
-      .select("id, name, project_id, projects(name)")
+      .select("id, name, project_id, projects(name, queue_priority)")
       .in("id", itemIds);
 
-    const itemMap = Object.fromEntries((items ?? []).map((i) => [i.id, i]));
+    const itemMap = Object.fromEntries(
+      (items ?? []).map((i) => {
+        const proj = i.projects as unknown as { name: string; queue_priority: number } | null;
+        return [
+          i.id,
+          {
+            name: i.name,
+            project_id: i.project_id,
+            project_name: proj?.name ?? "Unknown",
+            queue_priority: proj?.queue_priority ?? 0,
+          },
+        ];
+      })
+    );
 
     enrichedJobs = (jobs ?? []).map((j) => {
       const item = itemMap[j.project_item_id];
@@ -50,11 +69,25 @@ export default async function PrintersPage() {
         pieces_in_batch: j.pieces_in_batch,
         estimated_minutes: j.estimated_minutes,
         status: j.status,
+        position: j.position,
+        scheduled_start: j.scheduled_start,
+        project_item_id: j.project_item_id,
         item_name: item?.name ?? "Unknown",
-        project_name: (item?.projects as unknown as { name: string })?.name ?? "Unknown",
+        project_name: item?.project_name ?? "Unknown",
+        project_id: item?.project_id ?? null,
+        queue_priority: item?.queue_priority ?? 0,
       };
     });
   }
+
+  // Build printer infos for QueueTimeline
+  const typeMap = Object.fromEntries((printerTypes ?? []).map((t) => [t.id, t.name]));
+  const printerInfos = (printers ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    printer_type_id: p.printer_type_id,
+    type_name: p.printer_type_id ? typeMap[p.printer_type_id] ?? null : null,
+  }));
 
   return (
     <div>
@@ -72,7 +105,17 @@ export default async function PrintersPage() {
           Cola de impresion
         </Link>
       </div>
-      <PrinterGrid initialPrinters={printers ?? []} initialJobs={enrichedJobs} printerTypes={printerTypes ?? []} />
+
+      {/* Timeline Gantt */}
+      <div className="mb-6">
+        <QueueTimeline
+          printers={printerInfos}
+          jobs={enrichedJobs}
+          startTime={new Date().toISOString()}
+        />
+      </div>
+
+      <PrinterGrid initialPrinters={printers ?? []} printerTypes={printerTypes ?? []} />
     </div>
   );
 }
