@@ -123,7 +123,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     sendPushToAll({
       title: "Nuevo proyecto",
       body: proforma.contactName,
-      url: "/dashboard",
+      url: project ? `/dashboard/projects/${project.id}` : "/dashboard",
     }).catch(() => {});
 
     // Create Google Drive folder structure: Client / Project / subfolders
@@ -294,7 +294,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     sendPushToAll({
       title: "Nuevo pedido (factura)",
       body: invoice.contactName,
-      url: "/dashboard",
+      url: project ? `/dashboard/projects/${project.id}` : "/dashboard",
     }).catch(() => {});
 
     // Create Google Drive folder structure

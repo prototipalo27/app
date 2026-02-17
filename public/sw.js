@@ -73,18 +73,18 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/dashboard";
+  const targetPath = event.notification.data?.url || "/dashboard";
+  const targetUrl = new URL(targetPath, self.location.origin).href;
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
-      // If app is already open, navigate it to the target URL
+      // If app is already open, navigate to the target URL
       for (const client of windowClients) {
-        if ("focus" in client) {
-          client.focus();
-          client.navigate(url);
-          return;
+        if ("navigate" in client) {
+          return client.focus().then(() => client.navigate(targetUrl));
         }
       }
-      return clients.openWindow(url);
+      // No existing window, open a new one
+      return clients.openWindow(targetUrl);
     })
   );
 });
