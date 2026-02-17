@@ -24,12 +24,12 @@ POLL_INTERVAL = 15  # seconds
 
 # Define your printers here. serial_number must be unique and stable.
 PRINTERS = [
-    {"ip": "192.168.1.XX", "serial": "ELEGOO-NEP-1", "name": "Neptune 1", "model": "Neptune 4 Max"},
-    {"ip": "192.168.1.XX", "serial": "ELEGOO-NEP-2", "name": "Neptune 2", "model": "Neptune 4 Max"},
+    {"ip": "192.168.1.37", "serial": "ELEGOO-NEP-1", "name": "Neptune 1", "model": "Neptune 4 Max"},
+    {"ip": "192.168.1.54", "serial": "ELEGOO-NEP-2", "name": "Neptune 2", "model": "Neptune 4 Max"},
     {"ip": "192.168.1.56", "serial": "ELEGOO-NEP-3", "name": "Neptune 3", "model": "Neptune 4 Max"},
-    {"ip": "192.168.1.XX", "serial": "ELEGOO-NEP-4", "name": "Neptune 4", "model": "Neptune 4 Max"},
-    {"ip": "192.168.1.XX", "serial": "ELEGOO-NEP-5", "name": "Neptune 5", "model": "Neptune 4 Max"},
-    {"ip": "192.168.1.XX", "serial": "ELEGOO-GIGA-1", "name": "Giga Storm", "model": "OrangeStorm Giga"},
+    {"ip": "192.168.1.40", "serial": "ELEGOO-NEP-4", "name": "Neptune 4", "model": "Neptune 4 Max"},
+    {"ip": "192.168.1.67", "serial": "ELEGOO-NEP-5", "name": "Neptune 5", "model": "Neptune 4 Max"},
+    {"ip": "192.168.1.59", "serial": "ELEGOO-GIGA-1", "name": "Giga Storm", "model": "OrangeStorm Giga"},
 ]
 
 # ── Moonraker state → Prototipalo gcode_state mapping ──────────────────────────
