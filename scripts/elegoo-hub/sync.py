@@ -20,7 +20,7 @@ import requests
 
 API_URL = os.environ.get("PROTOTIPALO_URL", "https://app.prototipalo.es")
 SECRET = os.environ.get("ELEGOO_HUB_SECRET", "changeme")
-POLL_INTERVAL = 30  # seconds
+POLL_INTERVAL = 15  # seconds
 
 # Define your printers here. serial_number must be unique and stable.
 PRINTERS = [
