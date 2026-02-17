@@ -630,6 +630,38 @@ export type Database = {
           },
         ]
       }
+      printer_daily_stats: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          printer_id: string
+          printing_seconds: number
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          printer_id: string
+          printing_seconds?: number
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          printer_id?: string
+          printing_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printer_daily_stats_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       printer_types: {
         Row: {
           bed_depth_mm: number
@@ -1760,6 +1792,10 @@ export type Database = {
     }
     Functions: {
       get_user_role: { Args: never; Returns: string }
+      increment_printing_seconds: {
+        Args: { p_date: string; p_printer_id: string; p_seconds: number }
+        Returns: undefined
+      }
       is_user_active: { Args: never; Returns: boolean }
     }
     Enums: {

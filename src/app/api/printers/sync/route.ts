@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncPrinters } from "@/lib/bambu/mqtt-sync";
 import { sendPushToAll } from "@/lib/push-notifications/server";
+import { recordPrintingTime } from "@/lib/printer-stats";
 
 /**
  * Shared sync logic used by both GET (Vercel Cron) and POST (manual trigger).
@@ -66,6 +67,11 @@ async function runSync() {
       console.error("Supabase upsert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Record printing time for stats (5min = 300s sync interval)
+    recordPrintingTime(supabase, results, 300).catch((err) =>
+      console.error("Failed to record printing time:", err)
+    );
 
     // Send push notifications only for NEW printer errors
     // (error code that wasn't present in the previous sync)

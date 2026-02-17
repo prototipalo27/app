@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import PrinterGrid from "./printer-grid";
 import { QueueTimeline } from "../queue/queue-timeline";
+import { PrinterStats } from "./printer-stats";
+import { WORK_DAY_MINUTES } from "@/lib/schedule";
 
 export const metadata = {
   title: "Printers - Prototipalo",
@@ -10,8 +12,13 @@ export const metadata = {
 export default async function PrintersPage() {
   const supabase = await createClient();
 
-  // Fetch printers, types, and jobs in parallel
-  const [{ data: printers }, { data: printerTypes }, { data: jobs }] = await Promise.all([
+  // Date 30 days ago for stats query
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const statsFrom = thirtyDaysAgo.toISOString().slice(0, 10);
+
+  // Fetch printers, types, jobs, and stats in parallel
+  const [{ data: printers }, { data: printerTypes }, { data: jobs }, { data: rawStats }] = await Promise.all([
     supabase.from("printers").select("*").order("name"),
     supabase.from("printer_types").select("*").order("name"),
     supabase
@@ -19,6 +26,11 @@ export default async function PrintersPage() {
       .select("id, printer_id, batch_number, pieces_in_batch, estimated_minutes, status, project_item_id, position, scheduled_start")
       .in("status", ["queued", "printing"])
       .order("position", { ascending: true }),
+    supabase
+      .from("printer_daily_stats")
+      .select("printer_id, date, printing_seconds")
+      .gte("date", statsFrom)
+      .order("date"),
   ]);
 
   // Enrich with item + project names + priority in a single query using nested selects
@@ -80,6 +92,15 @@ export default async function PrintersPage() {
     });
   }
 
+  // Enrich stats with printer names
+  const printerNameMap = new Map((printers ?? []).map((p) => [p.id, p.name as string]));
+  const dailyStats = (rawStats ?? []).map((s) => ({
+    printer_id: s.printer_id as string,
+    printer_name: printerNameMap.get(s.printer_id) ?? "Unknown",
+    date: s.date as string,
+    printing_seconds: s.printing_seconds as number,
+  }));
+
   // Build printer infos for QueueTimeline
   const typeMap = Object.fromEntries((printerTypes ?? []).map((t) => [t.id, t.name]));
   const printerInfos = (printers ?? []).map((p) => ({
@@ -113,6 +134,11 @@ export default async function PrintersPage() {
           jobs={enrichedJobs}
           startTime={new Date().toISOString()}
         />
+      </div>
+
+      {/* Printing Stats */}
+      <div className="mb-6">
+        <PrinterStats stats={dailyStats} workDayMinutes={WORK_DAY_MINUTES} />
       </div>
 
       <PrinterGrid initialPrinters={printers ?? []} printerTypes={printerTypes ?? []} />

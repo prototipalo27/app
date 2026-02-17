@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
+import { recordPrintingTime } from "@/lib/printer-stats";
 
 interface ElegooPrinterPayload {
   serial_number: string;
@@ -104,6 +105,11 @@ export async function POST(request: NextRequest) {
       console.error("Elegoo sync upsert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Record printing time for stats (15s sync interval)
+    recordPrintingTime(supabase, body.printers, 15).catch((err) =>
+      console.error("Failed to record printing time:", err)
+    );
 
     // Send push notifications for NEW errors
     for (const printer of body.printers) {
