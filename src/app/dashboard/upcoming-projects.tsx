@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { ProjectWithItems } from "./kanban-card";
 
@@ -36,10 +37,23 @@ export function UpcomingProjects({ projects }: UpcomingProjectsProps) {
 
 function UpcomingCard({ project, onClick }: { project: ProjectWithItems; onClick: () => void }) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const items = project.project_items ?? [];
+
+  useEffect(() => {
+    if (showTooltip && cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      setTooltipPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+  }, [showTooltip]);
 
   return (
     <div
+      ref={cardRef}
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
@@ -54,46 +68,51 @@ function UpcomingCard({ project, onClick }: { project: ProjectWithItems; onClick
         </span>
       )}
 
-      {/* Hover tooltip */}
-      {showTooltip && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
-          <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
-            {project.name}
-          </h4>
-          {project.client_name && (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {project.client_name}
-            </p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {project.price !== null && (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                {Number(project.price).toFixed(2)} €
-              </span>
+      {/* Hover tooltip rendered via portal to escape overflow */}
+      {showTooltip &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-50 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800"
+            style={{ top: tooltipPos.top, left: tooltipPos.left }}
+          >
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              {project.name}
+            </h4>
+            {project.client_name && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {project.client_name}
+              </p>
             )}
-            {items.length > 0 && (
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
-                {items.length} item(s)
-              </span>
-            )}
-          </div>
-          {items.length > 0 && (
-            <div className="mt-2 space-y-0.5">
-              {items.map((item) => {
-                const isComplete = item.completed === item.quantity;
-                return (
-                  <div
-                    key={item.id}
-                    className={`text-[11px] ${isComplete ? "text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}
-                  >
-                    {isComplete ? "✓ " : ""}{item.completed}/{item.quantity} {item.name}
-                  </div>
-                );
-              })}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {project.price !== null && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  {Number(project.price).toFixed(2)} €
+                </span>
+              )}
+              {items.length > 0 && (
+                <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
+                  {items.length} item(s)
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      )}
+            {items.length > 0 && (
+              <div className="mt-2 space-y-0.5">
+                {items.map((item) => {
+                  const isComplete = item.completed === item.quantity;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`text-[11px] ${isComplete ? "text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}
+                    >
+                      {isComplete ? "✓ " : ""}{item.completed}/{item.quantity} {item.name}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
