@@ -883,6 +883,7 @@ export type Database = {
           file_keyword: string | null
           id: string
           name: string
+          notes: string | null
           print_time_minutes: number | null
           printer_type_id: string | null
           project_id: string
@@ -897,6 +898,7 @@ export type Database = {
           file_keyword?: string | null
           id?: string
           name: string
+          notes?: string | null
           print_time_minutes?: number | null
           printer_type_id?: string | null
           project_id: string
@@ -911,6 +913,7 @@ export type Database = {
           file_keyword?: string | null
           id?: string
           name?: string
+          notes?: string | null
           print_time_minutes?: number | null
           printer_type_id?: string | null
           project_id?: string
@@ -1803,6 +1806,15 @@ export type Database = {
         Returns: undefined
       }
       is_user_active: { Args: never; Returns: boolean }
+      upsert_lead_by_email: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_message?: string
+          p_source?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

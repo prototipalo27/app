@@ -115,6 +115,34 @@ export async function updateItemFileKeyword(itemId: string, fileKeyword: string 
   revalidatePath(`/dashboard/projects/${item.project_id}`);
 }
 
+export async function updateItemNotes(itemId: string, notes: string | null) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    redirect("/login");
+  }
+
+  const { data: item } = await supabase
+    .from("project_items")
+    .select("project_id")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item not found");
+
+  const { error } = await supabase
+    .from("project_items")
+    .update({ notes: notes || null })
+    .eq("id", itemId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/dashboard/projects/${item.project_id}`);
+}
+
 export async function deleteItem(itemId: string) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();

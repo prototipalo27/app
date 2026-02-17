@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, deleteItem } from "../items-actions";
+import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, deleteItem } from "../items-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
 
@@ -32,6 +32,7 @@ function ItemRow({
   onDelete: (id: string) => void;
   onBatchChange: (id: string, batchSize: number) => void;
   onKeywordChange: (id: string, keyword: string | null) => void;
+  onNotesChange: (id: string, notes: string | null) => void;
   printerTypes: Tables<"printer_types">[];
   jobs: PrintJob[];
   driveFiles: Array<{ id: string; name: string }>;
@@ -40,6 +41,7 @@ function ItemRow({
   const [editingBatch, setEditingBatch] = useState(false);
   const [editingKeyword, setEditingKeyword] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const dragging = useRef(false);
   const prevServer = useRef(item.completed);
   const isComplete = local === item.quantity;
@@ -164,6 +166,24 @@ function ItemRow({
           {local}/{item.quantity}
         </span>
 
+        {/* Notes toggle */}
+        <button
+          type="button"
+          onClick={() => setShowNotes(!showNotes)}
+          className={`rounded-md p-1 ${
+            showNotes
+              ? "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+              : item.notes
+                ? "text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/20 dark:hover:text-amber-300"
+                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+          }`}
+          title={item.notes ? "Ver notas" : "Añadir nota"}
+        >
+          <svg className="h-3.5 w-3.5" fill={item.notes ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+        </button>
+
         {/* Queue toggle */}
         <button
           type="button"
@@ -230,6 +250,24 @@ function ItemRow({
         </button>
       </div>
 
+      {/* Notes panel */}
+      {showNotes && (
+        <div className="mt-2">
+          <textarea
+            defaultValue={item.notes ?? ""}
+            placeholder="Añadir notas..."
+            rows={2}
+            className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 focus:outline-none dark:border-amber-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+            onBlur={(e) => {
+              const val = e.target.value.trim();
+              if (val !== (item.notes ?? "")) {
+                onNotesChange(item.id, val || null);
+              }
+            }}
+          />
+        </div>
+      )}
+
       {/* Queue panel */}
       {showQueue && (
         <ItemQueue
@@ -271,6 +309,12 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
   function handleKeywordChange(itemId: string, keyword: string | null) {
     startTransition(async () => {
       await updateItemFileKeyword(itemId, keyword);
+    });
+  }
+
+  function handleNotesChange(itemId: string, notes: string | null) {
+    startTransition(async () => {
+      await updateItemNotes(itemId, notes);
     });
   }
 
@@ -343,6 +387,7 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
               onDelete={handleDelete}
               onBatchChange={handleBatchChange}
               onKeywordChange={handleKeywordChange}
+              onNotesChange={handleNotesChange}
               printerTypes={printerTypes}
               jobs={printJobs}
               driveFiles={driveFiles}
