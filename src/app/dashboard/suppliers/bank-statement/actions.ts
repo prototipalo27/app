@@ -124,6 +124,7 @@ export async function sendClaimEmail(
     subject: `Solicitud de facturas pendientes — Prototipalo`,
     text,
     html,
+    signature: false,
   });
 
   // Register claim in database

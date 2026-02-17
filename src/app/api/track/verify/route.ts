@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       await sendEmail({
         to: email,
         subject: "Tu codigo de verificacion — Prototipalo",
+        signature: false,
         text: `Tu codigo de verificacion es: ${code}\n\nExpira en 10 minutos.`,
         html: `
           <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 24px;">
