@@ -83,13 +83,18 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Skip emails from @prototipalo.com (internal/outgoing)
-    const fromDomain = from.split("@")[1];
-    if (fromDomain === "prototipalo.com") {
+    // Skip emails from internal or notification senders
+    const fromDomain = from.split("@")[1] || "";
+    const skipDomains = [
+      "prototipalo.com",
+      "webflow.com",
+      "support.webflow.com",
+    ];
+    if (skipDomains.some((d) => fromDomain === d || fromDomain.endsWith("." + d))) {
       return NextResponse.json({
         ok: true,
         skipped: true,
-        reason: "internal_sender",
+        reason: "internal_or_notification_sender",
       });
     }
 
@@ -134,21 +139,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Auto-create lead from unknown sender
+      // Uses ON CONFLICT to handle race conditions (concurrent emails from same sender)
       const displayName = fromName !== from
         ? fromName
         : from.split("@")[0].replace(/[._-]/g, " ");
 
-      const { data: newLead, error: createError } = await supabase
-        .from("leads")
-        .insert({
-          full_name: displayName,
-          email: from,
-          source: "email",
-          status: "new",
-          message: body || null,
-        })
-        .select("id")
-        .single();
+      const { data: upserted, error: createError } = await supabase
+        .rpc("upsert_lead_by_email", {
+          p_email: from,
+          p_full_name: displayName,
+          p_source: "email",
+          p_message: body || null,
+        });
 
       if (createError) {
         console.error("Failed to auto-create lead:", createError);
@@ -158,7 +160,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      leadId = newLead.id;
+      leadId = upserted;
+      // Check if this was truly new (not an existing lead found by the rpc)
       autoCreated = true;
 
       // Notify team about new lead from email

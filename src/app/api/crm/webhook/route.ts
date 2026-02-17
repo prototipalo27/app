@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Check for duplicate submission
+    // Check for duplicate submission by webflow_submission_id
     if (submissionId) {
       const { data: existing } = await supabase
         .from("leads")
@@ -133,12 +133,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check for duplicate by email (prevents double-submit race condition)
+    const normalizedEmail = email?.trim().toLowerCase() || null;
+    if (normalizedEmail) {
+      const { data: existingByEmail } = await supabase
+        .from("leads")
+        .select("id")
+        .ilike("email", normalizedEmail)
+        .limit(1)
+        .single();
+
+      if (existingByEmail) {
+        // Update existing lead with any new info from the form
+        await supabase
+          .from("leads")
+          .update({
+            webflow_submission_id: submissionId || undefined,
+            phone: phone?.trim() || undefined,
+            company: company?.trim() || undefined,
+            attachments: attachments?.trim() || undefined,
+          })
+          .eq("id", existingByEmail.id);
+
+        return NextResponse.json({
+          ok: true,
+          duplicate: true,
+          lead_id: existingByEmail.id,
+        });
+      }
+    }
+
     const { data: lead, error } = await supabase
       .from("leads")
       .insert({
         full_name: fullName.trim(),
         company: company?.trim() || null,
-        email: email?.trim() || null,
+        email: normalizedEmail,
         phone: phone?.trim() || null,
         message: message?.trim() || null,
         attachments: attachments?.trim() || null,
@@ -151,6 +181,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      // Handle unique constraint violation (race condition fallback)
+      if (error.code === "23505") {
+        const { data: raced } = await supabase
+          .from("leads")
+          .select("id")
+          .ilike("email", normalizedEmail!)
+          .limit(1)
+          .single();
+        return NextResponse.json({
+          ok: true,
+          duplicate: true,
+          lead_id: raced?.id,
+        });
+      }
       console.error("CRM webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
