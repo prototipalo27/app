@@ -22,6 +22,7 @@ function ItemRow({
   onDelete,
   onBatchChange,
   onKeywordChange,
+  onNotesChange,
   printerTypes,
   jobs,
   driveFiles,
