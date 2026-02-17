@@ -27,6 +27,16 @@ export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
+  // Dev bypass: return a mock super_admin profile
+  if (process.env.NODE_ENV === "development") {
+    return {
+      id: "dev-user",
+      email: "dev@prototipalo.com",
+      role: "super_admin",
+      is_active: true,
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

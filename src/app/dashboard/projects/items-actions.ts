@@ -4,13 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-export async function addItem(projectId: string, name: string, quantity: number, batchSize: number = 1) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+const isDev = process.env.NODE_ENV === "development";
 
-  if (userError || !userData.user) {
-    redirect("/login");
+async function getAuthenticatedClient() {
+  const supabase = await createClient();
+  if (!isDev) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      redirect("/login");
+    }
   }
+  return supabase;
+}
+
+export async function addItem(projectId: string, name: string, quantity: number, batchSize: number = 1) {
+  const supabase = await getAuthenticatedClient();
 
   const { error } = await supabase.from("project_items").insert({
     project_id: projectId,
@@ -28,12 +36,7 @@ export async function addItem(projectId: string, name: string, quantity: number,
 }
 
 export async function updateItemCompleted(itemId: string, completed: number) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await getAuthenticatedClient();
 
   // Fetch item to clamp completed value
   const { data: item } = await supabase
@@ -60,12 +63,7 @@ export async function updateItemCompleted(itemId: string, completed: number) {
 }
 
 export async function updateItemBatchSize(itemId: string, batchSize: number) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await getAuthenticatedClient();
 
   const { data: item } = await supabase
     .from("project_items")
@@ -88,12 +86,7 @@ export async function updateItemBatchSize(itemId: string, batchSize: number) {
 }
 
 export async function updateItemFileKeyword(itemId: string, fileKeyword: string | null) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await getAuthenticatedClient();
 
   const { data: item } = await supabase
     .from("project_items")
@@ -116,12 +109,7 @@ export async function updateItemFileKeyword(itemId: string, fileKeyword: string 
 }
 
 export async function updateItemNotes(itemId: string, notes: string | null) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await getAuthenticatedClient();
 
   const { data: item } = await supabase
     .from("project_items")
@@ -144,12 +132,7 @@ export async function updateItemNotes(itemId: string, notes: string | null) {
 }
 
 export async function deleteItem(itemId: string) {
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
+  const supabase = await getAuthenticatedClient();
 
   // Fetch project_id for revalidation
   const { data: item } = await supabase
