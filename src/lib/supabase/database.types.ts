@@ -708,6 +708,7 @@ export type Database = {
           last_sync_at: string | null
           layer_current: number | null
           layer_total: number | null
+          lifetime_seconds: number
           model: string | null
           mqtt_connected: boolean | null
           name: string
@@ -735,6 +736,7 @@ export type Database = {
           last_sync_at?: string | null
           layer_current?: number | null
           layer_total?: number | null
+          lifetime_seconds?: number
           model?: string | null
           mqtt_connected?: boolean | null
           name: string
@@ -762,6 +764,7 @@ export type Database = {
           last_sync_at?: string | null
           layer_current?: number | null
           layer_total?: number | null
+          lifetime_seconds?: number
           model?: string | null
           mqtt_connected?: boolean | null
           name?: string
@@ -877,6 +880,7 @@ export type Database = {
           batch_size: number
           completed: number
           created_at: string
+          file_keyword: string | null
           id: string
           name: string
           print_time_minutes: number | null
@@ -890,6 +894,7 @@ export type Database = {
           batch_size?: number
           completed?: number
           created_at?: string
+          file_keyword?: string | null
           id?: string
           name: string
           print_time_minutes?: number | null
@@ -903,6 +908,7 @@ export type Database = {
           batch_size?: number
           completed?: number
           created_at?: string
+          file_keyword?: string | null
           id?: string
           name?: string
           print_time_minutes?: number | null

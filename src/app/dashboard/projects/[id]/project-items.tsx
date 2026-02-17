@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { addItem, updateItemCompleted, updateItemBatchSize, deleteItem } from "../items-actions";
+import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, deleteItem } from "../items-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
 
@@ -21,6 +21,7 @@ function ItemRow({
   onUpdate,
   onDelete,
   onBatchChange,
+  onKeywordChange,
   printerTypes,
   jobs,
   driveFiles,
@@ -30,12 +31,14 @@ function ItemRow({
   onUpdate: (id: string, completed: number) => void;
   onDelete: (id: string) => void;
   onBatchChange: (id: string, batchSize: number) => void;
+  onKeywordChange: (id: string, keyword: string | null) => void;
   printerTypes: Tables<"printer_types">[];
   jobs: PrintJob[];
   driveFiles: Array<{ id: string; name: string }>;
 }) {
   const [local, setLocal] = useState(item.completed);
   const [editingBatch, setEditingBatch] = useState(false);
+  const [editingKeyword, setEditingKeyword] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const dragging = useRef(false);
   const prevServer = useRef(item.completed);
@@ -117,6 +120,44 @@ function ItemRow({
           <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
             {Math.floor(item.print_time_minutes / 60)}h{item.print_time_minutes % 60 > 0 ? ` ${item.print_time_minutes % 60}m` : ""}
           </span>
+        )}
+
+        {/* File keyword badge */}
+        {editingKeyword ? (
+          <input
+            type="text"
+            defaultValue={item.file_keyword ?? ""}
+            autoFocus
+            placeholder="keyword"
+            className="w-24 rounded border border-purple-400 bg-white px-1.5 py-0.5 text-xs font-medium text-zinc-900 focus:outline-none dark:border-purple-600 dark:bg-zinc-800 dark:text-white"
+            onBlur={(e) => {
+              const val = e.target.value.trim();
+              if (val !== (item.file_keyword ?? "")) {
+                onKeywordChange(item.id, val || null);
+              }
+              setEditingKeyword(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                (e.target as HTMLInputElement).blur();
+              } else if (e.key === "Escape") {
+                setEditingKeyword(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingKeyword(true)}
+            className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+              item.file_keyword
+                ? "bg-purple-100 text-purple-600 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
+                : "bg-zinc-100 text-zinc-400 hover:bg-purple-50 hover:text-purple-500 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-purple-900/20 dark:hover:text-purple-400"
+            }`}
+            title={item.file_keyword ? `Keyword: ${item.file_keyword}` : "Asignar keyword para auto-completado"}
+          >
+            {item.file_keyword ? `🔑 ${item.file_keyword}` : "🔑"}
+          </button>
         )}
 
         <span className={`text-sm tabular-nums ${isComplete ? "font-semibold text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}>
@@ -227,6 +268,12 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
     });
   }
 
+  function handleKeywordChange(itemId: string, keyword: string | null) {
+    startTransition(async () => {
+      await updateItemFileKeyword(itemId, keyword);
+    });
+  }
+
   function handleDelete(itemId: string) {
     startTransition(async () => {
       await deleteItem(itemId);
@@ -295,6 +342,7 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
               onUpdate={handleUpdate}
               onDelete={handleDelete}
               onBatchChange={handleBatchChange}
+              onKeywordChange={handleKeywordChange}
               printerTypes={printerTypes}
               jobs={printJobs}
               driveFiles={driveFiles}

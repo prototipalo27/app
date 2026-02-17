@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { syncPrinters } from "@/lib/bambu/mqtt-sync";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 import { recordPrintingTime } from "@/lib/printer-stats";
+import { autoCompleteByKeyword } from "@/lib/auto-complete-jobs";
 
 /**
  * Shared sync logic used by both GET (Vercel Cron) and POST (manual trigger).
@@ -27,10 +28,10 @@ async function runSync() {
       return NextResponse.json({ synced: 0, message: "No printers found" });
     }
 
-    // Read previous error states BEFORE upserting new data
+    // Read previous states BEFORE upserting new data
     const { data: prevStates } = await supabase
       .from("printers")
-      .select("serial_number, print_error");
+      .select("serial_number, print_error, gcode_state, current_file");
 
     const prevErrorMap = new Map(
       (prevStates ?? []).map((p) => [p.serial_number, p.print_error ?? 0])
@@ -71,6 +72,22 @@ async function runSync() {
     // Record printing time for stats (5min = 300s sync interval)
     recordPrintingTime(supabase, results, 300).catch((err) =>
       console.error("Failed to record printing time:", err)
+    );
+
+    // Auto-complete print jobs by file keyword
+    autoCompleteByKeyword(
+      supabase,
+      (prevStates ?? []).map((p) => ({
+        serial_number: p.serial_number,
+        gcode_state: p.gcode_state,
+        current_file: p.current_file,
+      })),
+      results.map((r) => ({
+        serial_number: r.serial_number,
+        gcode_state: r.gcode_state,
+      }))
+    ).catch((err) =>
+      console.error("Failed to auto-complete jobs:", err)
     );
 
     // Send push notifications only for NEW printer errors

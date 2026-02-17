@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 import { recordPrintingTime } from "@/lib/printer-stats";
+import { autoCompleteByKeyword } from "@/lib/auto-complete-jobs";
 
 interface ElegooPrinterPayload {
   serial_number: string;
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
     const serials = body.printers.map((p) => p.serial_number);
     const { data: prevStates } = await supabase
       .from("printers")
-      .select("serial_number, print_error")
+      .select("serial_number, print_error, gcode_state, current_file")
       .in("serial_number", serials);
 
     const prevErrorMap = new Map(
@@ -109,6 +110,22 @@ export async function POST(request: NextRequest) {
     // Record printing time for stats (15s sync interval)
     recordPrintingTime(supabase, body.printers, 15).catch((err) =>
       console.error("Failed to record printing time:", err)
+    );
+
+    // Auto-complete print jobs by file keyword
+    autoCompleteByKeyword(
+      supabase,
+      (prevStates ?? []).map((p) => ({
+        serial_number: p.serial_number,
+        gcode_state: p.gcode_state,
+        current_file: p.current_file,
+      })),
+      body.printers.map((p) => ({
+        serial_number: p.serial_number,
+        gcode_state: p.gcode_state,
+      }))
+    ).catch((err) =>
+      console.error("Failed to auto-complete jobs:", err)
     );
 
     // Send push notifications for NEW errors

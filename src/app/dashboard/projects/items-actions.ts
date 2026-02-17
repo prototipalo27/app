@@ -87,6 +87,34 @@ export async function updateItemBatchSize(itemId: string, batchSize: number) {
   revalidatePath(`/dashboard/projects/${item.project_id}`);
 }
 
+export async function updateItemFileKeyword(itemId: string, fileKeyword: string | null) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    redirect("/login");
+  }
+
+  const { data: item } = await supabase
+    .from("project_items")
+    .select("project_id")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item not found");
+
+  const { error } = await supabase
+    .from("project_items")
+    .update({ file_keyword: fileKeyword || null })
+    .eq("id", itemId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath(`/dashboard/projects/${item.project_id}`);
+}
+
 export async function deleteItem(itemId: string) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
