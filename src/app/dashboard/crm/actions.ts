@@ -285,6 +285,34 @@ export async function getQuoteRequest(leadId: string) {
   return data;
 }
 
+// ── Get Lead Emails (for contact modal) ─────────────────
+
+export async function getLeadEmails(leadId: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name, company, email_subject_tag")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead) return { success: false as const, error: "Lead no encontrado" };
+
+  const { data: activities } = await supabase
+    .from("lead_activities")
+    .select("id, activity_type, content, metadata, thread_id, created_at, created_by")
+    .eq("lead_id", leadId)
+    .in("activity_type", ["email_sent", "email_received"])
+    .order("created_at", { ascending: true });
+
+  return {
+    success: true as const,
+    lead,
+    activities: activities || [],
+  };
+}
+
 // ── Search Leads ─────────────────────────────────────────
 
 export async function searchLeads(query: string) {

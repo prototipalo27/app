@@ -6,7 +6,8 @@ import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, type LeadWithAssignee } from "./crm-card";
-import { updateLeadStatus, dismissLead } from "./actions";
+import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
+import { ContactModal } from "./contact-modal";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
@@ -151,6 +152,39 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   };
 
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [contactModal, setContactModal] = useState<{
+    leadId: string;
+    leadName: string;
+    leadEmail: string | null;
+    leadCompany: string | null;
+    emailSubjectTag: string | null;
+    activities: Array<{
+      id: string;
+      activity_type: string;
+      content: string | null;
+      metadata: unknown;
+      thread_id: string | null;
+      created_at: string;
+      created_by: string | null;
+    }>;
+  } | null>(null);
+  const [loadingContactId, setLoadingContactId] = useState<string | null>(null);
+
+  const handleContact = async (lead: LeadWithAssignee) => {
+    setLoadingContactId(lead.id);
+    const result = await getLeadEmails(lead.id);
+    if (result.success) {
+      setContactModal({
+        leadId: lead.id,
+        leadName: lead.full_name,
+        leadEmail: result.lead.email,
+        leadCompany: result.lead.company,
+        emailSubjectTag: result.lead.email_subject_tag,
+        activities: result.activities,
+      });
+    }
+    setLoadingContactId(null);
+  };
 
   const handleDismiss = async (lead: LeadWithAssignee) => {
     if (!confirm(lead.email ? `Bloquear ${lead.email} y eliminar este lead?` : "Eliminar este lead?")) return;
@@ -266,15 +300,24 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   {dismissingId === lead.id ? "..." : "Descartar"}
                 </button>
 
-                {/* Contactar button → opens lead detail with email composer */}
+                {/* Contactar button → opens contact modal */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push(`/dashboard/crm/${lead.id}#email-compose`);
+                    if (lead.email) {
+                      handleContact(lead);
+                    } else {
+                      router.push(`/dashboard/crm/${lead.id}`);
+                    }
                   }}
-                  className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
+                  disabled={loadingContactId === lead.id}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {lead.email ? "Contactar" : "Ver lead"}
+                  {loadingContactId === lead.id
+                    ? "..."
+                    : lead.email
+                      ? "Contactar"
+                      : "Ver lead"}
                 </button>
               </div>
             ))}
@@ -294,6 +337,19 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
           ))}
         </div>
       </DragDropProvider>
+
+      {/* Contact modal */}
+      {contactModal && (
+        <ContactModal
+          leadId={contactModal.leadId}
+          leadName={contactModal.leadName}
+          leadEmail={contactModal.leadEmail}
+          leadCompany={contactModal.leadCompany}
+          emailSubjectTag={contactModal.emailSubjectTag}
+          activities={contactModal.activities}
+          onClose={() => setContactModal(null)}
+        />
+      )}
 
       {/* Lost reason modal */}
       {lostModal && (
