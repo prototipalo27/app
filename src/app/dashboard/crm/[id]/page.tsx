@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
-import EmailPanel from "./email-panel";
+import EmailWithSnippets from "./email-with-snippets";
 import AttachmentGallery from "./attachment-gallery";
 import {
   LEAD_COLUMNS,
@@ -80,6 +80,13 @@ export default async function LeadDetailPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // Fetch email snippets
+  const { data: snippets } = await supabase
+    .from("email_snippets")
+    .select("id, title, category, content")
+    .order("category")
+    .order("sort_order", { ascending: true });
 
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
@@ -241,14 +248,15 @@ export default async function LeadDetailPage({
             </div>
           )}
 
-          {/* Email panel (threads + compose) */}
-          <EmailPanel
+          {/* Email panel (threads + compose) + snippets */}
+          <EmailWithSnippets
             activities={activities || []}
             leadId={lead.id}
             leadEmail={lead.email}
             leadName={lead.full_name}
             leadCompany={lead.company}
             emailSubjectTag={lead.email_subject_tag}
+            snippets={snippets || []}
           />
 
           {/* Activity timeline */}

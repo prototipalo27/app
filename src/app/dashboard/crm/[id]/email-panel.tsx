@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail } from "../actions";
 
@@ -29,6 +29,7 @@ interface EmailPanelProps {
   leadName: string;
   leadCompany: string | null;
   emailSubjectTag: string | null;
+  onBodyRef?: (setter: (fn: (prev: string) => string) => void) => void;
 }
 
 function normalizeSubject(subject: string): string {
@@ -83,7 +84,7 @@ function buildDefaultSubject(tag: string | null, company: string | null, name: s
   return `Presupuesto - Prototipalo - ${identifier}`;
 }
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag }: EmailPanelProps) {
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, onBodyRef }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -98,6 +99,11 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
+
+  // Expose body setter for snippet insertion
+  useEffect(() => {
+    onBodyRef?.((fn) => setEmailBody(fn));
+  }, [onBodyRef]);
 
   // Expanded threads
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
