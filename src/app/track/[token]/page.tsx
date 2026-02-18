@@ -280,9 +280,9 @@ export default async function TrackingPage({
       <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-7 dark:block" />
+          <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-20 dark:block" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-light.png" alt="Prototipalo" className="block h-7 dark:hidden" />
+          <img src="/logo-light.png" alt="Prototipalo" className="block h-20 dark:hidden" />
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             Seguimiento de proyecto
           </span>

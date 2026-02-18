@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
+const globalTransporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.SMTP_USER,
@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const SIGNATURE_TEXT = `
+const DEFAULT_SIGNATURE_TEXT = `
 --
 Manuel de la Viña
 
@@ -16,7 +16,7 @@ Viriato 27 · 28010 Madrid
 +34 628 67 39 17
 Prototipalo.com`;
 
-const SIGNATURE_HTML = `
+const DEFAULT_SIGNATURE_HTML = `
 <br>
 <table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;line-height:1.6;">
   <tr>
@@ -42,6 +42,13 @@ const SIGNATURE_HTML = `
   </tr>
 </table>`;
 
+export interface SmtpConfig {
+  user: string;
+  pass: string;
+  displayName: string;
+  signatureHtml?: string | null;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
@@ -52,11 +59,32 @@ export interface SendEmailOptions {
   references?: string[];
   /** Set to false to omit the personal signature (e.g. system emails) */
   signature?: boolean;
+  /** Per-user SMTP credentials. Falls back to global SMTP_USER/SMTP_PASS. */
+  smtpConfig?: SmtpConfig;
 }
 
 export async function sendEmail(options: SendEmailOptions) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error("SMTP_USER y SMTP_PASS deben estar configurados en las variables de entorno");
+  const config = options.smtpConfig;
+
+  // Determine which transporter to use
+  let transporter: nodemailer.Transporter;
+  let fromEmail: string;
+  let fromName: string;
+
+  if (config) {
+    transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: config.user, pass: config.pass },
+    });
+    fromEmail = config.user;
+    fromName = config.displayName;
+  } else {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      throw new Error("SMTP_USER y SMTP_PASS deben estar configurados en las variables de entorno");
+    }
+    transporter = globalTransporter;
+    fromEmail = process.env.SMTP_USER;
+    fromName = "Prototipalo";
   }
 
   const includeSignature = options.signature !== false;
@@ -69,18 +97,22 @@ export async function sendEmail(options: SendEmailOptions) {
     headers["References"] = options.references.join(" ");
   }
 
-  const text = includeSignature ? options.text + SIGNATURE_TEXT : options.text;
+  // Pick signature based on config
+  const signatureHtml = config?.signatureHtml || DEFAULT_SIGNATURE_HTML;
+  const signatureText = config ? `\n--\n${config.displayName}\nPrototipalo.com` : DEFAULT_SIGNATURE_TEXT;
+
+  const text = includeSignature ? options.text + signatureText : options.text;
   const html = options.html
-    ? (includeSignature ? options.html + SIGNATURE_HTML : options.html)
+    ? (includeSignature ? options.html + signatureHtml : options.html)
     : undefined;
 
   const result = await transporter.sendMail({
-    from: `"Prototipalo" <${process.env.SMTP_USER}>`,
+    from: `"${fromName}" <${fromEmail}>`,
     to: options.to,
     subject: options.subject,
     text,
     html,
-    replyTo: options.replyTo || process.env.SMTP_USER,
+    replyTo: options.replyTo || fromEmail,
     headers,
   });
 

@@ -4,8 +4,28 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, type SmtpConfig } from "@/lib/email";
+import { decrypt } from "@/lib/encryption";
 import type { LeadStatus } from "@/lib/crm-config";
+
+/** Fetch per-user SMTP config or return undefined for global fallback */
+async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("user_smtp_settings")
+    .select("smtp_email, smtp_password_encrypted, display_name, signature_html")
+    .eq("user_id", userId)
+    .single();
+
+  if (!data) return undefined;
+
+  return {
+    user: data.smtp_email,
+    pass: decrypt(data.smtp_password_encrypted),
+    displayName: data.display_name,
+    signatureHtml: data.signature_html,
+  };
+}
 
 // ── Create Lead (manual) ────────────────────────────────
 
@@ -159,6 +179,9 @@ export async function sendLeadEmail(
       .filter(Boolean);
   }
 
+  // Get per-user SMTP config (falls back to global if not configured)
+  const smtpConfig = await getUserSmtpConfig(profile.id);
+
   const result = await sendEmail({
     to: to.trim(),
     subject: subject.trim(),
@@ -166,6 +189,7 @@ export async function sendLeadEmail(
     html: body.trim().replace(/\n/g, "<br>"),
     inReplyTo,
     references,
+    smtpConfig,
   });
 
   // Determine thread_id for this sent email
@@ -271,6 +295,9 @@ export async function createQuoteRequest(
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const quoteUrl = `${baseUrl}/quote/${qr.token}`;
 
+  // Get per-user SMTP config
+  const smtpConfig = await getUserSmtpConfig(profile.id);
+
   // Send email
   try {
     await sendEmail({
@@ -278,6 +305,7 @@ export async function createQuoteRequest(
       subject: "Datos de facturación — Prototipalo",
       text: `Hola ${lead.full_name},\n\nPara preparar tu presupuesto necesitamos tus datos de facturación.\n\nPor favor, rellena el siguiente formulario:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Para preparar tu presupuesto necesitamos tus datos de facturación.</p><p>Por favor, rellena el siguiente formulario:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Rellenar datos de facturación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
     });
   } catch {
     return { success: false, error: "Error al enviar el email" };

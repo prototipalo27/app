@@ -1772,6 +1772,44 @@ export type Database = {
           },
         ]
       }
+      user_smtp_settings: {
+        Row: {
+          created_at: string | null
+          display_name: string
+          signature_html: string | null
+          smtp_email: string
+          smtp_password_encrypted: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_name: string
+          signature_html?: string | null
+          smtp_email: string
+          smtp_password_encrypted: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string
+          signature_html?: string | null
+          smtp_email?: string
+          smtp_password_encrypted?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_smtp_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_mappings: {
         Row: {
           bank_vendor_name: string

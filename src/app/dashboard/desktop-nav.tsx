@@ -3,10 +3,12 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon, actionTitle }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode; actionTitle?: string }) {
+function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon, actionTitle, actions }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode; actionTitle?: string; actions?: { href: string; icon: React.ReactNode; title: string }[] }) {
   const pathname = usePathname();
   const isActive = (exact ? pathname === href : pathname?.startsWith(href)) || (alsoMatch && pathname?.startsWith(alsoMatch));
   const isActionActive = actionHref && pathname?.startsWith(actionHref);
+
+  const allActions = actions || (actionHref ? [{ href: actionHref, icon: actionIcon!, title: actionTitle! }] : []);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -21,19 +23,23 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
         {icon}
         {label}
       </Link>
-      {actionHref && (
-        <Link
-          href={actionHref}
-          className={`flex items-center rounded-lg p-2 ${
-            isActionActive
-              ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-              : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-          }`}
-          title={actionTitle}
-        >
-          {actionIcon}
-        </Link>
-      )}
+      {allActions.map((action) => {
+        const active = pathname?.startsWith(action.href);
+        return (
+          <Link
+            key={action.href}
+            href={action.href}
+            className={`flex items-center rounded-lg p-2 ${
+              active
+                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            }`}
+            title={action.title}
+          >
+            {action.icon}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -64,13 +70,27 @@ export default function DesktopNav({ isManager }: { isManager: boolean }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             }
-            actionHref="/dashboard/settings/email-snippets"
-            actionTitle="Frases de email"
-            actionIcon={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-              </svg>
-            }
+            actions={[
+              {
+                href: "/dashboard/settings/email-snippets",
+                title: "Frases de email",
+                icon: (
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                ),
+              },
+              {
+                href: "/dashboard/settings/email",
+                title: "Mi cuenta de email",
+                icon: (
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                ),
+              },
+            ]}
           />
         </>
       )}
