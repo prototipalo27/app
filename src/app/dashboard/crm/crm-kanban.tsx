@@ -248,6 +248,25 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                 onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
               >
+                {/* Owner badge */}
+                <div className="shrink-0 w-8 text-center">
+                  {lead.assignee_email ? (
+                    <span
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold uppercase text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                      title={lead.assignee_email.split("@")[0]}
+                    >
+                      {lead.assignee_email.split("@")[0].slice(0, 2)}
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-[11px] text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600"
+                      title="Sin asignar"
+                    >
+                      —
+                    </span>
+                  )}
+                </div>
+
                 {/* Name + company */}
                 <div className="min-w-0 shrink-0 basis-44">
                   <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
