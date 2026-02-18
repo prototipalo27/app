@@ -49,6 +49,12 @@ export interface SmtpConfig {
   signatureHtml?: string | null;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
@@ -61,6 +67,7 @@ export interface SendEmailOptions {
   signature?: boolean;
   /** Per-user SMTP credentials. Falls back to global SMTP_USER/SMTP_PASS. */
   smtpConfig?: SmtpConfig;
+  attachments?: EmailAttachment[];
 }
 
 export async function sendEmail(options: SendEmailOptions) {
@@ -114,6 +121,11 @@ export async function sendEmail(options: SendEmailOptions) {
     html,
     replyTo: options.replyTo || fromEmail,
     headers,
+    attachments: options.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType,
+    })),
   });
 
   return result;

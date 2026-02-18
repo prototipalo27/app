@@ -149,6 +149,26 @@ export async function createProforma(
   return (await res.json()) as { id: string };
 }
 
+// ── Document PDF ─────────────────────────────────────────
+
+/** Download a document PDF by type and ID */
+export async function getDocumentPdf(
+  docType: HoldedDocType,
+  documentId: string,
+): Promise<Buffer> {
+  const res = await fetch(
+    `${HOLDED_API_BASE}/documents/${docType}/${documentId}/pdf`,
+    { headers: { key: getApiKey() }, cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Holded PDF error: ${res.status} ${res.statusText}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 // ── Contacts (search) ──────────────────────────────────────
 
 /** Search contacts by name (client-side filtering — Holded API has no search endpoint) */

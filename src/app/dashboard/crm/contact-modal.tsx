@@ -21,6 +21,8 @@ interface ContactModalProps {
   leadEmail: string | null;
   leadCompany: string | null;
   emailSubjectTag: string | null;
+  leadNumber: number | null;
+  holdedProformaId: string | null;
   activities: EmailActivity[];
   onClose: () => void;
 }
@@ -35,11 +37,14 @@ export function ContactModal({
   leadEmail,
   leadCompany,
   emailSubjectTag,
+  leadNumber,
+  holdedProformaId,
   activities,
   onClose,
 }: ContactModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [attachProforma, setAttachProforma] = useState(false);
 
   // Find the latest received email to show
   const receivedEmails = activities.filter(
@@ -49,9 +54,10 @@ export function ContactModal({
 
   // Build default subject
   const identifier = emailSubjectTag || leadCompany || leadName;
+  const ref = leadNumber ? ` [PT-${String(leadNumber).padStart(4, "0")}]` : "";
   const defaultSubject = latestReceived
     ? `Re: ${latestReceived.metadata?.email_subject || "(sin asunto)"}`
-    : `Presupuesto - Prototipalo - ${identifier}`;
+    : `Presupuesto${ref} - Prototipalo - ${identifier}`;
 
   const [emailTo, setEmailTo] = useState(leadEmail || "");
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
@@ -66,7 +72,8 @@ export function ContactModal({
         emailSubject,
         emailBody,
         latestReceived?.metadata?.message_id || undefined,
-        latestReceived?.thread_id || undefined
+        latestReceived?.thread_id || undefined,
+        attachProforma || undefined
       );
       router.refresh();
       onClose();
@@ -220,14 +227,27 @@ export function ContactModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-zinc-100 px-6 py-4 dark:border-zinc-700">
-          <button
-            onClick={() =>
-              router.push(`/dashboard/crm/${leadId}`)
-            }
-            className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-          >
-            Ver ficha completa
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() =>
+                router.push(`/dashboard/crm/${leadId}`)
+              }
+              className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              Ver ficha completa
+            </button>
+            {holdedProformaId && (
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={attachProforma}
+                  onChange={(e) => setAttachProforma(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+                />
+                Adjuntar proforma
+              </label>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={onClose}

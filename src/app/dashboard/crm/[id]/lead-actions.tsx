@@ -9,6 +9,7 @@ import {
   deleteLead,
   blockEmailAndDeleteLead,
   createQuoteRequest,
+  updatePaymentCondition,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import {
@@ -24,6 +25,7 @@ interface LeadActionsProps {
   managers: { id: string; email: string }[];
   assignedTo: string | null;
   quoteRequest: Tables<"quote_requests"> | null;
+  paymentCondition: string | null;
 }
 
 export default function LeadActions({
@@ -33,6 +35,7 @@ export default function LeadActions({
   managers,
   assignedTo,
   quoteRequest,
+  paymentCondition,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -177,6 +180,29 @@ export default function LeadActions({
               {m.email.split("@")[0]}
             </option>
           ))}
+        </select>
+      </div>
+
+      {/* Payment condition */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+          Condicion de pago
+        </h3>
+        <select
+          value={paymentCondition || ""}
+          onChange={(e) => {
+            const value = e.target.value || null;
+            startTransition(async () => {
+              await updatePaymentCondition(leadId, value);
+              router.refresh();
+            });
+          }}
+          disabled={isPending}
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+        >
+          <option value="">Sin definir</option>
+          <option value="50-50">50-50 (dos plazos)</option>
+          <option value="100-5">100% (-5% dto)</option>
         </select>
       </div>
 

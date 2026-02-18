@@ -36,6 +36,8 @@ interface EmailPanelProps {
   leadName: string;
   leadCompany: string | null;
   emailSubjectTag: string | null;
+  leadNumber: number | null;
+  holdedProformaId: string | null;
   snippets?: Snippet[];
 }
 
@@ -86,9 +88,10 @@ function groupIntoThreads(activities: Activity[]): EmailThread[] {
   return threads;
 }
 
-function buildDefaultSubject(tag: string | null, company: string | null, name: string): string {
+function buildDefaultSubject(tag: string | null, company: string | null, name: string, leadNumber: number | null): string {
   const identifier = tag || company || name;
-  return `Presupuesto - Prototipalo - ${identifier}`;
+  const ref = leadNumber ? ` [PT-${String(leadNumber).padStart(4, "0")}]` : "";
+  return `Presupuesto${ref} - Prototipalo - ${identifier}`;
 }
 
 const SNIPPET_CATEGORIES = [
@@ -100,11 +103,14 @@ const SNIPPET_CATEGORIES = [
   { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
 ] as const;
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, snippets = [] }: EmailPanelProps) {
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [] }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const defaultSubject = buildDefaultSubject(emailSubjectTag, leadCompany, leadName);
+  const defaultSubject = buildDefaultSubject(emailSubjectTag, leadCompany, leadName, leadNumber);
+
+  // Proforma attachment toggle
+  const [attachProforma, setAttachProforma] = useState(false);
 
   // Compose state
   const [emailTo, setEmailTo] = useState(leadEmail || "");
@@ -158,9 +164,11 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         emailSubject,
         emailBody,
         replyToMessageId || undefined,
-        replyThreadId || undefined
+        replyThreadId || undefined,
+        attachProforma || undefined
       );
       cancelReply();
+      setAttachProforma(false);
       router.refresh();
     });
   };
@@ -403,7 +411,20 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
             rows={4}
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            {holdedProformaId ? (
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={attachProforma}
+                  onChange={(e) => setAttachProforma(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+                />
+                Adjuntar proforma PDF
+              </label>
+            ) : (
+              <div />
+            )}
             <button
               onClick={handleSend}
               disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}

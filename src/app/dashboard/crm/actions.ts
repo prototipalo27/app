@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
-import { sendEmail, type SmtpConfig } from "@/lib/email";
+import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
+import { getDocumentPdf } from "@/lib/holded/api";
 import type { LeadStatus } from "@/lib/crm-config";
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
@@ -150,7 +151,8 @@ export async function sendLeadEmail(
   subject: string,
   body: string,
   replyToMessageId?: string,
-  threadId?: string
+  threadId?: string,
+  attachProforma?: boolean
 ) {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -182,6 +184,27 @@ export async function sendLeadEmail(
   // Get per-user SMTP config (falls back to global if not configured)
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
+  // Optionally attach proforma PDF from Holded
+  let attachments: EmailAttachment[] | undefined;
+  if (attachProforma) {
+    const { data: qr } = await supabase
+      .from("quote_requests")
+      .select("holded_proforma_id")
+      .eq("lead_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (qr?.holded_proforma_id) {
+      try {
+        const pdf = await getDocumentPdf("proform", qr.holded_proforma_id);
+        attachments = [{ filename: "proforma.pdf", content: pdf, contentType: "application/pdf" }];
+      } catch {
+        // Non-fatal: send without attachment if PDF download fails
+      }
+    }
+  }
+
   const result = await sendEmail({
     to: to.trim(),
     subject: subject.trim(),
@@ -190,6 +213,7 @@ export async function sendLeadEmail(
     inReplyTo,
     references,
     smtpConfig,
+    attachments,
   });
 
   // Determine thread_id for this sent email
@@ -351,7 +375,7 @@ export async function getLeadEmails(leadId: string) {
 
   const { data: lead } = await supabase
     .from("leads")
-    .select("email, full_name, company, email_subject_tag")
+    .select("email, full_name, company, email_subject_tag, lead_number")
     .eq("id", leadId)
     .single();
 
@@ -364,10 +388,20 @@ export async function getLeadEmails(leadId: string) {
     .in("activity_type", ["email_sent", "email_received"])
     .order("created_at", { ascending: true });
 
+  // Check if lead has a holded proforma
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("holded_proforma_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return {
     success: true as const,
     lead,
     activities: activities || [],
+    holdedProformaId: qr?.holded_proforma_id || null,
   };
 }
 
@@ -426,6 +460,30 @@ export async function deleteLead(id: string) {
 
   revalidatePath("/dashboard/crm");
   redirect("/dashboard/crm");
+}
+
+// ── Dismiss Lead (block email if exists + delete, no redirect) ──
+
+// ── Update Payment Condition ─────────────────────────────
+
+export async function updatePaymentCondition(
+  id: string,
+  condition: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const value = condition && ["50-50", "100-5"].includes(condition) ? condition : null;
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ payment_condition: value })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  return { success: true };
 }
 
 // ── Dismiss Lead (block email if exists + delete, no redirect) ──

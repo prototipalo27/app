@@ -158,6 +158,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     leadEmail: string | null;
     leadCompany: string | null;
     emailSubjectTag: string | null;
+    leadNumber: number | null;
+    holdedProformaId: string | null;
     activities: Array<{
       id: string;
       activity_type: string;
@@ -180,6 +182,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         leadEmail: result.lead.email,
         leadCompany: result.lead.company,
         emailSubjectTag: result.lead.email_subject_tag,
+        leadNumber: result.lead.lead_number,
+        holdedProformaId: result.holdedProformaId,
         activities: result.activities,
       });
     }
@@ -365,6 +369,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
           leadEmail={contactModal.leadEmail}
           leadCompany={contactModal.leadCompany}
           emailSubjectTag={contactModal.emailSubjectTag}
+          leadNumber={contactModal.leadNumber}
+          holdedProformaId={contactModal.holdedProformaId}
           activities={contactModal.activities}
           onClose={() => setContactModal(null)}
         />

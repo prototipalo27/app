@@ -541,8 +541,10 @@ export type Database = {
           email_subject_tag: string | null
           full_name: string
           id: string
+          lead_number: number
           lost_reason: string | null
           message: string | null
+          payment_condition: string | null
           phone: string | null
           source: string
           status: string
@@ -558,8 +560,10 @@ export type Database = {
           email_subject_tag?: string | null
           full_name: string
           id?: string
+          lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          payment_condition?: string | null
           phone?: string | null
           source?: string
           status?: string
@@ -575,8 +579,10 @@ export type Database = {
           email_subject_tag?: string | null
           full_name?: string
           id?: string
+          lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          payment_condition?: string | null
           phone?: string | null
           source?: string
           status?: string

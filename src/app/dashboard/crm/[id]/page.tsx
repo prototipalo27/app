@@ -256,6 +256,8 @@ export default async function LeadDetailPage({
             leadName={lead.full_name}
             leadCompany={lead.company}
             emailSubjectTag={lead.email_subject_tag}
+            leadNumber={lead.lead_number}
+            holdedProformaId={quoteRequest?.holded_proforma_id || null}
             snippets={snippets || []}
           />
 
@@ -356,6 +358,7 @@ export default async function LeadDetailPage({
             managers={managers || []}
             assignedTo={lead.assigned_to}
             quoteRequest={quoteRequest}
+            paymentCondition={lead.payment_condition}
           />
         </div>
       </div>
