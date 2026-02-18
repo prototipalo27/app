@@ -317,9 +317,54 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         id="email-compose"
         className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
       >
-        <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">
-          {replyBanner ? "Responder email" : "Nuevo email"}
-        </h3>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            {replyBanner ? "Responder email" : "Nuevo email"}
+          </h3>
+          {snippets.length > 0 && (
+            <>
+              <span className="text-zinc-300 dark:text-zinc-600">|</span>
+              {SNIPPET_CATEGORIES.filter((cat) =>
+                snippets.some((s) => s.category === cat.id)
+              ).map((cat) => (
+                <div key={cat.id} className="group relative">
+                  <button
+                    type="button"
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${cat.color}`}
+                  >
+                    {cat.label}
+                  </button>
+                  <div className="invisible absolute left-0 top-full z-20 pt-1 opacity-0 transition-all group-hover:visible group-hover:opacity-100">
+                    <div className="min-w-56 max-w-72 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                      {snippets
+                        .filter((s) => s.category === cat.id)
+                        .map((snippet) => (
+                          <button
+                            key={snippet.id}
+                            type="button"
+                            onClick={() =>
+                              setEmailBody((prev) =>
+                                prev ? prev + "\n\n" + snippet.content : snippet.content
+                              )
+                            }
+                            className="block w-full px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
+                          >
+                            <span className="block text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                              {snippet.title}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[10px] text-zinc-500 dark:text-zinc-400">
+                              {snippet.content.slice(0, 80)}
+                              {snippet.content.length > 80 ? "..." : ""}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
 
         {replyBanner && (
           <div className="mb-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">

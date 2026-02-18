@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
-import EmailWithSnippets from "./email-with-snippets";
+import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
 import {
   LEAD_COLUMNS,
@@ -248,8 +248,8 @@ export default async function LeadDetailPage({
             </div>
           )}
 
-          {/* Email panel (threads + compose) + snippets */}
-          <EmailWithSnippets
+          {/* Email panel (threads + compose + inline snippets) */}
+          <EmailPanel
             activities={activities || []}
             leadId={lead.id}
             leadEmail={lead.email}
