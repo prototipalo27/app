@@ -11,7 +11,7 @@ export default async function EmailSettingsPage() {
     .from("user_smtp_settings")
     .select("smtp_email, display_name, signature_html")
     .eq("user_id", profile.id)
-    .single();
+    .maybeSingle();
 
   return (
     <div className="mx-auto max-w-2xl">
