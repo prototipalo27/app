@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail } from "../actions";
 
@@ -126,6 +126,16 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
 
   const threads = groupIntoThreads(activities);
+
+  // Listen for "send-proforma" event from lead-actions
+  useEffect(() => {
+    const handler = () => {
+      setAttachProforma(true);
+      document.getElementById("email-compose")?.scrollIntoView({ behavior: "smooth" });
+    };
+    window.addEventListener("send-proforma", handler);
+    return () => window.removeEventListener("send-proforma", handler);
+  }, []);
 
   const handleReply = (activity: Activity) => {
     const meta = activity.metadata;

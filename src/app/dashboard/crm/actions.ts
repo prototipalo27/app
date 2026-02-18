@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
-import { getDocumentPdf } from "@/lib/holded/api";
+import { getDocumentPdf, getDocument } from "@/lib/holded/api";
+import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
@@ -487,6 +488,37 @@ export async function updatePaymentCondition(
 }
 
 // ── Dismiss Lead (block email if exists + delete, no redirect) ──
+
+// ── Get Proforma Details from Holded ─────────────────────
+
+export async function getProformaDetails(
+  leadId: string,
+): Promise<{ success: boolean; proforma?: HoldedDocument; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("holded_proforma_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr?.holded_proforma_id) {
+    return { success: false, error: "No hay proforma vinculada" };
+  }
+
+  try {
+    const proforma = await getDocument("proform", qr.holded_proforma_id);
+    return { success: true, proforma };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error al obtener la proforma",
+    };
+  }
+}
 
 export async function dismissLead(
   leadId: string,

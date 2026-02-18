@@ -95,6 +95,23 @@ export async function listDocuments(
   return all;
 }
 
+/** Fetch a single document by type and ID */
+export async function getDocument(
+  docType: HoldedDocType,
+  documentId: string,
+): Promise<HoldedDocument> {
+  const res = await fetch(
+    `${HOLDED_API_BASE}/documents/${docType}/${documentId}`,
+    { headers: { key: getApiKey() }, cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as HoldedDocument;
+}
+
 // ── Contacts (write) ──────────────────────────────────────
 
 /** Update an existing contact */
