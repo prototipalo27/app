@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail } from "../actions";
 
@@ -22,6 +22,13 @@ interface EmailThread {
   lastDate: string;
 }
 
+interface Snippet {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+}
+
 interface EmailPanelProps {
   activities: Activity[];
   leadId: string;
@@ -29,7 +36,7 @@ interface EmailPanelProps {
   leadName: string;
   leadCompany: string | null;
   emailSubjectTag: string | null;
-  onBodyRef?: (setter: (fn: (prev: string) => string) => void) => void;
+  snippets?: Snippet[];
 }
 
 function normalizeSubject(subject: string): string {
@@ -84,7 +91,16 @@ function buildDefaultSubject(tag: string | null, company: string | null, name: s
   return `Presupuesto - Prototipalo - ${identifier}`;
 }
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, onBodyRef }: EmailPanelProps) {
+const SNIPPET_CATEGORIES = [
+  { id: "saludo", label: "Saludo", color: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50" },
+  { id: "pagos", label: "Pagos", color: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50" },
+  { id: "envios", label: "Envíos", color: "bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50" },
+  { id: "plazos", label: "Plazos", color: "bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50" },
+  { id: "materiales", label: "Materiales", color: "bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50" },
+  { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
+] as const;
+
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, snippets = [] }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -99,11 +115,6 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
-
-  // Expose body setter for snippet insertion
-  useEffect(() => {
-    onBodyRef?.((fn) => setEmailBody(fn));
-  }, [onBodyRef]);
 
   // Expanded threads
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
