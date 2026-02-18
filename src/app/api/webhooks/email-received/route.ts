@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendPushToAll } from "@/lib/push-notifications/server";
 
 function getSupabase() {
   return createClient(
@@ -30,8 +29,8 @@ async function logWebhook(
 /**
  * POST /api/webhooks/email-received?secret=EMAIL_WEBHOOK_SECRET
  *
- * Receives email data from n8n (IMAP trigger) and creates lead activities.
- * Auto-creates a lead if the sender email doesn't match any existing lead.
+ * Receives email data from n8n (IMAP trigger) and logs activities on existing leads.
+ * Does NOT auto-create leads — leads only enter via Webflow form or manual creation.
  *
  * Body:
  * {
@@ -67,7 +66,6 @@ export async function POST(request: NextRequest) {
 
     const from = (payload.from || "").toLowerCase().trim();
     const fromName = payload.from_name || from;
-    const to = (payload.to || "").toLowerCase().trim();
     const subject = payload.subject || "(sin asunto)";
     const body = (payload.body || "").slice(0, 10_000);
     const messageId = payload.message_id || null;
@@ -85,6 +83,7 @@ export async function POST(request: NextRequest) {
 
     // Skip emails from internal or notification senders
     const fromDomain = from.split("@")[1] || "";
+    const fromLocal = from.split("@")[0] || "";
     const skipDomains = [
       "prototipalo.com",
       "webflow.com",
@@ -95,6 +94,22 @@ export async function POST(request: NextRequest) {
         ok: true,
         skipped: true,
         reason: "internal_or_notification_sender",
+      });
+    }
+
+    // Skip noreply, newsletters, and automated senders
+    const spamLocalParts = [
+      "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
+      "newsletter", "newsletters", "news", "mailer", "mailer-daemon",
+      "notifications", "notification", "alert", "alerts",
+      "marketing", "promo", "promotions", "info", "updates",
+      "bounce", "postmaster", "daemon",
+    ];
+    if (spamLocalParts.some((p) => fromLocal === p || fromLocal.startsWith(p + "+"))) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "automated_sender",
       });
     }
 
@@ -123,52 +138,17 @@ export async function POST(request: NextRequest) {
       .single();
 
     let leadId: string;
-    let autoCreated = false;
 
     if (lead) {
       leadId = lead.id;
     } else {
-      // Only auto-create leads from emails sent to info@prototipalo.com
-      if (!to || !to.includes("info@prototipalo.com")) {
-        return NextResponse.json({
-          ok: true,
-          skipped: true,
-          reason: "not_to_info",
-        });
-      }
-
-      // Auto-create lead from unknown sender
-      // Uses ON CONFLICT to handle race conditions (concurrent emails from same sender)
-      const displayName = fromName !== from
-        ? fromName
-        : from.split("@")[0].replace(/[._-]/g, " ");
-
-      const { data: upserted, error: createError } = await supabase
-        .rpc("upsert_lead_by_email", {
-          p_email: from,
-          p_full_name: displayName,
-          p_source: "email",
-          p_message: body || null,
-        });
-
-      if (createError) {
-        console.error("Failed to auto-create lead:", createError);
-        return NextResponse.json(
-          { error: createError.message },
-          { status: 500 }
-        );
-      }
-
-      leadId = upserted;
-      // Check if this was truly new (not an existing lead found by the rpc)
-      autoCreated = true;
-
-      // Notify team about new lead from email
-      sendPushToAll({
-        title: "Nuevo lead (email)",
-        body: `${displayName} <${from}>`,
-        url: `/dashboard/crm/${leadId}`,
-      }).catch(() => {});
+      // No auto-create leads from email — leads only enter via Webflow or manual creation.
+      // n8n does not send the "to" field so we can't distinguish info@ from manu@ or spam.
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "no_matching_lead",
+      });
     }
 
     // Resolve thread_id
@@ -227,7 +207,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       lead_id: leadId,
-      auto_created: autoCreated,
       thread_id: threadId,
     });
   } catch (err) {
