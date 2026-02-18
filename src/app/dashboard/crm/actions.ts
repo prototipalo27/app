@@ -186,7 +186,37 @@ export async function sendLeadEmail(
     created_by: profile.id,
   });
 
+  // Auto-mark as "contacted" and assign to sender if lead is still "new"
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("status, assigned_to")
+    .eq("id", id)
+    .single();
+
+  if (lead?.status === "new") {
+    await supabase
+      .from("leads")
+      .update({ status: "contacted", assigned_to: profile.id })
+      .eq("id", id);
+
+    // Log status change
+    await supabase.from("lead_activities").insert({
+      lead_id: id,
+      activity_type: "status_change",
+      content: "Estado cambiado de new a contacted",
+      metadata: { old_status: "new", new_status: "contacted", auto: true },
+      created_by: profile.id,
+    });
+  } else if (!lead?.assigned_to) {
+    // If not "new" but unassigned, still claim ownership
+    await supabase
+      .from("leads")
+      .update({ assigned_to: profile.id })
+      .eq("id", id);
+  }
+
   revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
 }
 
 // ── Link Lead to Project ─────────────────────────────────
