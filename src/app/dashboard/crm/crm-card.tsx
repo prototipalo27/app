@@ -12,6 +12,16 @@ interface CrmCardProps {
   lead: LeadWithAssignee;
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
 export function CrmCard({ lead }: CrmCardProps) {
   const router = useRouter();
   const { ref, isDragging } = useDraggable({
@@ -23,6 +33,7 @@ export function CrmCard({ lead }: CrmCardProps) {
     day: "numeric",
     month: "short",
   });
+  const age = timeAgo(lead.updated_at);
 
   return (
     <div
@@ -38,8 +49,8 @@ export function CrmCard({ lead }: CrmCardProps) {
         <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
           {lead.full_name}
         </h4>
-        <span className="shrink-0 text-[11px] text-zinc-400 dark:text-zinc-500">
-          {createdDate}
+        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+          {age}
         </span>
       </div>
 
