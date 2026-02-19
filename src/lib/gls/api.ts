@@ -141,13 +141,34 @@ export async function createShipment(
   const barcode = barcodeMatch?.[1] || "";
   const uidMatch = xml.match(/\buid="([^"]+)"/);
   const uidResult = uidMatch?.[1] || "";
-  const labelPdf = extractTag(xml, "base64Binary") || extractTag(xml, "Etiqueta");
+
+  // Label PDF base64: try multiple tag patterns
+  // GLS may return it as <base64Binary>...</base64Binary> or inside <Etiqueta>...<base64Binary>...</base64Binary></Etiqueta>
+  let labelPdf = extractTag(xml, "base64Binary");
+  if (!labelPdf) {
+    // Try extracting from Etiqueta content (might contain nested base64)
+    const etiquetaContent = extractTag(xml, "Etiqueta");
+    if (etiquetaContent && etiquetaContent.length > 100) {
+      // If long enough, it's probably the base64 itself
+      labelPdf = etiquetaContent;
+    }
+  }
+
+  // Log response structure for debugging (temporary)
+  console.log("[GLS] GrabaServicios response length:", xml.length, "| labelPdf length:", labelPdf?.length ?? 0);
+  if (!labelPdf) {
+    // Log a snippet around "Etiqueta" to understand the structure
+    const etqIdx = xml.indexOf("Etiqueta");
+    if (etqIdx >= 0) {
+      console.log("[GLS] Etiqueta context:", xml.slice(Math.max(0, etqIdx - 20), etqIdx + 200));
+    }
+  }
 
   if (!barcode) {
     throw new Error(`GLS: No barcode returned. Response: ${xml.slice(0, 500)}`);
   }
 
-  return { barcode, labelPdf, uid: uidResult };
+  return { barcode, labelPdf: labelPdf || "", uid: uidResult };
 }
 
 /**

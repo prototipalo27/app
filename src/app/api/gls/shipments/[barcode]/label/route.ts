@@ -29,12 +29,17 @@ export async function GET(
 
   if (fileData) {
     const buffer = Buffer.from(await fileData.arrayBuffer());
-    return new NextResponse(buffer, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="GLS-${barcode}.pdf"`,
-      },
-    });
+    // Validate it's actually a PDF (min size check)
+    if (buffer.length > 100) {
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="GLS-${barcode}.pdf"`,
+        },
+      });
+    }
+    // Invalid file in storage, delete it and fall through to GLS API
+    await supabase.storage.from("gls-labels").remove([`${barcode}.pdf`]);
   }
 
   // Fall back to GLS API
