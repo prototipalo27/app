@@ -127,18 +127,21 @@ export async function createShipment(
     body,
   );
 
-  // Check for errors
+  // Check for errors — extract content of <Errores> and see if there's an <Error> inside
   const errorResult = extractTag(xml, "Errores");
   if (errorResult) {
     const errorMsg = extractTag(errorResult, "Error") || errorResult;
-    if (errorMsg && !errorMsg.includes("<")) {
+    if (errorMsg && errorMsg.trim() && !errorMsg.includes("<")) {
       throw new Error(`GLS error: ${errorMsg}`);
     }
   }
 
-  const barcode = extractTag(xml, "codbarras");
+  // Barcode and uid come as attributes of <Envio codbarras="..." uid="...">
+  const barcodeMatch = xml.match(/codbarras="([^"]+)"/);
+  const barcode = barcodeMatch?.[1] || "";
+  const uidMatch = xml.match(/\buid="([^"]+)"/);
+  const uidResult = uidMatch?.[1] || "";
   const labelPdf = extractTag(xml, "base64Binary") || extractTag(xml, "Etiqueta");
-  const uidResult = extractTag(xml, "uid");
 
   if (!barcode) {
     throw new Error(`GLS: No barcode returned. Response: ${xml.slice(0, 500)}`);
