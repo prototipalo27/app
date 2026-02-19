@@ -154,16 +154,6 @@ export async function createShipment(
     }
   }
 
-  // Log response structure for debugging (temporary)
-  console.log("[GLS] GrabaServicios response length:", xml.length, "| labelPdf length:", labelPdf?.length ?? 0);
-  if (!labelPdf) {
-    // Log a snippet around "Etiqueta" to understand the structure
-    const etqIdx = xml.indexOf("Etiqueta");
-    if (etqIdx >= 0) {
-      console.log("[GLS] Etiqueta context:", xml.slice(Math.max(0, etqIdx - 20), etqIdx + 200));
-    }
-  }
-
   if (!barcode) {
     throw new Error(`GLS: No barcode returned. Response: ${xml.slice(0, 500)}`);
   }
