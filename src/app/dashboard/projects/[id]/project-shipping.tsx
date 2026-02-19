@@ -3,6 +3,15 @@
 import { useState, useEffect } from "react";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkService, PacklinkTrackingEvent } from "@/lib/packlink/types";
+
+interface GlsTrackingEvent {
+  date: string;
+  description: string;
+  city?: string;
+}
+
+type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
+type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null };
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
@@ -17,7 +26,7 @@ interface HoldedContactAddress {
 
 interface ProjectShippingProps {
   projectId: string;
-  shippingInfo: Tables<"shipping_info"> | null;
+  shippingInfo: ShipmentRow | null;
   holdedContact: {
     name?: string;
     email?: string;
@@ -30,17 +39,23 @@ interface ProjectShippingProps {
 export function ProjectShipping({ projectId, shippingInfo, holdedContact }: ProjectShippingProps) {
   // Determine initial step based on existing data
   const getInitialStep = () => {
-    if (shippingInfo?.packlink_shipment_ref) return "created" as const;
+    if (shippingInfo?.packlink_shipment_ref || shippingInfo?.gls_barcode) return "created" as const;
     return "idle" as const;
   };
 
   const [step, setStep] = useState<"idle" | "form" | "selecting" | "creating" | "created">(getInitialStep);
+  const [carrier, setCarrier] = useState<"packlink" | "gls">(
+    shippingInfo?.carrier === "GLS" ? "gls" : "packlink",
+  );
   const [services, setServices] = useState<PacklinkService[]>([]);
   const [selectedService, setSelectedService] = useState<PacklinkService | null>(null);
-  const [tracking, setTracking] = useState<PacklinkTrackingEvent[]>([]);
+  const [tracking, setTracking] = useState<TrackingEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentShipping, setCurrentShipping] = useState(shippingInfo);
+  const [currentShipping, setCurrentShipping] = useState<ShipmentRow | null>(shippingInfo);
+
+  const isGls = currentShipping?.carrier === "GLS";
+  const hasRef = isGls ? !!currentShipping?.gls_barcode : !!currentShipping?.packlink_shipment_ref;
 
   // Form state — pre-fill from Holded contact (split name into first + surname)
   const [recipientName, setRecipientName] = useState(() => {
@@ -73,12 +88,16 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
 
   // Fetch tracking when shipment exists
   useEffect(() => {
-    if (currentShipping?.packlink_shipment_ref && step === "created") {
-      fetchTracking(currentShipping.packlink_shipment_ref);
+    if (step === "created") {
+      if (currentShipping?.carrier === "GLS" && currentShipping?.gls_barcode) {
+        fetchGlsTracking(currentShipping.gls_barcode);
+      } else if (currentShipping?.packlink_shipment_ref) {
+        fetchPacklinkTracking(currentShipping.packlink_shipment_ref);
+      }
     }
-  }, [currentShipping?.packlink_shipment_ref, step]);
+  }, [currentShipping?.packlink_shipment_ref, currentShipping?.gls_barcode, currentShipping?.carrier, step]);
 
-  async function fetchTracking(ref: string) {
+  async function fetchPacklinkTracking(ref: string) {
     try {
       const res = await fetch(`/api/packlink/shipments/${ref}/tracking`);
       if (res.ok) {
@@ -87,6 +106,26 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
       }
     } catch {
       // Tracking may not be available yet
+    }
+  }
+
+  async function fetchGlsTracking(barcode: string) {
+    try {
+      const res = await fetch(`/api/gls/shipments/${barcode}/tracking`);
+      if (res.ok) {
+        const data = await res.json();
+        setTracking(data.events ?? []);
+      }
+    } catch {
+      // Tracking may not be available yet
+    }
+  }
+
+  function refreshTracking() {
+    if (currentShipping?.carrier === "GLS" && currentShipping?.gls_barcode) {
+      fetchGlsTracking(currentShipping.gls_barcode);
+    } else if (currentShipping?.packlink_shipment_ref) {
+      fetchPacklinkTracking(currentShipping.packlink_shipment_ref);
     }
   }
 
