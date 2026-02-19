@@ -68,42 +68,56 @@ export async function createShipment(
   const uid = getUidCliente();
   // Service 96 = BusinessParcel nacional (Spain), 74 = EuroBusinessParcel international
   const serviceCode = params.recipientCountry === "34" ? "96" : "74";
+  const today = new Date();
+  const fecha = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
 
   const body = `
     <GrabaServicios xmlns="http://www.asmred.com/">
       <docIn>
-        <Servicios>
-          <Servicio>
-            <uid_cliente>${escapeXml(uid)}</uid_cliente>
-            <codigo_servicio>${serviceCode}</codigo_servicio>
-            <codigo_horario>18</codigo_horario>
-            <bultos>${params.packages}</bultos>
-            <peso>${params.weight}</peso>
-            <referencia_c>${escapeXml((params.reference || "").slice(0, 15))}</referencia_c>
-            <observaciones>${escapeXml(params.observations || "")}</observaciones>
+        <Servicios uidcliente="${escapeXml(uid)}" xmlns="http://www.asmred.com/">
+          <Envio codbarras="">
+            <Fecha>${fecha}</Fecha>
+            <Portes>P</Portes>
+            <Servicio>${serviceCode}</Servicio>
+            <Horario>18</Horario>
+            <Bultos>${params.packages}</Bultos>
+            <Peso>${params.weight}</Peso>
+            <Retorno>0</Retorno>
+            <Pod>N</Pod>
             <Remite>
-              <nombre>${escapeXml(GLS_SENDER.name)}</nombre>
-              <direccion>${escapeXml(GLS_SENDER.address)}</direccion>
-              <poblacion>${escapeXml(GLS_SENDER.city)}</poblacion>
-              <provincia>${escapeXml(GLS_SENDER.province)}</provincia>
-              <pais>${escapeXml(GLS_SENDER.country)}</pais>
-              <codigo_postal>${escapeXml(GLS_SENDER.postalCode)}</codigo_postal>
-              <telefono>${escapeXml(GLS_SENDER.phone)}</telefono>
-              <email>${escapeXml(GLS_SENDER.email)}</email>
+              <Plaza></Plaza>
+              <Nombre><![CDATA[${GLS_SENDER.name}]]></Nombre>
+              <Direccion><![CDATA[${GLS_SENDER.address}]]></Direccion>
+              <Poblacion><![CDATA[${GLS_SENDER.city}]]></Poblacion>
+              <Provincia><![CDATA[${GLS_SENDER.province}]]></Provincia>
+              <Pais>${GLS_SENDER.country}</Pais>
+              <CP>${GLS_SENDER.postalCode}</CP>
+              <Telefono><![CDATA[${GLS_SENDER.phone}]]></Telefono>
+              <Movil><![CDATA[]]></Movil>
+              <Email><![CDATA[${GLS_SENDER.email}]]></Email>
+              <Observaciones><![CDATA[]]></Observaciones>
             </Remite>
             <Destinatario>
-              <nombre>${escapeXml(params.recipientName)}</nombre>
-              <direccion>${escapeXml(params.recipientAddress)}</direccion>
-              <poblacion>${escapeXml(params.recipientCity)}</poblacion>
-              <pais>${escapeXml(params.recipientCountry)}</pais>
-              <codigo_postal>${escapeXml(params.recipientPostalCode)}</codigo_postal>
-              <telefono>${escapeXml(params.recipientPhone || "")}</telefono>
-              <email>${escapeXml(params.recipientEmail || "")}</email>
+              <Codigo></Codigo>
+              <Plaza></Plaza>
+              <Nombre><![CDATA[${params.recipientName}]]></Nombre>
+              <Direccion><![CDATA[${params.recipientAddress}]]></Direccion>
+              <Poblacion><![CDATA[${params.recipientCity}]]></Poblacion>
+              <Provincia><![CDATA[]]></Provincia>
+              <Pais>${params.recipientCountry}</Pais>
+              <CP>${params.recipientPostalCode}</CP>
+              <Telefono><![CDATA[${params.recipientPhone || ""}]]></Telefono>
+              <Movil><![CDATA[]]></Movil>
+              <Email><![CDATA[${params.recipientEmail || ""}]]></Email>
+              <Observaciones><![CDATA[${params.observations || ""}]]></Observaciones>
             </Destinatario>
+            <Referencias>
+              <Referencia tipo="C"><![CDATA[${(params.reference || "").slice(0, 15)}]]></Referencia>
+            </Referencias>
             <DevuelveAdicionales>
-              <Etiqueta tipo="PDF" />
+              <Etiqueta tipo="PDF"></Etiqueta>
             </DevuelveAdicionales>
-          </Servicio>
+          </Envio>
         </Servicios>
       </docIn>
     </GrabaServicios>`;
