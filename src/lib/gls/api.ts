@@ -159,9 +159,9 @@ export async function getLabel(barcode: string): Promise<string> {
 
   const body = `
     <EtiquetaEnvio xmlns="http://www.asmred.com/">
+      <uidCliente>${escapeXml(uid)}</uidCliente>
       <codigo>${escapeXml(barcode)}</codigo>
-      <uid>${escapeXml(uid)}</uid>
-      <tipo>PDF</tipo>
+      <tipoEtiqueta>PDF</tipoEtiqueta>
     </EtiquetaEnvio>`;
 
   const xml = await soapRequest(
