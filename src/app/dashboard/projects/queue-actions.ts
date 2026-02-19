@@ -113,12 +113,12 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
   if (!item.print_time_minutes) return { success: false, error: "Tiempo de impresion no configurado" };
   if (!item.printer_type_id) return { success: false, error: "Tipo de impresora no seleccionado" };
 
-  // Delete existing queued jobs for this item
+  // Delete existing jobs for this item (except actively printing ones)
   await supabase
     .from("print_jobs")
     .delete()
     .eq("project_item_id", itemId)
-    .in("status", ["queued"]);
+    .neq("status", "printing");
 
   const batchSize = item.batch_size || 1;
   const totalBatches = Math.ceil(item.quantity / batchSize);
@@ -311,13 +311,13 @@ export async function generateProjectQueue(projectId: string): Promise<{
       return { success: false, generated: 0, skipped, error: "Ningun item tiene configuracion de impresion completa" };
     }
 
-    // Delete existing queued jobs for all configured items
+    // Delete existing jobs for all configured items (except actively printing ones)
     const configuredIds = configured.map((i) => i.id);
     await supabase
       .from("print_jobs")
       .delete()
       .in("project_item_id", configuredIds)
-      .in("status", ["queued"]);
+      .neq("status", "printing");
 
     // Fetch project priority
     const { data: project } = await supabase

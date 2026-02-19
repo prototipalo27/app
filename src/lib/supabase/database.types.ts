@@ -605,6 +605,7 @@ export type Database = {
           completed_at: string | null
           created_at: string | null
           estimated_minutes: number
+          gcode_filename: string | null
           id: string
           pieces_in_batch: number
           position: number
@@ -620,6 +621,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string | null
           estimated_minutes: number
+          gcode_filename?: string | null
           id?: string
           pieces_in_batch: number
           position?: number
@@ -635,6 +637,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string | null
           estimated_minutes?: number
+          gcode_filename?: string | null
           id?: string
           pieces_in_batch?: number
           position?: number

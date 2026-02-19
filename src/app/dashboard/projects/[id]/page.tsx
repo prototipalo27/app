@@ -154,6 +154,7 @@ export default async function ProjectDetailPage({
     started_at: string | null;
     completed_at: string | null;
     created_at: string | null;
+    gcode_filename: string | null;
     printer_name?: string;
   }> = [];
 
@@ -172,6 +173,7 @@ export default async function ProjectDetailPage({
       started_at: j.started_at as string | null,
       completed_at: j.completed_at as string | null,
       created_at: j.created_at as string | null,
+      gcode_filename: j.gcode_filename as string | null,
       printer_name: (j.printers as { name: string } | null)?.name,
     }));
   }
