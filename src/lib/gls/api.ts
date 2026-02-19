@@ -5,7 +5,7 @@ const GLS_API_URL =
   process.env.GLS_API_URL || "https://ws-customer.gls-spain.es/b2b.asmx";
 
 function getUidCliente(): string {
-  const uid = process.env.GLS_UID_CLIENTE;
+  const uid = process.env.GLS_UID_CLIENTE?.trim();
   if (!uid) throw new Error("GLS_UID_CLIENTE is not set");
   return uid;
 }
