@@ -4,6 +4,7 @@ import PrinterGrid from "./printer-grid";
 import { QueueTimeline } from "../queue/queue-timeline";
 import { PrinterStats } from "./printer-stats";
 import { WORK_DAY_MINUTES } from "@/lib/schedule";
+import { getLaunchSettings } from "@/lib/launch-settings";
 
 export const metadata = {
   title: "Printers - Prototipalo",
@@ -11,6 +12,7 @@ export const metadata = {
 
 export default async function PrintersPage() {
   const supabase = await createClient();
+  const launchSettings = await getLaunchSettings(supabase);
 
   // Date 30 days ago for stats query
   const thirtyDaysAgo = new Date();
@@ -145,6 +147,7 @@ export default async function PrintersPage() {
           printers={printerInfos}
           jobs={enrichedJobs}
           startTime={new Date().toISOString()}
+          launchSettings={launchSettings}
         />
       </div>
 

@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { QueueTimeline } from "./queue-timeline";
+import { QueueSettings } from "./queue-settings";
+import { getLaunchSettings } from "@/lib/launch-settings";
 
 export const metadata = {
   title: "Cola de impresion - Prototipalo",
@@ -68,6 +70,8 @@ export default async function QueuePage() {
     }
   }
 
+  const launchSettings = await getLaunchSettings(supabase);
+
   const printerTypeMap = Object.fromEntries(
     (printerTypes ?? []).map((pt) => [pt.id, pt.name])
   );
@@ -86,9 +90,15 @@ export default async function QueuePage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
-        Cola de impresion
-      </h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+          Cola de impresion
+        </h1>
+        <QueueSettings
+          launchStartTime={launchSettings.launchStartTime}
+          launchEndTime={launchSettings.launchEndTime}
+        />
+      </div>
       <QueueTimeline
         printers={(printers ?? []).map((p) => ({
           ...p,
@@ -96,6 +106,7 @@ export default async function QueuePage() {
         }))}
         jobs={enrichedJobs}
         startTime={new Date().toISOString()}
+        launchSettings={launchSettings}
       />
     </div>
   );

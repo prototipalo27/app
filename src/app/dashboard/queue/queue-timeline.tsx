@@ -3,15 +3,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import {
-  isLaunchWindow,
-  nextLaunchStart,
-  addRealMinutes,
-  LAUNCH_START_H,
-  LAUNCH_START_M,
-  LAUNCH_END_H,
-  LAUNCH_END_M,
-} from "@/lib/schedule";
+import { addRealMinutes } from "@/lib/schedule";
+import { isInLaunchWindow, nextLaunchStartFromSettings, parseTime, type LaunchSettings } from "@/lib/launch-settings";
 
 interface PrinterInfo {
   id: string;
@@ -53,6 +46,7 @@ interface QueueTimelineProps {
   printers: PrinterInfo[];
   jobs: JobInfo[];
   startTime: string;
+  launchSettings: LaunchSettings;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -179,7 +173,7 @@ function JobTooltip({
   );
 }
 
-export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps) {
+export function QueueTimeline({ printers, jobs, startTime, launchSettings }: QueueTimelineProps) {
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -258,16 +252,17 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
     return markers;
   }, [origin, totalWallMinutes, pxPerMin]);
 
-  // Generate dead-zone bands (no-launch windows: 19:30 – 09:30)
+  // Generate dead-zone bands (no-launch windows)
   const deadZones = useMemo(() => {
     const zones: { leftPx: number; widthPx: number }[] = [];
     const endMs = origin.getTime() + totalWallMinutes * 60000;
     let cursor = new Date(origin);
+    const launchEnd = parseTime(launchSettings.launchEndTime);
 
     while (cursor.getTime() < endMs) {
-      if (!isLaunchWindow(cursor)) {
+      if (!isInLaunchWindow(cursor, launchSettings)) {
         const deadStart = cursor.getTime();
-        const resumeAt = nextLaunchStart(new Date(cursor));
+        const resumeAt = nextLaunchStartFromSettings(new Date(cursor), launchSettings);
         const deadEnd = Math.min(resumeAt.getTime(), endMs);
         const leftMin = (deadStart - origin.getTime()) / 60000;
         const widthMin = (deadEnd - deadStart) / 60000;
@@ -280,12 +275,12 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         cursor = new Date(deadEnd);
       } else {
         const eod = new Date(cursor);
-        eod.setHours(LAUNCH_END_H, LAUNCH_END_M, 0, 0);
+        eod.setHours(launchEnd.h, launchEnd.m, 0, 0);
         cursor = eod;
       }
     }
     return zones;
-  }, [origin, totalWallMinutes, pxPerMin]);
+  }, [origin, totalWallMinutes, pxPerMin, launchSettings]);
 
   // Day labels for the header
   const dayLabels = useMemo(() => {
