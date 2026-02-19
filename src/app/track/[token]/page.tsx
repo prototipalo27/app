@@ -3,13 +3,15 @@ import { notFound } from "next/navigation";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { Metadata } from "next";
 import { getTracking } from "@/lib/packlink/api";
+import { getTracking as getGlsTracking } from "@/lib/gls/api";
 import { getVerifiedClient } from "@/lib/client-auth";
 import ClientPortal from "./client-portal";
 
 interface TrackingEvent {
-  city: string;
+  city?: string;
   description: string;
-  timestamp: string;
+  timestamp?: string;
+  date?: string;
 }
 
 const STATUSES = [
@@ -134,7 +136,7 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
   );
 }
 
-function ShippingCard({ shipping, trackingEvents }: { shipping: Tables<"shipping_info">; trackingEvents: TrackingEvent[] }) {
+function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Tables<"shipping_info">; trackingEvents: TrackingEvent[]; glsBarcode?: string | null }) {
   const addressParts = [
     shipping.address_line,
     shipping.postal_code,
@@ -157,10 +159,10 @@ function ShippingCard({ shipping, trackingEvents }: { shipping: Tables<"shipping
             <span className="font-medium text-zinc-900 dark:text-white">{shipping.carrier}</span>
           </div>
         )}
-        {shipping.tracking_number && (
+        {(shipping.tracking_number || glsBarcode) && (
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">N.º seguimiento</span>
-            <span className="font-mono font-medium text-zinc-900 dark:text-white">{shipping.tracking_number}</span>
+            <span className="font-mono font-medium text-zinc-900 dark:text-white">{glsBarcode || shipping.tracking_number}</span>
           </div>
         )}
         {shipping.shipment_status && (
@@ -209,7 +211,7 @@ function ShippingCard({ shipping, trackingEvents }: { shipping: Tables<"shipping
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">{event.description}</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     {event.city && `${event.city} · `}
-                    {new Date(event.timestamp).toLocaleString("es-ES")}
+                    {(event.timestamp || event.date) && new Date(event.timestamp || event.date!).toLocaleString("es-ES")}
                   </p>
                 </div>
               </div>
@@ -252,9 +254,23 @@ export default async function TrackingPage({
       .single(),
   ]);
 
-  // Fetch Packlink tracking events if a shipment exists
+  // Fetch tracking events if a shipment exists
   let trackingEvents: TrackingEvent[] = [];
-  if (shipping?.packlink_shipment_ref) {
+  const shippingRow = shipping as Record<string, unknown> | null;
+  const glsBarcode = shippingRow?.gls_barcode as string | null;
+
+  if (shipping?.carrier === "GLS" && glsBarcode) {
+    try {
+      const events = await getGlsTracking(glsBarcode);
+      trackingEvents = events.map((e) => ({
+        description: e.description,
+        date: e.date,
+        city: e.city,
+      }));
+    } catch {
+      // Tracking may not be available
+    }
+  } else if (shipping?.packlink_shipment_ref) {
     try {
       const trackingData = await getTracking(shipping.packlink_shipment_ref);
       trackingEvents = trackingData.history ?? [];
@@ -373,7 +389,7 @@ export default async function TrackingPage({
         )}
 
         {/* Shipping */}
-        {shipping && <div className="mb-6"><ShippingCard shipping={shipping} trackingEvents={trackingEvents} /></div>}
+        {shipping && <div className="mb-6"><ShippingCard shipping={shipping} trackingEvents={trackingEvents} glsBarcode={glsBarcode} /></div>}
       </main>
 
       <footer className="border-t border-zinc-200 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">

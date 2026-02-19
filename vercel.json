@@ -4,6 +4,10 @@
     {
       "path": "/api/printers/sync",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/gls/sync",
+      "schedule": "0 */1 * * *"
     }
   ]
 }

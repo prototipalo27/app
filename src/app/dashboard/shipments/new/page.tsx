@@ -49,7 +49,7 @@ export default function NewShipmentPage() {
   const [glsBarcode, setGlsBarcode] = useState<string | null>(null);
   const [glsLabelUrl, setGlsLabelUrl] = useState<string | null>(null);
   const [glsServiceId, setGlsServiceId] = useState("business24");
-  const [glsPrice, setGlsPrice] = useState<{ price: number; zone: string; service: string; horario: string } | null>(null);
+  const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Projects for optional linking
@@ -85,14 +85,14 @@ export default function NewShipmentPage() {
   // Packages
   const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
 
-  // Estimate GLS price when relevant fields change
+  // Estimate GLS prices for all services when relevant fields change
   useEffect(() => {
     if (carrier !== "gls" || !postalCode || !country) {
-      setGlsPrice(null);
+      setGlsPrices({});
       return;
     }
     const totalWeight = packages.reduce((sum, p) => sum + (Number(p.weight) || 0), 0);
-    if (!totalWeight) { setGlsPrice(null); return; }
+    if (!totalWeight) { setGlsPrices({}); return; }
 
     if (glsPriceRef.current) clearTimeout(glsPriceRef.current);
     glsPriceRef.current = setTimeout(async () => {
@@ -102,22 +102,22 @@ export default function NewShipmentPage() {
           weight: String(totalWeight),
           postalCode,
           country,
-          serviceId: glsServiceId,
+          all: "true",
           ...(firstPkg.width ? { width: firstPkg.width } : {}),
           ...(firstPkg.height ? { height: firstPkg.height } : {}),
           ...(firstPkg.length ? { length: firstPkg.length } : {}),
         });
         const res = await fetch(`/api/gls/price?${params}`);
         if (res.ok) {
-          setGlsPrice(await res.json());
+          setGlsPrices(await res.json());
         } else {
-          setGlsPrice(null);
+          setGlsPrices({});
         }
       } catch {
-        setGlsPrice(null);
+        setGlsPrices({});
       }
     }, 300);
-  }, [carrier, postalCode, country, packages, glsServiceId]);
+  }, [carrier, postalCode, country, packages]);
 
   // Fetch projects for optional linking
   useEffect(() => {
@@ -262,7 +262,7 @@ export default function NewShipmentPage() {
           title: title || undefined,
           contentDescription: contentDescription || undefined,
           declaredValue: declaredValue ? Number(declaredValue) : undefined,
-          horario: glsPrice?.horario || undefined,
+          horario: glsPrices[glsServiceId]?.horario || undefined,
         }),
       });
 
@@ -387,23 +387,35 @@ export default function NewShipmentPage() {
           {carrier === "gls" && (
             <div>
               <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">GLS Service</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {GLS_SERVICES.map((svc) => (
-                  <button
-                    key={svc.id}
-                    type="button"
-                    onClick={() => setGlsServiceId(svc.id)}
-                    className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                      glsServiceId === svc.id
-                        ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
-                        : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
-                    }`}
-                  >
-                    <span className="font-medium">{svc.name}</span>
-                    <br />
-                    <span className="text-xs opacity-70">{svc.delivery}</span>
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {GLS_SERVICES.map((svc) => {
+                  const price = glsPrices[svc.id];
+                  return (
+                    <button
+                      key={svc.id}
+                      type="button"
+                      onClick={() => setGlsServiceId(svc.id)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                        glsServiceId === svc.id
+                          ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                          : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium">{svc.name}</span>
+                        <br />
+                        <span className="text-xs opacity-70">{svc.delivery}</span>
+                      </div>
+                      {price && (
+                        <span className={`text-sm font-semibold tabular-nums ${
+                          glsServiceId === svc.id ? "text-cyan-700 dark:text-cyan-300" : "text-zinc-900 dark:text-white"
+                        }`}>
+                          {price.price.toFixed(2)} €
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -532,23 +544,6 @@ export default function NewShipmentPage() {
             inputClass={inputClass}
           />
 
-          {/* GLS price estimate */}
-          {carrier === "gls" && glsPrice && (
-            <div className="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 dark:border-cyan-800 dark:bg-cyan-900/20">
-              <div>
-                <p className="text-sm font-medium text-cyan-700 dark:text-cyan-300">
-                  {glsPrice.service}
-                </p>
-                <p className="text-xs text-cyan-600 dark:text-cyan-400">
-                  {glsPrice.zone} · {GLS_SERVICES.find(s => s.id === glsServiceId)?.delivery || "24h"}
-                </p>
-              </div>
-              <span className="text-lg font-bold text-cyan-700 dark:text-cyan-300">
-                {glsPrice.price.toFixed(2)} €
-              </span>
-            </div>
-          )}
-
           <div className="flex gap-2">
             <button
               onClick={() => router.push("/dashboard/shipments")}
@@ -672,12 +667,12 @@ export default function NewShipmentPage() {
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
-                <span className="font-medium text-zinc-900 dark:text-white">GLS — {glsPrice?.service || GLS_SERVICES.find(s => s.id === glsServiceId)?.name || "BusinessParcel 24H"}</span>
+                <span className="font-medium text-zinc-900 dark:text-white">GLS — {glsPrices[glsServiceId]?.service || GLS_SERVICES.find(s => s.id === glsServiceId)?.name || "BusinessParcel 24H"}</span>
               </div>
-              {glsPrice && (
+              {glsPrices[glsServiceId] && (
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500 dark:text-zinc-400">Precio estimado</span>
-                  <span className="font-medium text-zinc-900 dark:text-white">{glsPrice.price.toFixed(2)} € <span className="text-xs text-zinc-400">(sin IVA)</span></span>
+                  <span className="font-medium text-zinc-900 dark:text-white">{glsPrices[glsServiceId].price.toFixed(2)} € <span className="text-xs text-zinc-400">(sin IVA)</span></span>
                 </div>
               )}
             </>
