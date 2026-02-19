@@ -4,13 +4,13 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
-  isOfficeHour,
-  nextOfficeStart,
+  isLaunchWindow,
+  nextLaunchStart,
   addRealMinutes,
-  OFFICE_START_H,
-  OFFICE_START_M,
-  OFFICE_END_H,
-  OFFICE_END_M,
+  LAUNCH_START_H,
+  LAUNCH_START_M,
+  LAUNCH_END_H,
+  LAUNCH_END_M,
 } from "@/lib/schedule";
 
 interface PrinterInfo {
@@ -258,16 +258,16 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
     return markers;
   }, [origin, totalWallMinutes, pxPerMin]);
 
-  // Generate dead-zone bands (nights & weekends)
+  // Generate dead-zone bands (no-launch windows: 19:30 – 09:30)
   const deadZones = useMemo(() => {
     const zones: { leftPx: number; widthPx: number }[] = [];
     const endMs = origin.getTime() + totalWallMinutes * 60000;
     let cursor = new Date(origin);
 
     while (cursor.getTime() < endMs) {
-      if (!isOfficeHour(cursor)) {
+      if (!isLaunchWindow(cursor)) {
         const deadStart = cursor.getTime();
-        const resumeAt = nextOfficeStart(new Date(cursor));
+        const resumeAt = nextLaunchStart(new Date(cursor));
         const deadEnd = Math.min(resumeAt.getTime(), endMs);
         const leftMin = (deadStart - origin.getTime()) / 60000;
         const widthMin = (deadEnd - deadStart) / 60000;
@@ -280,7 +280,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         cursor = new Date(deadEnd);
       } else {
         const eod = new Date(cursor);
-        eod.setHours(OFFICE_END_H, OFFICE_END_M, 0, 0);
+        eod.setHours(LAUNCH_END_H, LAUNCH_END_M, 0, 0);
         cursor = eod;
       }
     }

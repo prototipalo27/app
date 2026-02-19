@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { addRealMinutes } from "@/lib/schedule";
+import { addRealMinutes, nextLaunchStart } from "@/lib/schedule";
 import { generateJobFilename } from "@/lib/print-job-naming";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -250,7 +250,8 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       }
     }
 
-    const scheduledStart = new Date(printerEndTimes[minPrinterId]);
+    // Next job can only START inside the launch window (09:30–19:30)
+    const scheduledStart = nextLaunchStart(printerEndTimes[minPrinterId]);
 
     jobs.push({
       project_item_id: itemId,
@@ -264,6 +265,7 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       gcode_filename: generateJobFilename(item.project_id, item.name ?? "Item", b + 1),
     });
 
+    // Job runs in real time (may finish overnight), but next job waits for launch window
     printerEndTimes[minPrinterId] = addRealMinutes(scheduledStart, item.print_time_minutes);
     printerPositions[minPrinterId] += 1;
   }
@@ -458,7 +460,8 @@ export async function generateProjectQueue(projectId: string): Promise<{
             }
           }
 
-          const scheduledStart = new Date(printerEndTimes[minPrinterId]);
+          // Next job can only START inside the launch window (09:30–19:30)
+          const scheduledStart = nextLaunchStart(printerEndTimes[minPrinterId]);
 
           allJobs.push({
             project_item_id: item.id,
@@ -472,6 +475,7 @@ export async function generateProjectQueue(projectId: string): Promise<{
             gcode_filename: generateJobFilename(projectId, item.name ?? "Item", b + 1),
           });
 
+          // Job runs in real time (may finish overnight), but next job waits for launch window
           printerEndTimes[minPrinterId] = addRealMinutes(scheduledStart, item.print_time_minutes!);
           printerPositions[minPrinterId] += 1;
         }
@@ -639,12 +643,13 @@ export async function reorderPrintJobs(
     const updates: Array<{ id: string; position: number; scheduled_start: string }> = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const job = jobMap.get(finalOrder[i])!;
+      const start = nextLaunchStart(cursor);
       updates.push({
         id: job.id,
         position: i,
-        scheduled_start: cursor.toISOString(),
+        scheduled_start: start.toISOString(),
       });
-      cursor = addRealMinutes(cursor, job.estimated_minutes);
+      cursor = addRealMinutes(start, job.estimated_minutes);
     }
 
     // Apply updates

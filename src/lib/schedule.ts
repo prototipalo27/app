@@ -97,4 +97,45 @@ export function addRealMinutes(start: Date, minutes: number): Date {
   return new Date(start.getTime() + minutes * 60000);
 }
 
-export { OFFICE_START_H, OFFICE_START_M, OFFICE_END_H, OFFICE_END_M, WORK_DAY_MINUTES };
+/* ── Launch-window constraints ────────────────────────────────────── */
+
+/** Launch window: 09:30 – 19:30 every day (including weekends).
+ *  No new print jobs can START outside this window.
+ *  Jobs already running are allowed to finish overnight. */
+const LAUNCH_START_H = 9;
+const LAUNCH_START_M = 30;
+const LAUNCH_END_H = 19;
+const LAUNCH_END_M = 30;
+
+/** Is `date` within the launch window? (09:30 – 19:30, every day) */
+export function isLaunchWindow(date: Date): boolean {
+  const mins = date.getHours() * 60 + date.getMinutes();
+  const start = LAUNCH_START_H * 60 + LAUNCH_START_M;
+  const end = LAUNCH_END_H * 60 + LAUNCH_END_M;
+  return mins >= start && mins < end;
+}
+
+/**
+ * If `date` is inside the launch window, return it unchanged.
+ * Otherwise return the next 09:30 (today if before 09:30, tomorrow if after 19:30).
+ */
+export function nextLaunchStart(date: Date): Date {
+  if (isLaunchWindow(date)) return new Date(date);
+
+  const d = new Date(date);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const start = LAUNCH_START_H * 60 + LAUNCH_START_M;
+
+  if (mins < start) {
+    // Before 09:30 today → same day 09:30
+    d.setHours(LAUNCH_START_H, LAUNCH_START_M, 0, 0);
+  } else {
+    // After 19:30 → next day 09:30
+    d.setDate(d.getDate() + 1);
+    d.setHours(LAUNCH_START_H, LAUNCH_START_M, 0, 0);
+  }
+  return d;
+}
+
+export { OFFICE_START_H, OFFICE_START_M, OFFICE_END_H, OFFICE_END_M, WORK_DAY_MINUTES,
+  LAUNCH_START_H, LAUNCH_START_M, LAUNCH_END_H, LAUNCH_END_M };
