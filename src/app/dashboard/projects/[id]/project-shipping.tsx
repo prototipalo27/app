@@ -45,7 +45,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
 
   const [step, setStep] = useState<"idle" | "form" | "selecting" | "creating" | "created">(getInitialStep);
   const [carrier, setCarrier] = useState<"packlink" | "gls">(
-    shippingInfo?.carrier === "GLS" ? "gls" : "packlink",
+    shippingInfo?.carrier === "GLS" ? "gls" : shippingInfo?.packlink_shipment_ref ? "packlink" : "gls",
   );
   const [services, setServices] = useState<PacklinkService[]>([]);
   const [selectedService, setSelectedService] = useState<PacklinkService | null>(null);
@@ -162,6 +162,82 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
     }
   }
 
+  async function createGlsShipment() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const totalWeight = packages.reduce((sum, p) => sum + Number(p.weight), 0);
+      const firstPkg = packages[0];
+
+      const res = await fetch("/api/gls/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          recipientName: `${recipientName} ${recipientSurname}`.trim(),
+          recipientAddress: street,
+          recipientCity: city,
+          recipientPostalCode: postalCode,
+          recipientCountry: country,
+          recipientPhone: recipientPhone || undefined,
+          recipientEmail: recipientEmail || undefined,
+          packages: packages.length,
+          weight: totalWeight,
+          packageWidth: Number(firstPkg.width),
+          packageHeight: Number(firstPkg.height),
+          packageLength: Number(firstPkg.length),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create GLS shipment");
+      }
+
+      const data = await res.json();
+      setCurrentShipping({
+        ...currentShipping,
+        id: currentShipping?.id ?? "",
+        project_id: projectId,
+        gls_barcode: data.barcode,
+        carrier: "GLS",
+        label_url: data.labelUrl,
+        address_line: street,
+        city,
+        postal_code: postalCode,
+        country,
+        recipient_name: `${recipientName} ${recipientSurname}`.trim(),
+        recipient_phone: recipientPhone,
+        recipient_email: recipientEmail,
+        package_width: Number(firstPkg.width),
+        package_height: Number(firstPkg.height),
+        package_length: Number(firstPkg.length),
+        package_weight: totalWeight,
+        shipment_status: "pending",
+        shipped_at: new Date().toISOString(),
+        packlink_shipment_ref: null,
+        packlink_order_ref: null,
+        service_id: null,
+        service_name: null,
+        price: null,
+        notes: null,
+        delivered_at: null,
+        tracking_number: null,
+        title: null,
+        content_description: null,
+        declared_value: null,
+        created_at: null,
+        created_by: null,
+      });
+      setStep("created");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating GLS shipment");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function createShipment() {
     if (!selectedService) return;
     setLoading(true);
@@ -245,6 +321,13 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
   }
 
   async function downloadLabel() {
+    if (isGls) {
+      const barcode = currentShipping?.gls_barcode;
+      if (!barcode) return;
+      window.open(`/api/gls/shipments/${barcode}/label`, "_blank");
+      return;
+    }
+
     if (!currentShipping?.packlink_shipment_ref) return;
     setLoading(true);
     try {
@@ -305,6 +388,35 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
         )}
 
         <div className="space-y-4">
+          {/* Carrier selector */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Carrier</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCarrier("gls")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "gls"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                GLS
+              </button>
+              <button
+                type="button"
+                onClick={() => setCarrier("packlink")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "packlink"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                Packlink
+              </button>
+            </div>
+          </div>
+
           {/* Recipient */}
           <div>
             <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Recipient</p>
@@ -392,11 +504,13 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             Cancel
           </button>
           <button
-            onClick={searchServices}
+            onClick={carrier === "gls" ? createGlsShipment : searchServices}
             disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
             className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
           >
-            {loading ? "Searching…" : "Search carriers"}
+            {loading
+              ? carrier === "gls" ? "Creating…" : "Searching…"
+              : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
           </button>
         </div>
       </div>
@@ -492,11 +606,11 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
       )}
 
       <div className="space-y-2">
-        {currentShipping?.packlink_shipment_ref && (
+        {(currentShipping?.packlink_shipment_ref || currentShipping?.gls_barcode) && (
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-500 dark:text-zinc-400">Reference</span>
+            <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : "Reference"}</span>
             <span className="font-mono font-medium text-zinc-900 dark:text-white">
-              {currentShipping.packlink_shipment_ref}
+              {isGls ? currentShipping?.gls_barcode : currentShipping?.packlink_shipment_ref}
             </span>
           </div>
         )}
