@@ -40,6 +40,8 @@ export default function NewShipmentPage() {
   const [carrier, setCarrier] = useState<"packlink" | "gls">("packlink");
   const [glsBarcode, setGlsBarcode] = useState<string | null>(null);
   const [glsLabelUrl, setGlsLabelUrl] = useState<string | null>(null);
+  const [glsPrice, setGlsPrice] = useState<{ price: number; zone: string; service: string } | null>(null);
+  const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Projects for optional linking
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -73,6 +75,39 @@ export default function NewShipmentPage() {
 
   // Packages
   const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
+
+  // Estimate GLS price when relevant fields change
+  useEffect(() => {
+    if (carrier !== "gls" || !postalCode || !country) {
+      setGlsPrice(null);
+      return;
+    }
+    const totalWeight = packages.reduce((sum, p) => sum + (Number(p.weight) || 0), 0);
+    if (!totalWeight) { setGlsPrice(null); return; }
+
+    if (glsPriceRef.current) clearTimeout(glsPriceRef.current);
+    glsPriceRef.current = setTimeout(async () => {
+      try {
+        const firstPkg = packages[0];
+        const params = new URLSearchParams({
+          weight: String(totalWeight),
+          postalCode,
+          country,
+          ...(firstPkg.width ? { width: firstPkg.width } : {}),
+          ...(firstPkg.height ? { height: firstPkg.height } : {}),
+          ...(firstPkg.length ? { length: firstPkg.length } : {}),
+        });
+        const res = await fetch(`/api/gls/price?${params}`);
+        if (res.ok) {
+          setGlsPrice(await res.json());
+        } else {
+          setGlsPrice(null);
+        }
+      } catch {
+        setGlsPrice(null);
+      }
+    }, 300);
+  }, [carrier, postalCode, country, packages]);
 
   // Fetch projects for optional linking
   useEffect(() => {
@@ -461,6 +496,23 @@ export default function NewShipmentPage() {
             inputClass={inputClass}
           />
 
+          {/* GLS price estimate */}
+          {carrier === "gls" && glsPrice && (
+            <div className="flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 dark:border-cyan-800 dark:bg-cyan-900/20">
+              <div>
+                <p className="text-sm font-medium text-cyan-700 dark:text-cyan-300">
+                  {glsPrice.service}
+                </p>
+                <p className="text-xs text-cyan-600 dark:text-cyan-400">
+                  {glsPrice.zone} · Entrega 24h
+                </p>
+              </div>
+              <span className="text-lg font-bold text-cyan-700 dark:text-cyan-300">
+                {glsPrice.price.toFixed(2)} €
+              </span>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={() => router.push("/dashboard/shipments")}
@@ -581,10 +633,18 @@ export default function NewShipmentPage() {
             </div>
           )}
           {carrier === "gls" ? (
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
-              <span className="font-medium text-zinc-900 dark:text-white">GLS</span>
-            </div>
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
+                <span className="font-medium text-zinc-900 dark:text-white">GLS — BusinessParcel 24H</span>
+              </div>
+              {glsPrice && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500 dark:text-zinc-400">Precio estimado</span>
+                  <span className="font-medium text-zinc-900 dark:text-white">{glsPrice.price.toFixed(2)} € <span className="text-xs text-zinc-400">(sin IVA)</span></span>
+                </div>
+              )}
+            </>
           ) : selectedService ? (
             <>
               <div className="flex justify-between text-sm">

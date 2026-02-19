@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkService, PacklinkTrackingEvent } from "@/lib/packlink/types";
 
@@ -56,6 +56,8 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
 
   const isGls = currentShipping?.carrier === "GLS";
   const hasRef = isGls ? !!currentShipping?.gls_barcode : !!currentShipping?.packlink_shipment_ref;
+  const [glsPrice, setGlsPrice] = useState<{ price: number; zone: string; service: string } | null>(null);
+  const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Form state — pre-fill from Holded contact (split name into first + surname)
   const [recipientName, setRecipientName] = useState(() => {
@@ -96,6 +98,36 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
       }
     }
   }, [currentShipping?.packlink_shipment_ref, currentShipping?.gls_barcode, currentShipping?.carrier, step]);
+
+  // Estimate GLS price
+  useEffect(() => {
+    if (carrier !== "gls" || !postalCode || !country) {
+      setGlsPrice(null);
+      return;
+    }
+    const totalWeight = packages.reduce((sum, p) => sum + (Number(p.weight) || 0), 0);
+    if (!totalWeight) { setGlsPrice(null); return; }
+
+    if (glsPriceRef.current) clearTimeout(glsPriceRef.current);
+    glsPriceRef.current = setTimeout(async () => {
+      try {
+        const firstPkg = packages[0];
+        const params = new URLSearchParams({
+          weight: String(totalWeight),
+          postalCode,
+          country,
+          ...(firstPkg.width ? { width: firstPkg.width } : {}),
+          ...(firstPkg.height ? { height: firstPkg.height } : {}),
+          ...(firstPkg.length ? { length: firstPkg.length } : {}),
+        });
+        const res = await fetch(`/api/gls/price?${params}`);
+        if (res.ok) setGlsPrice(await res.json());
+        else setGlsPrice(null);
+      } catch {
+        setGlsPrice(null);
+      }
+    }, 300);
+  }, [carrier, postalCode, country, packages]);
 
   async function fetchPacklinkTracking(ref: string) {
     try {
@@ -495,6 +527,23 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             inputClass="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           />
         </div>
+
+        {/* GLS price estimate */}
+        {carrier === "gls" && glsPrice && (
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 dark:border-cyan-800 dark:bg-cyan-900/20">
+            <div>
+              <p className="text-sm font-medium text-cyan-700 dark:text-cyan-300">
+                {glsPrice.service}
+              </p>
+              <p className="text-xs text-cyan-600 dark:text-cyan-400">
+                {glsPrice.zone} · Entrega 24h
+              </p>
+            </div>
+            <span className="text-lg font-bold text-cyan-700 dark:text-cyan-300">
+              {glsPrice.price.toFixed(2)} €
+            </span>
+          </div>
+        )}
 
         <div className="mt-5 flex gap-2">
           <button
