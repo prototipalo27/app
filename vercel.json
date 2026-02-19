@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/gls/sync",
-      "schedule": "0 */1 * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
