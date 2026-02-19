@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { addRealMinutes, nextLaunchStart } from "@/lib/schedule";
+import { addRealMinutes } from "@/lib/schedule";
 import { generateJobFilename } from "@/lib/print-job-naming";
+import { getLaunchSettings, nextLaunchStartFromSettings } from "@/lib/launch-settings";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -102,6 +103,8 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) redirect("/login");
+
+  const launchSettings = await getLaunchSettings(supabase);
 
   // Fetch item
   const { data: item } = await supabase
@@ -250,8 +253,8 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       }
     }
 
-    // Next job can only START inside the launch window (09:30–19:30)
-    const scheduledStart = nextLaunchStart(printerEndTimes[minPrinterId]);
+    // Next job can only START inside the launch window
+    const scheduledStart = nextLaunchStartFromSettings(printerEndTimes[minPrinterId], launchSettings);
 
     jobs.push({
       project_item_id: itemId,
@@ -294,6 +297,8 @@ export async function generateProjectQueue(projectId: string): Promise<{
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) redirect("/login");
+
+    const launchSettings = await getLaunchSettings(supabase);
 
     // Fetch all items for the project
     const { data: allItems } = await supabase
@@ -460,8 +465,8 @@ export async function generateProjectQueue(projectId: string): Promise<{
             }
           }
 
-          // Next job can only START inside the launch window (09:30–19:30)
-          const scheduledStart = nextLaunchStart(printerEndTimes[minPrinterId]);
+          // Next job can only START inside the launch window
+          const scheduledStart = nextLaunchStartFromSettings(printerEndTimes[minPrinterId], launchSettings);
 
           allJobs.push({
             project_item_id: item.id,
@@ -611,6 +616,8 @@ export async function reorderPrintJobs(
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) redirect("/login");
 
+    const launchSettings = await getLaunchSettings(supabase);
+
     // Fetch current queued/printing jobs for this printer
     const { data: currentJobs } = await supabase
       .from("print_jobs")
@@ -643,7 +650,7 @@ export async function reorderPrintJobs(
     const updates: Array<{ id: string; position: number; scheduled_start: string }> = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const job = jobMap.get(finalOrder[i])!;
-      const start = nextLaunchStart(cursor);
+      const start = nextLaunchStartFromSettings(cursor, launchSettings);
       updates.push({
         id: job.id,
         position: i,
