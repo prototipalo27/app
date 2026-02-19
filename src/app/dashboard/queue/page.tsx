@@ -29,7 +29,8 @@ export default async function QueuePage() {
         scheduled_start,
         started_at,
         completed_at,
-        created_at
+        created_at,
+        gcode_filename
       `)
       .in("status", ["queued", "printing", "done"])
       .order("position", { ascending: true }),

@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   isOfficeHour,
   nextOfficeStart,
-  addWorkMinutes,
+  addRealMinutes,
   OFFICE_START_H,
   OFFICE_START_M,
   OFFICE_END_H,
@@ -34,6 +34,7 @@ interface JobInfo {
   project_name: string;
   project_id: string | null;
   queue_priority?: number;
+  gcode_filename?: string | null;
 }
 
 const PRIORITY_RING: Record<number, string> = {
@@ -154,6 +155,11 @@ function JobTooltip({
       <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         {job.pieces_in_batch} piezas · ~{formatMinutes(job.estimated_minutes)}
       </div>
+      {job.gcode_filename && (
+        <div className="mt-0.5 truncate text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
+          {job.gcode_filename}
+        </div>
+      )}
       <div className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
         Inicio: {formatTime(jobStart)} {formatDate(jobStart)}
       </div>
@@ -186,7 +192,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
     for (const job of jobs) {
       if (job.scheduled_start) {
         const jobStart = new Date(job.scheduled_start);
-        const jobEnd = addWorkMinutes(jobStart, job.estimated_minutes);
+        const jobEnd = addRealMinutes(jobStart, job.estimated_minutes);
         if (jobEnd.getTime() > maxEndMs) {
           maxEndMs = jobEnd.getTime();
         }
@@ -335,7 +341,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
           <span className="h-3 w-3 rounded bg-red-500" /> Fallido
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-6 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" /> Fuera de horario
+          <span className="h-3 w-6 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" /> Horario nocturno
         </span>
       </div>
 
@@ -416,7 +422,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
                   const jobStart = job.scheduled_start
                     ? new Date(job.scheduled_start)
                     : origin;
-                  const jobEnd = addWorkMinutes(jobStart, job.estimated_minutes);
+                  const jobEnd = addRealMinutes(jobStart, job.estimated_minutes);
 
                   const leftMin = (jobStart.getTime() - origin.getTime()) / 60000;
                   const widthMin = (jobEnd.getTime() - jobStart.getTime()) / 60000;
@@ -458,7 +464,7 @@ export function QueueTimeline({ printers, jobs, startTime }: QueueTimelineProps)
         <JobTooltip
           job={hoveredJobData}
           jobStart={hoveredJobData.scheduled_start ? new Date(hoveredJobData.scheduled_start) : origin}
-          jobEnd={addWorkMinutes(
+          jobEnd={addRealMinutes(
             hoveredJobData.scheduled_start ? new Date(hoveredJobData.scheduled_start) : origin,
             hoveredJobData.estimated_minutes
           )}

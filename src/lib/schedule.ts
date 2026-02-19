@@ -89,4 +89,12 @@ export function wallClockMinutes(start: Date, end: Date): number {
   return (end.getTime() - start.getTime()) / 60000;
 }
 
+/**
+ * Advance `minutes` of real (wall-clock) time from `start`.
+ * Unlike addWorkMinutes, this does NOT skip nights or weekends — 24/7 scheduling.
+ */
+export function addRealMinutes(start: Date, minutes: number): Date {
+  return new Date(start.getTime() + minutes * 60000);
+}
+
 export { OFFICE_START_H, OFFICE_START_M, OFFICE_END_H, OFFICE_END_M, WORK_DAY_MINUTES };

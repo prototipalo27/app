@@ -4,6 +4,7 @@ import { syncPrinters } from "@/lib/bambu/mqtt-sync";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 import { recordPrintingTime } from "@/lib/printer-stats";
 import { autoCompleteByKeyword } from "@/lib/auto-complete-jobs";
+import { autoTrackPrintJobs } from "@/lib/auto-track-jobs";
 
 /**
  * Shared sync logic used by both GET (Vercel Cron) and POST (manual trigger).
@@ -72,6 +73,23 @@ async function runSync() {
     // Record printing time for stats (5min = 300s sync interval)
     recordPrintingTime(supabase, results, 300).catch((err) =>
       console.error("Failed to record printing time:", err)
+    );
+
+    // Auto-track print jobs: RUNNING→printing, FINISH→done
+    autoTrackPrintJobs(
+      supabase,
+      (prevStates ?? []).map((p) => ({
+        serial_number: p.serial_number,
+        gcode_state: p.gcode_state,
+        current_file: p.current_file,
+      })),
+      results.map((r) => ({
+        serial_number: r.serial_number,
+        gcode_state: r.gcode_state,
+        current_file: r.current_file,
+      }))
+    ).catch((err) =>
+      console.error("Failed to auto-track jobs:", err)
     );
 
     // Auto-complete print jobs by file keyword

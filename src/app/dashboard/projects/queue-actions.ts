@@ -3,7 +3,65 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { addWorkMinutes } from "@/lib/schedule";
+import { addRealMinutes } from "@/lib/schedule";
+import { generateJobFilename } from "@/lib/print-job-naming";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Auto-update project status based on print job states:
+ * - If any item has a job with status 'printing' and project is 'pending' → 'printing'
+ * - If all items have completed >= quantity → 'post_processing'
+ */
+export async function autoUpdateProjectStatus(
+  supabase: SupabaseClient,
+  projectId: string
+) {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("status")
+    .eq("id", projectId)
+    .single();
+  if (!project) return;
+
+  // Don't touch projects already past printing phase
+  const immutableStatuses = ["post_processing", "qc", "shipping", "delivered"];
+  if (immutableStatuses.includes(project.status)) return;
+
+  // Check if all items are complete
+  const { data: items } = await supabase
+    .from("project_items")
+    .select("id, quantity, completed")
+    .eq("project_id", projectId);
+
+  if (items && items.length > 0) {
+    const allComplete = items.every((i) => i.completed >= i.quantity);
+    if (allComplete) {
+      await supabase
+        .from("projects")
+        .update({ status: "post_processing" })
+        .eq("id", projectId);
+      return;
+    }
+  }
+
+  // If project is pending/design and there's a printing job → mark as printing
+  if (project.status === "pending" || project.status === "design") {
+    const { count } = await supabase
+      .from("print_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "printing")
+      .in(
+        "project_item_id",
+        (items ?? []).map((i) => i.id)
+      );
+    if (count && count > 0) {
+      await supabase
+        .from("projects")
+        .update({ status: "printing" })
+        .eq("id", projectId);
+    }
+  }
+}
 
 export async function updateItemPrintConfig(
   itemId: string,
@@ -148,7 +206,7 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       }
     }
     for (const [pid, mins] of Object.entries(loadMinutes)) {
-      printerEndTimes[pid] = addWorkMinutes(now, mins);
+      printerEndTimes[pid] = addRealMinutes(now, mins);
     }
   }
 
@@ -175,6 +233,7 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
     estimated_minutes: number;
     position: number;
     scheduled_start: string;
+    gcode_filename: string;
   }> = [];
 
   for (let b = 0; b < totalBatches; b++) {
@@ -202,9 +261,10 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
       estimated_minutes: item.print_time_minutes,
       position: printerPositions[minPrinterId],
       scheduled_start: scheduledStart.toISOString(),
+      gcode_filename: generateJobFilename(item.project_id, item.name ?? "Item", b + 1),
     });
 
-    printerEndTimes[minPrinterId] = addWorkMinutes(scheduledStart, item.print_time_minutes);
+    printerEndTimes[minPrinterId] = addRealMinutes(scheduledStart, item.print_time_minutes);
     printerPositions[minPrinterId] += 1;
   }
 
@@ -300,6 +360,7 @@ export async function generateProjectQueue(projectId: string): Promise<{
       estimated_minutes: number;
       position: number;
       scheduled_start: string;
+      gcode_filename: string;
     }> = [];
 
     for (const [printerTypeId, groupItems] of Object.entries(groups)) {
@@ -368,7 +429,7 @@ export async function generateProjectQueue(projectId: string): Promise<{
           }
         }
         for (const [pid, mins] of Object.entries(loadMinutes)) {
-          printerEndTimes[pid] = addWorkMinutes(now, mins);
+          printerEndTimes[pid] = addRealMinutes(now, mins);
         }
 
         for (const job of existingJobs) {
@@ -408,9 +469,10 @@ export async function generateProjectQueue(projectId: string): Promise<{
             estimated_minutes: item.print_time_minutes!,
             position: printerPositions[minPrinterId],
             scheduled_start: scheduledStart.toISOString(),
+            gcode_filename: generateJobFilename(projectId, item.name ?? "Item", b + 1),
           });
 
-          printerEndTimes[minPrinterId] = addWorkMinutes(scheduledStart, item.print_time_minutes!);
+          printerEndTimes[minPrinterId] = addRealMinutes(scheduledStart, item.print_time_minutes!);
           printerPositions[minPrinterId] += 1;
         }
       }
@@ -495,6 +557,10 @@ export async function completePrintJob(jobId: string) {
       .from("project_items")
       .update({ completed: newCompleted })
       .eq("id", job.project_item_id);
+
+    // Auto-update project status
+    await autoUpdateProjectStatus(supabase, item.project_id);
+
     revalidatePath(`/dashboard/projects/${item.project_id}`);
   }
 
@@ -578,7 +644,7 @@ export async function reorderPrintJobs(
         position: i,
         scheduled_start: cursor.toISOString(),
       });
-      cursor = addWorkMinutes(cursor, job.estimated_minutes);
+      cursor = addRealMinutes(cursor, job.estimated_minutes);
     }
 
     // Apply updates

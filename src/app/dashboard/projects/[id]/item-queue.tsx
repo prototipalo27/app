@@ -231,6 +231,11 @@ export function ItemQueue({ item, printerTypes, jobs, driveFiles }: ItemQueuePro
               <span className="text-xs text-zinc-400">
                 ~{formatMinutes(job.estimated_minutes)}
               </span>
+              {job.gcode_filename && (
+                <span className="truncate text-[10px] font-mono text-zinc-400 dark:text-zinc-500" title={job.gcode_filename}>
+                  {job.gcode_filename}
+                </span>
+              )}
               {job.printer_name && (
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
                   {job.printer_name}
