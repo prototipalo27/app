@@ -621,7 +621,7 @@ export async function reorderPrintJobs(
     // Fetch current queued/printing jobs for this printer
     const { data: currentJobs } = await supabase
       .from("print_jobs")
-      .select("id, status, estimated_minutes")
+      .select("id, status, estimated_minutes, started_at, scheduled_start")
       .eq("printer_id", printerId)
       .in("status", ["queued", "printing"])
       .order("position", { ascending: true });
@@ -650,13 +650,25 @@ export async function reorderPrintJobs(
     const updates: Array<{ id: string; position: number; scheduled_start: string }> = [];
     for (let i = 0; i < finalOrder.length; i++) {
       const job = jobMap.get(finalOrder[i])!;
-      const start = nextLaunchStartFromSettings(cursor, launchSettings);
-      updates.push({
-        id: job.id,
-        position: i,
-        scheduled_start: start.toISOString(),
-      });
-      cursor = addRealMinutes(start, job.estimated_minutes);
+
+      if (job.status === "printing") {
+        // Printing jobs keep their original scheduled_start; advance cursor to estimated finish
+        const actualStart = job.started_at ? new Date(job.started_at) : (job.scheduled_start ? new Date(job.scheduled_start) : now);
+        updates.push({
+          id: job.id,
+          position: i,
+          scheduled_start: (job.scheduled_start ?? actualStart.toISOString()),
+        });
+        cursor = addRealMinutes(actualStart, job.estimated_minutes);
+      } else {
+        const start = nextLaunchStartFromSettings(cursor, launchSettings);
+        updates.push({
+          id: job.id,
+          position: i,
+          scheduled_start: start.toISOString(),
+        });
+        cursor = addRealMinutes(start, job.estimated_minutes);
+      }
     }
 
     // Apply updates
