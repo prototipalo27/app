@@ -5,10 +5,21 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkTrackingEvent } from "@/lib/packlink/types";
+
+interface GlsTrackingEvent {
+  date: string;
+  description: string;
+  city?: string;
+}
+
+type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
+
+// The DB has gls_barcode but generated types may not include it yet
+type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null };
 import { linkShipmentToProject, unlinkShipmentFromProject, deleteShipment } from "../actions";
 
 interface ShipmentDetailProps {
-  shipment: Tables<"shipping_info">;
+  shipment: ShipmentRow;
   linkedProject: { id: string; name: string } | null;
   availableProjects: { id: string; name: string }[];
   canDelete?: boolean;
@@ -31,19 +42,24 @@ function StatusBadge({ status }: { status: string | null }) {
 
 export function ShipmentDetail({ shipment, linkedProject, availableProjects, canDelete }: ShipmentDetailProps) {
   const router = useRouter();
-  const [tracking, setTracking] = useState<PacklinkTrackingEvent[]>([]);
+  const [tracking, setTracking] = useState<TrackingEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkProjectId, setLinkProjectId] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  useEffect(() => {
-    if (shipment.packlink_shipment_ref) {
-      fetchTracking(shipment.packlink_shipment_ref);
-    }
-  }, [shipment.packlink_shipment_ref]);
+  const isGls = shipment.carrier === "GLS";
+  const hasRef = isGls ? !!shipment.gls_barcode : !!shipment.packlink_shipment_ref;
 
-  async function fetchTracking(ref: string) {
+  useEffect(() => {
+    if (isGls && shipment.gls_barcode) {
+      fetchGlsTracking(shipment.gls_barcode);
+    } else if (shipment.packlink_shipment_ref) {
+      fetchPacklinkTracking(shipment.packlink_shipment_ref);
+    }
+  }, [shipment.packlink_shipment_ref, shipment.gls_barcode, isGls]);
+
+  async function fetchPacklinkTracking(ref: string) {
     try {
       const res = await fetch(`/api/packlink/shipments/${ref}/tracking`);
       if (res.ok) {
@@ -55,7 +71,36 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
     }
   }
 
+  async function fetchGlsTracking(barcode: string) {
+    try {
+      const res = await fetch(`/api/gls/shipments/${barcode}/tracking`);
+      if (res.ok) {
+        const data = await res.json();
+        setTracking(data.events ?? []);
+      }
+    } catch {
+      // Tracking may not be available yet
+    }
+  }
+
+  function refreshTracking() {
+    if (isGls && shipment.gls_barcode) {
+      fetchGlsTracking(shipment.gls_barcode);
+    } else if (shipment.packlink_shipment_ref) {
+      fetchPacklinkTracking(shipment.packlink_shipment_ref);
+    }
+  }
+
   async function downloadLabel() {
+    if (isGls) {
+      // GLS: open label PDF endpoint in new tab, or use stored label_url
+      const barcode = shipment.gls_barcode;
+      if (!barcode) return;
+      window.open(`/api/gls/shipments/${barcode}/label`, "_blank");
+      return;
+    }
+
+    // Packlink flow
     if (!shipment.packlink_shipment_ref) return;
     setLoading(true);
     try {
@@ -142,10 +187,12 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Shipment details</h2>
           <div className="space-y-2">
-            {shipment.packlink_shipment_ref && (
+            {(shipment.packlink_shipment_ref || shipment.gls_barcode) && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-500 dark:text-zinc-400">Reference</span>
-                <span className="font-mono font-medium text-zinc-900 dark:text-white">{shipment.packlink_shipment_ref}</span>
+                <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : "Reference"}</span>
+                <span className="font-mono font-medium text-zinc-900 dark:text-white">
+                  {isGls ? shipment.gls_barcode : shipment.packlink_shipment_ref}
+                </span>
               </div>
             )}
             {shipment.carrier && (
@@ -293,14 +340,14 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
         <div className="flex gap-2">
           <button
             onClick={downloadLabel}
-            disabled={loading || !shipment.packlink_shipment_ref}
+            disabled={loading || !hasRef}
             className="rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:bg-cyan-50 disabled:opacity-50 dark:border-cyan-800 dark:text-cyan-400 dark:hover:bg-cyan-900/20"
           >
             {loading ? "Loading…" : "Download label"}
           </button>
           <button
-            onClick={() => shipment.packlink_shipment_ref && fetchTracking(shipment.packlink_shipment_ref)}
-            disabled={!shipment.packlink_shipment_ref}
+            onClick={refreshTracking}
+            disabled={!hasRef}
             className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Refresh tracking
@@ -341,21 +388,25 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-3 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Tracking</h2>
             <div className="space-y-3">
-              {tracking.map((event, i) => (
-                <div key={i} className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={`h-2.5 w-2.5 rounded-full ${i === 0 ? "bg-cyan-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
-                    {i < tracking.length - 1 && <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
+              {tracking.map((event, i) => {
+                const eventDate = "timestamp" in event ? event.timestamp : (event as GlsTrackingEvent).date;
+                const eventCity = "city" in event ? event.city : undefined;
+                return (
+                  <div key={i} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={`h-2.5 w-2.5 rounded-full ${i === 0 ? "bg-cyan-500" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+                      {i < tracking.length - 1 && <div className="w-px flex-1 bg-zinc-200 dark:bg-zinc-700" />}
+                    </div>
+                    <div className="pb-3">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{event.description}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {eventCity && `${eventCity} · `}
+                        {new Date(eventDate).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="pb-3">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{event.description}</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {event.city && `${event.city} · `}
-                      {new Date(event.timestamp).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

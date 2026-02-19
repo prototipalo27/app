@@ -36,6 +36,11 @@ export default function NewShipmentPage() {
   const [error, setError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
 
+  // Carrier selection
+  const [carrier, setCarrier] = useState<"packlink" | "gls">("packlink");
+  const [glsBarcode, setGlsBarcode] = useState<string | null>(null);
+  const [glsLabelUrl, setGlsLabelUrl] = useState<string | null>(null);
+
   // Projects for optional linking
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -183,6 +188,55 @@ export default function NewShipmentPage() {
     }
   }
 
+  async function createGlsShipment() {
+    setLoading(true);
+    setError(null);
+    setStep("creating");
+
+    try {
+      const totalWeight = packages.reduce((sum, p) => sum + Number(p.weight), 0);
+      const firstPkg = packages[0];
+
+      const res = await fetch("/api/gls/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
+          recipientName: `${recipientName} ${recipientSurname}`.trim(),
+          recipientAddress: street,
+          recipientCity: city,
+          recipientPostalCode: postalCode,
+          recipientCountry: country,
+          recipientPhone: recipientPhone || undefined,
+          recipientEmail: recipientEmail || undefined,
+          packages: packages.length,
+          weight: totalWeight,
+          packageWidth: Number(firstPkg.width),
+          packageHeight: Number(firstPkg.height),
+          packageLength: Number(firstPkg.length),
+          title: title || undefined,
+          contentDescription: contentDescription || undefined,
+          declaredValue: declaredValue ? Number(declaredValue) : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create GLS shipment");
+      }
+
+      const data = await res.json();
+      setGlsBarcode(data.barcode);
+      setGlsLabelUrl(data.labelUrl);
+      setStep("created");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating GLS shipment");
+      setStep("form");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function createShipment() {
     if (!selectedService) return;
     setLoading(true);
@@ -253,6 +307,35 @@ export default function NewShipmentPage() {
               {error}
             </div>
           )}
+
+          {/* Carrier selector */}
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Carrier</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCarrier("packlink")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "packlink"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                Packlink
+              </button>
+              <button
+                type="button"
+                onClick={() => setCarrier("gls")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "gls"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                GLS
+              </button>
+            </div>
+          </div>
 
           {/* Holded contact search */}
           <div ref={contactWrapperRef}>
@@ -386,11 +469,13 @@ export default function NewShipmentPage() {
               Cancel
             </button>
             <button
-              onClick={searchServices}
+              onClick={carrier === "gls" ? createGlsShipment : searchServices}
               disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
               className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-black"
             >
-              {loading ? "Searching…" : "Search carriers"}
+              {loading
+                ? carrier === "gls" ? "Creating…" : "Searching…"
+                : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
             </button>
           </div>
         </div>
@@ -489,28 +574,54 @@ export default function NewShipmentPage() {
               <span className="font-mono font-medium text-zinc-900 dark:text-white">{reference}</span>
             </div>
           )}
-          {selectedService && (
+          {glsBarcode && (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500 dark:text-zinc-400">GLS Barcode</span>
+              <span className="font-mono font-medium text-zinc-900 dark:text-white">{glsBarcode}</span>
+            </div>
+          )}
+          {carrier === "gls" ? (
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
-              <span className="font-medium text-zinc-900 dark:text-white">
-                {selectedService.carrier_name} — {selectedService.name}
-              </span>
+              <span className="font-medium text-zinc-900 dark:text-white">GLS</span>
             </div>
-          )}
-          {selectedService && (
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-500 dark:text-zinc-400">Price</span>
-              <span className="font-medium text-zinc-900 dark:text-white">
-                {selectedService.price.total_price.toFixed(2)} {selectedService.price.currency}
-              </span>
-            </div>
-          )}
+          ) : selectedService ? (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
+                <span className="font-medium text-zinc-900 dark:text-white">
+                  {selectedService.carrier_name} — {selectedService.name}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Price</span>
+                <span className="font-medium text-zinc-900 dark:text-white">
+                  {selectedService.price.total_price.toFixed(2)} {selectedService.price.currency}
+                </span>
+              </div>
+            </>
+          ) : null}
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">Destination</span>
             <span className="text-right font-medium text-zinc-900 dark:text-white">
               {[street, postalCode, city, country].filter(Boolean).join(", ")}
             </span>
           </div>
+          {glsLabelUrl && (
+            <div className="pt-2">
+              <a
+                href={glsLabelUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-400 dark:hover:bg-cyan-900/20"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download GLS label
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex gap-2">
@@ -526,6 +637,9 @@ export default function NewShipmentPage() {
               setServices([]);
               setSelectedService(null);
               setReference(null);
+              setGlsBarcode(null);
+              setGlsLabelUrl(null);
+              setCarrier("packlink");
               setTitle("");
               setContentDescription("");
               setDeclaredValue("");
