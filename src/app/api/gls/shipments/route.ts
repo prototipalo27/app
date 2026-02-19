@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     packageWidth,
     packageHeight,
     packageLength,
+    horario,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
     packageWidth?: number;
     packageHeight?: number;
     packageLength?: number;
+    horario?: string;
   };
 
   if (!recipientName || !recipientAddress || !recipientCity || !recipientPostalCode || !recipientCountry) {
@@ -97,6 +99,7 @@ export async function POST(request: NextRequest) {
     weight: weight || 1,
     reference,
     observations,
+    horario,
   };
 
   try {

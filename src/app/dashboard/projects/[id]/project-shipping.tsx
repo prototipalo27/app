@@ -15,6 +15,14 @@ type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null };
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
+const GLS_SERVICES = [
+  { id: "business24", name: "BusinessParcel 24H", delivery: "24h" },
+  { id: "express14", name: "Express14", delivery: "Antes de las 14:00" },
+  { id: "express1030", name: "Express 10:30", delivery: "Antes de las 10:30" },
+  { id: "express830", name: "Express 8:30", delivery: "Antes de las 8:30" },
+  { id: "economy", name: "EconomyParcel 48-72H", delivery: "48-72h" },
+] as const;
+
 interface HoldedContactAddress {
   address?: string;
   city?: string;
@@ -56,7 +64,8 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
 
   const isGls = currentShipping?.carrier === "GLS";
   const hasRef = isGls ? !!currentShipping?.gls_barcode : !!currentShipping?.packlink_shipment_ref;
-  const [glsPrice, setGlsPrice] = useState<{ price: number; zone: string; service: string } | null>(null);
+  const [glsServiceId, setGlsServiceId] = useState("business24");
+  const [glsPrice, setGlsPrice] = useState<{ price: number; zone: string; service: string; horario: string } | null>(null);
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Form state — pre-fill from Holded contact (split name into first + surname)
@@ -116,6 +125,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
           weight: String(totalWeight),
           postalCode,
           country,
+          serviceId: glsServiceId,
           ...(firstPkg.width ? { width: firstPkg.width } : {}),
           ...(firstPkg.height ? { height: firstPkg.height } : {}),
           ...(firstPkg.length ? { length: firstPkg.length } : {}),
@@ -127,7 +137,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
         setGlsPrice(null);
       }
     }, 300);
-  }, [carrier, postalCode, country, packages]);
+  }, [carrier, postalCode, country, packages, glsServiceId]);
 
   async function fetchPacklinkTracking(ref: string) {
     try {
@@ -219,6 +229,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
           packageWidth: Number(firstPkg.width),
           packageHeight: Number(firstPkg.height),
           packageLength: Number(firstPkg.length),
+          horario: glsPrice?.horario || undefined,
         }),
       });
 
@@ -449,6 +460,31 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             </div>
           </div>
 
+          {/* GLS service selector */}
+          {carrier === "gls" && (
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">GLS Service</p>
+              <div className="grid grid-cols-2 gap-2">
+                {GLS_SERVICES.map((svc) => (
+                  <button
+                    key={svc.id}
+                    type="button"
+                    onClick={() => setGlsServiceId(svc.id)}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      glsServiceId === svc.id
+                        ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                        : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                    }`}
+                  >
+                    <span className="font-medium">{svc.name}</span>
+                    <br />
+                    <span className="text-xs opacity-70">{svc.delivery}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Recipient */}
           <div>
             <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Recipient</p>
@@ -536,7 +572,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
                 {glsPrice.service}
               </p>
               <p className="text-xs text-cyan-600 dark:text-cyan-400">
-                {glsPrice.zone} · Entrega 24h
+                {glsPrice.zone} · {GLS_SERVICES.find(s => s.id === glsServiceId)?.delivery || "24h"}
               </p>
             </div>
             <span className="text-lg font-bold text-cyan-700 dark:text-cyan-300">

@@ -10,6 +10,7 @@ export interface GlsShipmentParams {
   weight: number; // kg
   reference?: string; // client reference (max 15 chars)
   observations?: string;
+  horario?: string; // GLS time slot code: "18"=standard, "14"=before 14h, "10"=before 10:30, "8"=before 8:30
 }
 
 export interface GlsShipmentResult {

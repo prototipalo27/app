@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { estimateGlsPrice } from "@/lib/gls/pricing";
+import { estimateGlsPrice, type GlsServiceId } from "@/lib/gls/pricing";
 
 /**
- * GET /api/gls/price?weight=2&width=30&height=20&length=40&postalCode=08001&country=ES
+ * GET /api/gls/price?weight=2&width=30&height=20&length=40&postalCode=08001&country=ES&serviceId=business24
  *
  * Returns estimated GLS shipping price.
  */
@@ -14,12 +14,14 @@ export async function GET(request: NextRequest) {
   const length = Number(sp.get("length") || "0") || undefined;
   const postalCode = sp.get("postalCode") || "";
   const country = sp.get("country") || "ES";
+  const serviceId = (sp.get("serviceId") || undefined) as GlsServiceId | undefined;
 
   if (!weight || !postalCode) {
     return NextResponse.json({ error: "Missing weight or postalCode" }, { status: 400 });
   }
 
   const estimate = estimateGlsPrice({
+    serviceId,
     weightKg: weight,
     widthCm: width,
     heightCm: height,

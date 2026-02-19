@@ -79,7 +79,7 @@ export async function createShipment(
             <Fecha>${fecha}</Fecha>
             <Portes>P</Portes>
             <Servicio>${serviceCode}</Servicio>
-            <Horario>18</Horario>
+            <Horario>${params.horario || "18"}</Horario>
             <Bultos>${params.packages}</Bultos>
             <Peso>${params.weight}</Peso>
             <Retorno>0</Retorno>
