@@ -222,6 +222,218 @@ export async function generatePrintJobs(itemId: string): Promise<{ success: bool
   }
 }
 
+export async function generateProjectQueue(projectId: string): Promise<{
+  success: boolean;
+  generated: number;
+  skipped: number;
+  error?: string;
+}> {
+  try {
+    const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) redirect("/login");
+
+    // Fetch all items for the project
+    const { data: allItems } = await supabase
+      .from("project_items")
+      .select("*")
+      .eq("project_id", projectId);
+
+    if (!allItems || allItems.length === 0) {
+      return { success: false, generated: 0, skipped: 0, error: "No hay items en el proyecto" };
+    }
+
+    // Split into configured vs unconfigured
+    const configured = allItems.filter((i) => i.print_time_minutes && i.printer_type_id);
+    const skipped = allItems.length - configured.length;
+
+    if (configured.length === 0) {
+      return { success: false, generated: 0, skipped, error: "Ningun item tiene configuracion de impresion completa" };
+    }
+
+    // Delete existing queued jobs for all configured items
+    const configuredIds = configured.map((i) => i.id);
+    await supabase
+      .from("print_jobs")
+      .delete()
+      .in("project_item_id", configuredIds)
+      .in("status", ["queued"]);
+
+    // Fetch project priority
+    const { data: project } = await supabase
+      .from("projects")
+      .select("queue_priority")
+      .eq("id", projectId)
+      .single();
+    const itemPriority = project?.queue_priority ?? 0;
+
+    // Collect all unique printer_type_ids (+ compatible)
+    const typeIds = [...new Set(configured.map((i) => i.printer_type_id!))];
+    const { data: printerTypeRows } = await supabase
+      .from("printer_types")
+      .select("id, compatible_types")
+      .in("id", typeIds);
+
+    const compatibleMap: Record<string, string[]> = {};
+    if (printerTypeRows) {
+      for (const pt of printerTypeRows) {
+        compatibleMap[pt.id] = [pt.id, ...(pt.compatible_types ?? [])];
+      }
+    }
+
+    // Group items by their effective printer type group key
+    // Items with the same set of eligible printers share a group
+    const groups: Record<string, typeof configured> = {};
+    for (const item of configured) {
+      const key = item.printer_type_id!;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    }
+
+    const now = new Date();
+    const allJobs: Array<{
+      project_item_id: string;
+      printer_id: string;
+      printer_type_id: string;
+      batch_number: number;
+      pieces_in_batch: number;
+      estimated_minutes: number;
+      position: number;
+      scheduled_start: string;
+    }> = [];
+
+    for (const [printerTypeId, groupItems] of Object.entries(groups)) {
+      const eligibleTypeIds = compatibleMap[printerTypeId] ?? [printerTypeId];
+
+      // Find printers of eligible types
+      const { data: printers } = await supabase
+        .from("printers")
+        .select("id")
+        .in("printer_type_id", eligibleTypeIds);
+
+      if (!printers || printers.length === 0) continue;
+
+      // Calculate current wall-clock end-time per printer from existing jobs
+      const printerEndTimes: Record<string, Date> = {};
+      for (const p of printers) {
+        printerEndTimes[p.id] = new Date(now);
+      }
+
+      const printerPositions: Record<string, number> = {};
+      for (const p of printers) {
+        printerPositions[p.id] = 0;
+      }
+
+      const { data: existingJobs } = await supabase
+        .from("print_jobs")
+        .select("printer_id, estimated_minutes, project_item_id")
+        .in("printer_id", printers.map((p) => p.id))
+        .in("status", ["queued", "printing"]);
+
+      if (existingJobs && existingJobs.length > 0) {
+        const existingItemIds = [...new Set(existingJobs.map((j) => j.project_item_id))];
+        const { data: existingItems } = await supabase
+          .from("project_items")
+          .select("id, project_id")
+          .in("id", existingItemIds);
+
+        const itemProjectMap: Record<string, string> = {};
+        if (existingItems) {
+          for (const ei of existingItems) {
+            itemProjectMap[ei.id] = ei.project_id;
+          }
+        }
+
+        const projectIds = [...new Set(Object.values(itemProjectMap))];
+        const { data: projects } = await supabase
+          .from("projects")
+          .select("id, queue_priority")
+          .in("id", projectIds);
+
+        const projectPriorityMap: Record<string, number> = {};
+        if (projects) {
+          for (const p of projects) {
+            projectPriorityMap[p.id] = p.queue_priority;
+          }
+        }
+
+        const loadMinutes: Record<string, number> = {};
+        for (const job of existingJobs) {
+          if (job.printer_id) {
+            const jobProjectId = itemProjectMap[job.project_item_id];
+            const jobPriority = jobProjectId ? (projectPriorityMap[jobProjectId] ?? 0) : 0;
+            if (jobPriority >= itemPriority) {
+              loadMinutes[job.printer_id] = (loadMinutes[job.printer_id] || 0) + job.estimated_minutes;
+            }
+          }
+        }
+        for (const [pid, mins] of Object.entries(loadMinutes)) {
+          printerEndTimes[pid] = addWorkMinutes(now, mins);
+        }
+
+        for (const job of existingJobs) {
+          if (job.printer_id) {
+            printerPositions[job.printer_id] = (printerPositions[job.printer_id] || 0) + 1;
+          }
+        }
+      }
+
+      // Generate batches for ALL items in this group and assign with greedy load balancing
+      for (const item of groupItems) {
+        const batchSize = item.batch_size || 1;
+        const totalBatches = Math.ceil(item.quantity / batchSize);
+
+        for (let b = 0; b < totalBatches; b++) {
+          const piecesInBatch = Math.min(batchSize, item.quantity - b * batchSize);
+
+          // Find printer with earliest end time
+          let minPrinterId = printers[0].id;
+          let minEnd = printerEndTimes[minPrinterId].getTime();
+          for (const p of printers) {
+            const t = printerEndTimes[p.id].getTime();
+            if (t < minEnd) {
+              minEnd = t;
+              minPrinterId = p.id;
+            }
+          }
+
+          const scheduledStart = new Date(printerEndTimes[minPrinterId]);
+
+          allJobs.push({
+            project_item_id: item.id,
+            printer_id: minPrinterId,
+            printer_type_id: item.printer_type_id!,
+            batch_number: b + 1,
+            pieces_in_batch: piecesInBatch,
+            estimated_minutes: item.print_time_minutes!,
+            position: printerPositions[minPrinterId],
+            scheduled_start: scheduledStart.toISOString(),
+          });
+
+          printerEndTimes[minPrinterId] = addWorkMinutes(scheduledStart, item.print_time_minutes!);
+          printerPositions[minPrinterId] += 1;
+        }
+      }
+    }
+
+    if (allJobs.length === 0) {
+      return { success: false, generated: 0, skipped, error: "No se generaron jobs (sin impresoras disponibles)" };
+    }
+
+    // Insert all jobs at once
+    const { error } = await supabase.from("print_jobs").insert(allJobs);
+    if (error) return { success: false, generated: 0, skipped, error: `Error al insertar jobs: ${error.message}` };
+
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    revalidatePath("/dashboard/queue");
+    revalidatePath("/dashboard/printers");
+
+    return { success: true, generated: configured.length, skipped };
+  } catch (e) {
+    return { success: false, generated: 0, skipped: 0, error: e instanceof Error ? e.message : "Error desconocido" };
+  }
+}
+
 export async function cancelPrintJob(jobId: string) {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();

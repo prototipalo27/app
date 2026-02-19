@@ -2,6 +2,7 @@
 
 import { useState, useRef, useTransition } from "react";
 import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, deleteItem } from "../items-actions";
+import { generateProjectQueue } from "../queue-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
 
@@ -284,6 +285,23 @@ function ItemRow({
 
 export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [] }: ProjectItemsProps) {
   const [isPending, startTransition] = useTransition();
+  const [queueFeedback, setQueueFeedback] = useState<string | null>(null);
+
+  function handleGenerateAll() {
+    setQueueFeedback(null);
+    startTransition(async () => {
+      const result = await generateProjectQueue(projectId);
+      if (result.success) {
+        const parts: string[] = [];
+        parts.push(`${result.generated} items generados`);
+        if (result.skipped > 0) parts.push(`${result.skipped} sin configurar`);
+        setQueueFeedback(parts.join(", "));
+      } else {
+        setQueueFeedback(result.error ?? "Error desconocido");
+      }
+      setTimeout(() => setQueueFeedback(null), 5000);
+    });
+  }
 
   function handleAdd(formData: FormData) {
     const name = (formData.get("name") as string)?.trim();
@@ -327,9 +345,24 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
-        Items
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+          Items
+        </h2>
+        <div className="flex items-center gap-2">
+          {queueFeedback && (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">{queueFeedback}</span>
+          )}
+          <button
+            type="button"
+            onClick={handleGenerateAll}
+            disabled={isPending || items.filter((i) => i.print_time_minutes && i.printer_type_id).length === 0}
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600"
+          >
+            {isPending ? "Generando..." : "Generar toda la cola"}
+          </button>
+        </div>
+      </div>
 
       {/* Add form */}
       <form action={handleAdd} className="mb-4 flex items-end gap-2">
