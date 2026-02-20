@@ -850,11 +850,11 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
       )}
 
       <div className="space-y-2">
-        {(currentShipping?.packlink_shipment_ref || currentShipping?.gls_barcode) && (
+        {(currentShipping?.packlink_shipment_ref || currentShipping?.gls_barcode || currentShipping?.cabify_parcel_id) && (
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : "Reference"}</span>
+            <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : isCabify ? "Cabify Parcel" : "Reference"}</span>
             <span className="font-mono font-medium text-zinc-900 dark:text-white">
-              {isGls ? currentShipping?.gls_barcode : currentShipping?.packlink_shipment_ref}
+              {isGls ? currentShipping?.gls_barcode : isCabify ? currentShipping?.cabify_parcel_id : currentShipping?.packlink_shipment_ref}
             </span>
           </div>
         )}

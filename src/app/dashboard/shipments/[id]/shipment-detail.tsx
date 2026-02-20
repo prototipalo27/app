@@ -14,8 +14,8 @@ interface GlsTrackingEvent {
 
 type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
 
-// The DB has gls_barcode but generated types may not include it yet
-type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null };
+// The DB has gls_barcode/cabify_parcel_id but generated types may not include them yet
+type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null; cabify_parcel_id?: string | null };
 import { linkShipmentToProject, unlinkShipmentFromProject, deleteShipment } from "../actions";
 
 interface ShipmentDetailProps {
@@ -49,15 +49,18 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isGls = shipment.carrier === "GLS";
-  const hasRef = isGls ? !!shipment.gls_barcode : !!shipment.packlink_shipment_ref;
+  const isCabify = shipment.carrier === "Cabify";
+  const hasRef = isGls ? !!shipment.gls_barcode : isCabify ? !!shipment.cabify_parcel_id : !!shipment.packlink_shipment_ref;
 
   useEffect(() => {
     if (isGls && shipment.gls_barcode) {
       fetchGlsTracking(shipment.gls_barcode);
+    } else if (isCabify && shipment.cabify_parcel_id) {
+      fetchCabifyTracking(shipment.cabify_parcel_id);
     } else if (shipment.packlink_shipment_ref) {
       fetchPacklinkTracking(shipment.packlink_shipment_ref);
     }
-  }, [shipment.packlink_shipment_ref, shipment.gls_barcode, isGls]);
+  }, [shipment.packlink_shipment_ref, shipment.gls_barcode, shipment.cabify_parcel_id, isGls, isCabify]);
 
   async function fetchPacklinkTracking(ref: string) {
     try {
