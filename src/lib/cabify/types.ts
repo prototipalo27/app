@@ -16,6 +16,7 @@ export interface CabifyDeliveryEstimate {
     currency: string;
   };
   estimated_duration_minutes?: number;
+  product_id?: string;
 }
 
 /** Parcel creation response */

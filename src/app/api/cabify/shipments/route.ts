@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createParcel, shipParcels } from "@/lib/cabify/api";
+import { createParcel } from "@/lib/cabify/api";
 import { CABIFY_SENDER } from "@/lib/cabify/sender";
 
 /**
@@ -60,20 +60,10 @@ export async function POST(request: NextRequest) {
       description: contentDescription || "3D printed parts",
     });
 
-    // Try to ship the parcel (request pickup). If it fails (e.g. no riders),
-    // still save the parcel — user can ship it from the Cabify Logistics panel.
-    let shipStatus = "ready";
-    try {
-      await shipParcels([parcel.id]);
-      shipStatus = "shipped";
-    } catch {
-      // Ship failed (likely "no asset kinds available") — parcel is still created
-    }
-
     const row: Record<string, unknown> = {
       cabify_parcel_id: parcel.id,
       carrier: "Cabify",
-      shipment_status: shipStatus,
+      shipment_status: parcel.status || "created",
       address_line: street,
       city,
       postal_code: postalCode,
