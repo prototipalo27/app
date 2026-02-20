@@ -50,6 +50,7 @@ export async function estimateDelivery(
       dropoff: buildParcelAddress(dropoff),
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!res.ok) {
@@ -81,6 +82,7 @@ export async function createParcel(params: {
       ],
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!res.ok) {

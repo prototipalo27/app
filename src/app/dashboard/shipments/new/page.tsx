@@ -51,6 +51,7 @@ export default function NewShipmentPage() {
   const [cabifyParcelId, setCabifyParcelId] = useState<string | null>(null);
   const [cabifyTrackingUrl, setCabifyTrackingUrl] = useState<string | null>(null);
   const [cabifyEstimate, setCabifyEstimate] = useState<{ amount: number; currency: string } | null>(null);
+  const [cabifyEstimateError, setCabifyEstimateError] = useState<string | null>(null);
   const cabifyEstimateRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [glsServiceId, setGlsServiceId] = useState("business24");
   const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
@@ -93,10 +94,12 @@ export default function NewShipmentPage() {
   useEffect(() => {
     if (carrier !== "cabify" || !street || !city || !postalCode) {
       setCabifyEstimate(null);
+      setCabifyEstimateError(null);
       return;
     }
 
     if (cabifyEstimateRef.current) clearTimeout(cabifyEstimateRef.current);
+    setCabifyEstimateError(null);
     cabifyEstimateRef.current = setTimeout(async () => {
       try {
         const params = new URLSearchParams({
@@ -108,11 +111,15 @@ export default function NewShipmentPage() {
         if (res.ok) {
           const data = await res.json();
           setCabifyEstimate(data.price ?? null);
+          setCabifyEstimateError(null);
         } else {
+          const data = await res.json().catch(() => ({}));
           setCabifyEstimate(null);
+          setCabifyEstimateError(data.error || `Error ${res.status}`);
         }
-      } catch {
+      } catch (err) {
         setCabifyEstimate(null);
+        setCabifyEstimateError(err instanceof Error && err.name === "AbortError" ? "Timeout — Cabify no responde" : "Error de conexión");
       }
     }, 500);
   }, [carrier, street, city, postalCode]);
@@ -513,6 +520,8 @@ export default function NewShipmentPage() {
                 <p className="mt-1 text-sm font-semibold text-amber-800 dark:text-amber-300">
                   Precio estimado: {cabifyEstimate.amount.toFixed(2)} {cabifyEstimate.currency}
                 </p>
+              ) : cabifyEstimateError ? (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{cabifyEstimateError}</p>
               ) : street && city && postalCode ? (
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Calculando precio…</p>
               ) : (
