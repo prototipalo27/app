@@ -86,15 +86,37 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
     }
   }
 
+  async function fetchCabifyTracking(parcelId: string) {
+    try {
+      const res = await fetch(`/api/cabify/shipments/${parcelId}/tracking`);
+      if (res.ok) {
+        const data = await res.json();
+        setTracking(data.events ?? []);
+      }
+    } catch {
+      // Tracking may not be available yet
+    }
+  }
+
   function refreshTracking() {
     if (isGls && shipment.gls_barcode) {
       fetchGlsTracking(shipment.gls_barcode);
+    } else if (isCabify && shipment.cabify_parcel_id) {
+      fetchCabifyTracking(shipment.cabify_parcel_id);
     } else if (shipment.packlink_shipment_ref) {
       fetchPacklinkTracking(shipment.packlink_shipment_ref);
     }
   }
 
   async function downloadLabel() {
+    if (isCabify) {
+      // Cabify doesn't provide downloadable labels — open tracking URL if available
+      if (shipment.tracking_number) {
+        window.open(shipment.tracking_number, "_blank");
+      }
+      return;
+    }
+
     if (isGls) {
       // GLS: open label PDF endpoint in new tab, or use stored label_url
       const barcode = shipment.gls_barcode;
@@ -190,11 +212,11 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Shipment details</h2>
           <div className="space-y-2">
-            {(shipment.packlink_shipment_ref || shipment.gls_barcode) && (
+            {(shipment.packlink_shipment_ref || shipment.gls_barcode || shipment.cabify_parcel_id) && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : "Reference"}</span>
+                <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : isCabify ? "Cabify Parcel" : "Reference"}</span>
                 <span className="font-mono font-medium text-zinc-900 dark:text-white">
-                  {isGls ? shipment.gls_barcode : shipment.packlink_shipment_ref}
+                  {isGls ? shipment.gls_barcode : isCabify ? shipment.cabify_parcel_id : shipment.packlink_shipment_ref}
                 </span>
               </div>
             )}
