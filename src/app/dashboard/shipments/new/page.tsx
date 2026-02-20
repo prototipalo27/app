@@ -45,9 +45,13 @@ export default function NewShipmentPage() {
   const [reference, setReference] = useState<string | null>(null);
 
   // Carrier selection
-  const [carrier, setCarrier] = useState<"packlink" | "gls">("packlink");
+  const [carrier, setCarrier] = useState<"packlink" | "gls" | "cabify">("packlink");
   const [glsBarcode, setGlsBarcode] = useState<string | null>(null);
   const [glsLabelUrl, setGlsLabelUrl] = useState<string | null>(null);
+  const [cabifyParcelId, setCabifyParcelId] = useState<string | null>(null);
+  const [cabifyTrackingUrl, setCabifyTrackingUrl] = useState<string | null>(null);
+  const [cabifyEstimate, setCabifyEstimate] = useState<{ amount: number; currency: string } | null>(null);
+  const cabifyEstimateRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [glsServiceId, setGlsServiceId] = useState("business24");
   const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -84,6 +88,34 @@ export default function NewShipmentPage() {
 
   // Packages
   const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
+
+  // Estimate Cabify price when relevant fields change
+  useEffect(() => {
+    if (carrier !== "cabify" || !street || !city || !postalCode) {
+      setCabifyEstimate(null);
+      return;
+    }
+
+    if (cabifyEstimateRef.current) clearTimeout(cabifyEstimateRef.current);
+    cabifyEstimateRef.current = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          dropoffAddress: street,
+          dropoffCity: city,
+          dropoffPostalCode: postalCode,
+        });
+        const res = await fetch(`/api/cabify/estimate?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          setCabifyEstimate(data.price ?? null);
+        } else {
+          setCabifyEstimate(null);
+        }
+      } catch {
+        setCabifyEstimate(null);
+      }
+    }, 500);
+  }, [carrier, street, city, postalCode]);
 
   // Estimate GLS prices for all services when relevant fields change
   useEffect(() => {
@@ -228,6 +260,46 @@ export default function NewShipmentPage() {
       setStep("selecting");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error fetching services");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createCabifyShipment() {
+    setLoading(true);
+    setError(null);
+    setStep("creating");
+
+    try {
+      const res = await fetch("/api/cabify/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
+          recipientName: `${recipientName} ${recipientSurname}`.trim(),
+          recipientPhone: recipientPhone || undefined,
+          recipientEmail: recipientEmail || undefined,
+          street,
+          city,
+          postalCode,
+          title: title || undefined,
+          contentDescription: contentDescription || undefined,
+          declaredValue: declaredValue ? Number(declaredValue) : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create Cabify shipment");
+      }
+
+      const data = await res.json();
+      setCabifyParcelId(data.parcelId);
+      setCabifyTrackingUrl(data.trackingUrl);
+      setStep("created");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating Cabify shipment");
+      setStep("form");
     } finally {
       setLoading(false);
     }
@@ -380,6 +452,17 @@ export default function NewShipmentPage() {
               >
                 GLS
               </button>
+              <button
+                type="button"
+                onClick={() => setCarrier("cabify")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "cabify"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                Cabify
+              </button>
             </div>
           </div>
 
@@ -417,6 +500,24 @@ export default function NewShipmentPage() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Cabify estimate */}
+          {carrier === "cabify" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                Cabify — Courier urbano (solo Madrid)
+              </p>
+              {cabifyEstimate ? (
+                <p className="mt-1 text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  Precio estimado: {cabifyEstimate.amount.toFixed(2)} {cabifyEstimate.currency}
+                </p>
+              ) : street && city && postalCode ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Calculando precio…</p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Rellena la dirección destino para ver precio</p>
+              )}
             </div>
           )}
 
@@ -537,12 +638,14 @@ export default function NewShipmentPage() {
             </div>
           </div>
 
-          {/* Packages */}
-          <PackageListEditor
-            packages={packages}
-            onChange={setPackages}
-            inputClass={inputClass}
-          />
+          {/* Packages (not needed for Cabify) */}
+          {carrier !== "cabify" && (
+            <PackageListEditor
+              packages={packages}
+              onChange={setPackages}
+              inputClass={inputClass}
+            />
+          )}
 
           <div className="flex gap-2">
             <button
@@ -552,13 +655,24 @@ export default function NewShipmentPage() {
               Cancel
             </button>
             <button
-              onClick={carrier === "gls" ? createGlsShipment : searchServices}
-              disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
+              onClick={
+                carrier === "cabify"
+                  ? createCabifyShipment
+                  : carrier === "gls"
+                    ? createGlsShipment
+                    : searchServices
+              }
+              disabled={
+                loading ||
+                !postalCode ||
+                !country ||
+                (carrier !== "cabify" && packages.some((p) => !p.width || !p.height || !p.length || !p.weight))
+              }
               className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-black"
             >
               {loading
-                ? carrier === "gls" ? "Creating…" : "Searching…"
-                : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
+                ? carrier === "cabify" ? "Creating…" : carrier === "gls" ? "Creating…" : "Searching…"
+                : carrier === "cabify" ? "Crear envio Cabify" : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
             </button>
           </div>
         </div>
@@ -663,7 +777,26 @@ export default function NewShipmentPage() {
               <span className="font-mono font-medium text-zinc-900 dark:text-white">{glsBarcode}</span>
             </div>
           )}
-          {carrier === "gls" ? (
+          {cabifyParcelId && (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500 dark:text-zinc-400">Cabify Parcel ID</span>
+              <span className="font-mono font-medium text-zinc-900 dark:text-white">{cabifyParcelId}</span>
+            </div>
+          )}
+          {carrier === "cabify" ? (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
+                <span className="font-medium text-zinc-900 dark:text-white">Cabify</span>
+              </div>
+              {cabifyEstimate && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500 dark:text-zinc-400">Precio estimado</span>
+                  <span className="font-medium text-zinc-900 dark:text-white">{cabifyEstimate.amount.toFixed(2)} {cabifyEstimate.currency}</span>
+                </div>
+              )}
+            </>
+          ) : carrier === "gls" ? (
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
@@ -713,6 +846,21 @@ export default function NewShipmentPage() {
               </a>
             </div>
           )}
+          {cabifyTrackingUrl && (
+            <div className="pt-2">
+              <a
+                href={cabifyTrackingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-400 dark:hover:bg-cyan-900/20"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Ver tracking Cabify
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex gap-2">
@@ -730,6 +878,9 @@ export default function NewShipmentPage() {
               setReference(null);
               setGlsBarcode(null);
               setGlsLabelUrl(null);
+              setCabifyParcelId(null);
+              setCabifyTrackingUrl(null);
+              setCabifyEstimate(null);
               setCarrier("packlink");
               setTitle("");
               setContentDescription("");

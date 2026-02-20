@@ -11,7 +11,7 @@ interface GlsTrackingEvent {
 }
 
 type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
-type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null };
+type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null; cabify_parcel_id?: string | null };
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
@@ -47,13 +47,13 @@ interface ProjectShippingProps {
 export function ProjectShipping({ projectId, shippingInfo, holdedContact }: ProjectShippingProps) {
   // Determine initial step based on existing data
   const getInitialStep = () => {
-    if (shippingInfo?.packlink_shipment_ref || shippingInfo?.gls_barcode) return "created" as const;
+    if (shippingInfo?.packlink_shipment_ref || shippingInfo?.gls_barcode || shippingInfo?.cabify_parcel_id) return "created" as const;
     return "idle" as const;
   };
 
   const [step, setStep] = useState<"idle" | "form" | "selecting" | "creating" | "created">(getInitialStep);
-  const [carrier, setCarrier] = useState<"packlink" | "gls">(
-    shippingInfo?.carrier === "GLS" ? "gls" : shippingInfo?.packlink_shipment_ref ? "packlink" : "gls",
+  const [carrier, setCarrier] = useState<"packlink" | "gls" | "cabify">(
+    shippingInfo?.carrier === "Cabify" ? "cabify" : shippingInfo?.carrier === "GLS" ? "gls" : shippingInfo?.packlink_shipment_ref ? "packlink" : "gls",
   );
   const [services, setServices] = useState<PacklinkService[]>([]);
   const [selectedService, setSelectedService] = useState<PacklinkService | null>(null);
@@ -63,10 +63,13 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
   const [currentShipping, setCurrentShipping] = useState<ShipmentRow | null>(shippingInfo);
 
   const isGls = currentShipping?.carrier === "GLS";
-  const hasRef = isGls ? !!currentShipping?.gls_barcode : !!currentShipping?.packlink_shipment_ref;
+  const isCabify = currentShipping?.carrier === "Cabify";
+  const hasRef = isGls ? !!currentShipping?.gls_barcode : isCabify ? !!currentShipping?.cabify_parcel_id : !!currentShipping?.packlink_shipment_ref;
   const [glsServiceId, setGlsServiceId] = useState("business24");
   const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [cabifyEstimate, setCabifyEstimate] = useState<{ amount: number; currency: string } | null>(null);
+  const cabifyEstimateRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Form state — pre-fill from Holded contact (split name into first + surname)
   const [recipientName, setRecipientName] = useState(() => {
@@ -102,11 +105,40 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
     if (step === "created") {
       if (currentShipping?.carrier === "GLS" && currentShipping?.gls_barcode) {
         fetchGlsTracking(currentShipping.gls_barcode);
+      } else if (currentShipping?.carrier === "Cabify" && currentShipping?.cabify_parcel_id) {
+        fetchCabifyTracking(currentShipping.cabify_parcel_id);
       } else if (currentShipping?.packlink_shipment_ref) {
         fetchPacklinkTracking(currentShipping.packlink_shipment_ref);
       }
     }
-  }, [currentShipping?.packlink_shipment_ref, currentShipping?.gls_barcode, currentShipping?.carrier, step]);
+  }, [currentShipping?.packlink_shipment_ref, currentShipping?.gls_barcode, currentShipping?.cabify_parcel_id, currentShipping?.carrier, step]);
+
+  // Estimate Cabify price
+  useEffect(() => {
+    if (carrier !== "cabify" || !street || !city || !postalCode) {
+      setCabifyEstimate(null);
+      return;
+    }
+    if (cabifyEstimateRef.current) clearTimeout(cabifyEstimateRef.current);
+    cabifyEstimateRef.current = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          dropoffAddress: street,
+          dropoffCity: city,
+          dropoffPostalCode: postalCode,
+        });
+        const res = await fetch(`/api/cabify/estimate?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          setCabifyEstimate(data.price ?? null);
+        } else {
+          setCabifyEstimate(null);
+        }
+      } catch {
+        setCabifyEstimate(null);
+      }
+    }, 500);
+  }, [carrier, street, city, postalCode]);
 
   // Estimate GLS prices for all services
   useEffect(() => {
@@ -163,9 +195,23 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
     }
   }
 
+  async function fetchCabifyTracking(parcelId: string) {
+    try {
+      const res = await fetch(`/api/cabify/shipments/${parcelId}/tracking`);
+      if (res.ok) {
+        const data = await res.json();
+        setTracking(data.events ?? []);
+      }
+    } catch {
+      // Tracking may not be available yet
+    }
+  }
+
   function refreshTracking() {
     if (currentShipping?.carrier === "GLS" && currentShipping?.gls_barcode) {
       fetchGlsTracking(currentShipping.gls_barcode);
+    } else if (currentShipping?.carrier === "Cabify" && currentShipping?.cabify_parcel_id) {
+      fetchCabifyTracking(currentShipping.cabify_parcel_id);
     } else if (currentShipping?.packlink_shipment_ref) {
       fetchPacklinkTracking(currentShipping.packlink_shipment_ref);
     }
@@ -199,6 +245,74 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
       setStep("selecting");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error fetching services");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createCabifyShipment() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/cabify/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          recipientName: `${recipientName} ${recipientSurname}`.trim(),
+          recipientPhone: recipientPhone || undefined,
+          recipientEmail: recipientEmail || undefined,
+          street,
+          city,
+          postalCode,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create Cabify shipment");
+      }
+
+      const data = await res.json();
+      setCurrentShipping({
+        ...currentShipping,
+        id: currentShipping?.id ?? "",
+        project_id: projectId,
+        cabify_parcel_id: data.parcelId,
+        carrier: "Cabify",
+        address_line: street,
+        city,
+        postal_code: postalCode,
+        country: "ES",
+        recipient_name: `${recipientName} ${recipientSurname}`.trim(),
+        recipient_phone: recipientPhone,
+        recipient_email: recipientEmail,
+        shipment_status: "pending",
+        shipped_at: new Date().toISOString(),
+        tracking_number: data.trackingUrl ?? null,
+        gls_barcode: null,
+        packlink_shipment_ref: null,
+        packlink_order_ref: null,
+        service_id: null,
+        service_name: null,
+        price: null,
+        label_url: null,
+        notes: null,
+        delivered_at: null,
+        title: null,
+        content_description: null,
+        declared_value: null,
+        package_width: null,
+        package_height: null,
+        package_length: null,
+        package_weight: null,
+        created_at: null,
+        created_by: null,
+      });
+      setStep("created");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating Cabify shipment");
     } finally {
       setLoading(false);
     }
@@ -364,6 +478,14 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
   }
 
   async function downloadLabel() {
+    if (isCabify) {
+      // Cabify doesn't provide downloadable labels — open tracking URL if available
+      if (currentShipping?.tracking_number) {
+        window.open(currentShipping.tracking_number, "_blank");
+      }
+      return;
+    }
+
     if (isGls) {
       const barcode = currentShipping?.gls_barcode;
       if (!barcode) return;
@@ -457,8 +579,37 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
               >
                 Packlink
               </button>
+              <button
+                type="button"
+                onClick={() => setCarrier("cabify")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "cabify"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                Cabify
+              </button>
             </div>
           </div>
+
+          {/* Cabify estimate */}
+          {carrier === "cabify" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                Cabify — Courier urbano (solo Madrid)
+              </p>
+              {cabifyEstimate ? (
+                <p className="mt-1 text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  Precio estimado: {cabifyEstimate.amount.toFixed(2)} {cabifyEstimate.currency}
+                </p>
+              ) : street && city && postalCode ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Calculando precio…</p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">Rellena la dirección destino para ver precio</p>
+              )}
+            </div>
+          )}
 
           {/* GLS service selector */}
           {carrier === "gls" && (
@@ -568,12 +719,14 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             </div>
           </div>
 
-          {/* Packages */}
-          <PackageListEditor
-            packages={packages}
-            onChange={setPackages}
-            inputClass="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-          />
+          {/* Packages (not needed for Cabify) */}
+          {carrier !== "cabify" && (
+            <PackageListEditor
+              packages={packages}
+              onChange={setPackages}
+              inputClass="block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            />
+          )}
         </div>
 
         <div className="mt-5 flex gap-2">
@@ -584,13 +737,24 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
             Cancel
           </button>
           <button
-            onClick={carrier === "gls" ? createGlsShipment : searchServices}
-            disabled={loading || !postalCode || !country || packages.some((p) => !p.width || !p.height || !p.length || !p.weight)}
+            onClick={
+              carrier === "cabify"
+                ? createCabifyShipment
+                : carrier === "gls"
+                  ? createGlsShipment
+                  : searchServices
+            }
+            disabled={
+              loading ||
+              !postalCode ||
+              !country ||
+              (carrier !== "cabify" && packages.some((p) => !p.width || !p.height || !p.length || !p.weight))
+            }
             className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
           >
             {loading
-              ? carrier === "gls" ? "Creating…" : "Searching…"
-              : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
+              ? carrier === "cabify" ? "Creating…" : carrier === "gls" ? "Creating…" : "Searching…"
+              : carrier === "cabify" ? "Crear envio Cabify" : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
           </button>
         </div>
       </div>
