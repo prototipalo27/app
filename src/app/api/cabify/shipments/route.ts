@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createParcel } from "@/lib/cabify/api";
+import { createParcel, shipParcels } from "@/lib/cabify/api";
 import { CABIFY_SENDER } from "@/lib/cabify/sender";
 
 /**
@@ -60,10 +60,13 @@ export async function POST(request: NextRequest) {
       description: contentDescription || "3D printed parts",
     });
 
+    // Ship the parcel (request pickup)
+    await shipParcels([parcel.id]);
+
     const row: Record<string, unknown> = {
       cabify_parcel_id: parcel.id,
       carrier: "Cabify",
-      shipment_status: parcel.status || "pending",
+      shipment_status: "shipped",
       address_line: street,
       city,
       postal_code: postalCode,
