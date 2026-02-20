@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getParcelStatus } from "@/lib/cabify/api";
+import { getParcelTimeline } from "@/lib/cabify/api";
 
 /**
  * GET /api/cabify/shipments/[parcelId]/tracking
@@ -21,7 +21,7 @@ export async function GET(
   const { parcelId } = await params;
 
   try {
-    const status = await getParcelStatus(parcelId);
+    const status = await getParcelTimeline(parcelId);
     return NextResponse.json({
       status: status.status,
       events: status.events,
