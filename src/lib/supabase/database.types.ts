@@ -1319,6 +1319,7 @@ export type Database = {
       shipping_info: {
         Row: {
           address_line: string | null
+          cabify_parcel_id: string | null
           carrier: string | null
           city: string | null
           content_description: string | null
@@ -1351,6 +1352,7 @@ export type Database = {
         }
         Insert: {
           address_line?: string | null
+          cabify_parcel_id?: string | null
           carrier?: string | null
           city?: string | null
           content_description?: string | null
@@ -1383,6 +1385,7 @@ export type Database = {
         }
         Update: {
           address_line?: string | null
+          cabify_parcel_id?: string | null
           carrier?: string | null
           city?: string | null
           content_description?: string | null
