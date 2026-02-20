@@ -166,6 +166,47 @@ export async function createProforma(
   return (await res.json()) as { id: string };
 }
 
+/** Update a proforma with line items and optional notes */
+export async function updateProforma(
+  documentId: string,
+  data: {
+    products: Array<{
+      name: string;
+      desc?: string;
+      units: number;
+      subtotal: number;
+      tax: number;
+    }>;
+    notes?: string;
+  },
+): Promise<{ id: string }> {
+  const body: Record<string, unknown> = {
+    products: data.products.map((p) => ({
+      name: p.name,
+      desc: p.desc || "",
+      units: p.units,
+      subtotal: p.subtotal,
+      tax: p.tax,
+    })),
+  };
+  if (data.notes) body.notes = data.notes;
+
+  const res = await fetch(
+    `${HOLDED_API_BASE}/documents/proform/${documentId}`,
+    {
+      method: "PUT",
+      headers: { key: getApiKey(), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as { id: string };
+}
+
 // ── Document PDF ─────────────────────────────────────────
 
 /** Download a document PDF by type and ID */

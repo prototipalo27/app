@@ -16,6 +16,7 @@ import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
 import ProjectChecklist from "./project-checklist";
+import ProformaEditor from "./proforma-editor";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -287,6 +288,17 @@ export default async function ProjectDetailPage({
         <ProjectDocuments
           folderId={project.google_drive_folder_id}
           projectId={project.id}
+        />
+      </div>
+
+      {/* Proforma */}
+      <div className="mb-6">
+        <ProformaEditor
+          projectId={project.id}
+          hasHoldedContact={!!project.holded_contact_id}
+          existingProformaId={project.holded_proforma_id}
+          proformaSentAt={project.proforma_sent_at ?? null}
+          projectPrice={project.price}
         />
       </div>
 

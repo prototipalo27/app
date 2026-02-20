@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { syncHoldedDocuments, type SyncResult } from "@/lib/holded/sync";
+import { shouldNotifyStatus, sendStatusNotification } from "@/lib/email/status-notifications";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -81,16 +82,28 @@ export async function updateProjectStatus(formData: FormData) {
   }
 
   const id = formData.get("id") as string;
-  const status = formData.get("status") as string;
+  const newStatus = formData.get("status") as string;
+
+  // Get current status before update
+  const { data: project } = await supabase
+    .from("projects")
+    .select("status, client_email, name, tracking_token")
+    .eq("id", id)
+    .single();
+
+  const oldStatus = project?.status ?? null;
 
   const { error } = await supabase
     .from("projects")
-    .update({ status })
+    .update({ status: newStatus })
     .eq("id", id);
 
   if (error) {
     throw new Error(error.message);
   }
+
+  // Record status history + send notification (fire-and-forget)
+  recordStatusChange(supabase, id, oldStatus, newStatus, userData.user.id, project).catch(() => {});
 
   revalidatePath(`/dashboard/projects/${id}`);
   revalidatePath("/dashboard");
@@ -104,6 +117,15 @@ export async function updateProjectStatusById(id: string, status: string): Promi
     return { success: false, error: "Unauthorized" };
   }
 
+  // Get current status before update
+  const { data: project } = await supabase
+    .from("projects")
+    .select("status, client_email, name, tracking_token")
+    .eq("id", id)
+    .single();
+
+  const oldStatus = project?.status ?? null;
+
   const { error } = await supabase
     .from("projects")
     .update({ status })
@@ -113,8 +135,47 @@ export async function updateProjectStatusById(id: string, status: string): Promi
     return { success: false, error: error.message };
   }
 
+  // Record status history + send notification (fire-and-forget)
+  recordStatusChange(supabase, id, oldStatus, status, userData.user.id, project).catch(() => {});
+
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+/** Helper: record status change in history and optionally notify client */
+async function recordStatusChange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  projectId: string,
+  oldStatus: string | null,
+  newStatus: string,
+  userId: string,
+  project: { client_email: string | null; name: string; tracking_token: string } | null,
+) {
+  let notificationSent = false;
+
+  // Send email notification if applicable
+  if (project?.client_email && shouldNotifyStatus(newStatus)) {
+    try {
+      await sendStatusNotification(
+        project.client_email,
+        project.name,
+        newStatus,
+        project.tracking_token,
+      );
+      notificationSent = true;
+    } catch (e) {
+      console.error("Failed to send status notification email:", e);
+    }
+  }
+
+  // Insert status history record
+  await supabase.from("project_status_history").insert({
+    project_id: projectId,
+    old_status: oldStatus,
+    new_status: newStatus,
+    changed_by: userId,
+    notification_sent: notificationSent,
+  });
 }
 
 export async function updateProjectDeadline(projectId: string, deadline: string | null) {
