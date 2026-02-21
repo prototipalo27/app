@@ -460,6 +460,7 @@ export function ProjectShipping({ projectId, shippingInfo, holdedContact }: Proj
         shipped_at: new Date().toISOString(),
         packlink_order_ref: null,
         cabify_parcel_id: null,
+        gls_barcode: currentShipping?.gls_barcode ?? null,
         service_id: selectedService.id,
         label_url: null,
         notes: null,
