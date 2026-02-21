@@ -980,6 +980,44 @@ export type Database = {
           },
         ]
       }
+      project_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string | null
+          id: string
+          new_status: string
+          notification_sent: boolean | null
+          old_status: string | null
+          project_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          new_status: string
+          notification_sent?: boolean | null
+          old_status?: string | null
+          project_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          new_status?: string
+          notification_sent?: boolean | null
+          old_status?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_status_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_templates: {
         Row: {
           created_at: string
@@ -1033,6 +1071,7 @@ export type Database = {
           payment_confirmed_at: string | null
           price: number | null
           print_time_minutes: number | null
+          proforma_sent_at: string | null
           project_type: string
           queue_priority: number
           status: string
@@ -1065,6 +1104,7 @@ export type Database = {
           payment_confirmed_at?: string | null
           price?: number | null
           print_time_minutes?: number | null
+          proforma_sent_at?: string | null
           project_type?: string
           queue_priority?: number
           status?: string
@@ -1097,6 +1137,7 @@ export type Database = {
           payment_confirmed_at?: string | null
           price?: number | null
           print_time_minutes?: number | null
+          proforma_sent_at?: string | null
           project_type?: string
           queue_priority?: number
           status?: string
@@ -1267,6 +1308,14 @@ export type Database = {
           holded_proforma_id: string | null
           id: string
           lead_id: string
+          proforma_accepted_at: string | null
+          shipping_address: string | null
+          shipping_city: string | null
+          shipping_country: string | null
+          shipping_postal_code: string | null
+          shipping_province: string | null
+          shipping_recipient_name: string | null
+          shipping_recipient_phone: string | null
           status: string
           submitted_at: string | null
           tax_id: string | null
@@ -1284,6 +1333,14 @@ export type Database = {
           holded_proforma_id?: string | null
           id?: string
           lead_id: string
+          proforma_accepted_at?: string | null
+          shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_postal_code?: string | null
+          shipping_province?: string | null
+          shipping_recipient_name?: string | null
+          shipping_recipient_phone?: string | null
           status?: string
           submitted_at?: string | null
           tax_id?: string | null
@@ -1301,6 +1358,14 @@ export type Database = {
           holded_proforma_id?: string | null
           id?: string
           lead_id?: string
+          proforma_accepted_at?: string | null
+          shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_postal_code?: string | null
+          shipping_province?: string | null
+          shipping_recipient_name?: string | null
+          shipping_recipient_phone?: string | null
           status?: string
           submitted_at?: string | null
           tax_id?: string | null
@@ -1328,6 +1393,7 @@ export type Database = {
           created_by: string | null
           declared_value: number | null
           delivered_at: string | null
+          gls_barcode: string | null
           id: string
           label_url: string | null
           notes: string | null
@@ -1361,6 +1427,7 @@ export type Database = {
           created_by?: string | null
           declared_value?: number | null
           delivered_at?: string | null
+          gls_barcode?: string | null
           id?: string
           label_url?: string | null
           notes?: string | null
@@ -1394,6 +1461,7 @@ export type Database = {
           created_by?: string | null
           declared_value?: number | null
           delivered_at?: string | null
+          gls_barcode?: string | null
           id?: string
           label_url?: string | null
           notes?: string | null

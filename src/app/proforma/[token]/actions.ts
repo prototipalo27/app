@@ -90,12 +90,14 @@ export async function acceptProforma(
       await supabase.from("shipping_info").insert(shippingRow);
     }
 
-    // 3. Update quote_request if linked (find by holded_proforma_id or lead)
-    const { data: quoteRequests } = await supabase
-      .from("quote_requests")
-      .select("id")
-      .eq("holded_proforma_id", project.holded_contact_id)
-      .limit(1);
+    // 3. Update quote_request if linked
+    const quoteRequests = project.holded_contact_id
+      ? (await supabase
+          .from("quote_requests")
+          .select("id")
+          .eq("holded_contact_id", project.holded_contact_id)
+          .limit(1)).data
+      : null;
 
     if (quoteRequests && quoteRequests.length > 0) {
       await supabase
