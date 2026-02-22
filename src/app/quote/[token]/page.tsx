@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -30,10 +31,8 @@ export default async function QuotePage({
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
         <div className="w-full max-w-md">
           <div className="mb-6 flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-8 dark:block" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-light.png" alt="Prototipalo" className="block h-8 dark:hidden" />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-8 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="block h-8 w-auto dark:hidden" />
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
@@ -58,10 +57,8 @@ export default async function QuotePage({
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
           <div className="mb-4 flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-dark.png" alt="Prototipalo" className="hidden h-8 dark:block" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-light.png" alt="Prototipalo" className="block h-8 dark:hidden" />
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-8 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="block h-8 w-auto dark:hidden" />
           </div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
             Datos de facturación

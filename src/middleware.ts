@@ -9,6 +9,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  const { pathname } = request.nextUrl;
+  const isPublic =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/track/") ||
+    pathname.startsWith("/quote/") ||
+    pathname.startsWith("/proforma/") ||
+    pathname === "/offline";
+
+  // Skip Supabase auth check entirely for public routes
+  if (isPublic && pathname !== "/login") {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -39,16 +55,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-  const isPublic =
-    pathname === "/" ||
-    pathname === "/login" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/track/") ||
-    pathname.startsWith("/quote/") ||
-    pathname === "/offline";
 
   // Not authenticated + protected route -> redirect to login
   if (!user && !isPublic) {
