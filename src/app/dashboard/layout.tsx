@@ -5,7 +5,11 @@ import { signOut } from "@/app/login/actions";
 import NotificationBell from "@/components/NotificationBell";
 import MobileSidebar from "@/components/MobileSidebar";
 import SessionRefresh from "@/components/SessionRefresh";
-import { getUserProfile, hasRole, type UserRole } from "@/lib/rbac";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
+import ImpersonateButton from "@/components/ImpersonateButton";
+import { getUserProfile, getRealProfile, hasRole, type UserRole } from "@/lib/rbac";
+import { getImpersonatedUserId } from "@/lib/impersonate";
+import { createClient } from "@/lib/supabase/server";
 import DesktopNav from "./desktop-nav";
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -23,6 +27,24 @@ export default async function DashboardLayout({
 
   if (!profile || !profile.is_active) {
     redirect("/login");
+  }
+
+  const realProfile = await getRealProfile();
+  const realIsSuperAdmin = realProfile?.role === "super_admin";
+  const impersonatedUserId = await getImpersonatedUserId();
+  const isImpersonating = realIsSuperAdmin && impersonatedUserId && impersonatedUserId !== realProfile?.id;
+
+  // Fetch users list for impersonation dropdown (only for super_admin)
+  let impersonatableUsers: { id: string; email: string; role: string }[] = [];
+  if (realIsSuperAdmin) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("id, email, role")
+      .eq("is_active", true)
+      .neq("id", realProfile!.id)
+      .order("email");
+    impersonatableUsers = data ?? [];
   }
 
   const isManager = hasRole(profile.role, "manager");
@@ -61,6 +83,7 @@ export default async function DashboardLayout({
           </Link>
         )}
       </div>
+      {realIsSuperAdmin && <ImpersonateButton users={impersonatableUsers} />}
       <form action={signOut}>
         <button
           type="submit"
@@ -77,11 +100,18 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
+      {/* Impersonation banner */}
+      {isImpersonating && (
+        <div className="fixed inset-x-0 top-0 z-50">
+          <ImpersonationBanner email={profile.email} role={profile.role} />
+        </div>
+      )}
+
       {/* Mobile sidebar + top bar */}
       <MobileSidebar isManager={isManager}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
+      <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900 ${isImpersonating ? "pt-10" : ""}`}>
         <div className="shrink-0 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <Link href={isManager ? "/dashboard/control" : "/dashboard"}>
             <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-[5.25rem] w-auto dark:hidden" priority />
@@ -97,7 +127,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex min-w-0 flex-1 flex-col p-4 md:p-8">
+      <main className={`flex min-w-0 flex-1 flex-col p-4 md:p-8 ${isImpersonating ? "pt-14 md:pt-16" : ""}`}>
         {children}
       </main>
 

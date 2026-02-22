@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getImpersonatedUserId } from "./impersonate";
 
 export type UserRole = "super_admin" | "manager" | "employee";
 
@@ -26,8 +27,7 @@ export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
   return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
 }
 
-export async function getUserProfile(): Promise<UserProfile | null> {
-  // Dev bypass: return a mock super_admin profile
+export async function getRealProfile(): Promise<UserProfile | null> {
   if (process.env.NODE_ENV === "development") {
     return {
       id: "dev-user",
@@ -53,6 +53,27 @@ export async function getUserProfile(): Promise<UserProfile | null> {
   if (!data) return null;
 
   return data as UserProfile;
+}
+
+export async function getUserProfile(): Promise<UserProfile | null> {
+  const realProfile = await getRealProfile();
+  if (!realProfile) return null;
+
+  if (realProfile.role === "super_admin") {
+    const targetId = await getImpersonatedUserId();
+    if (targetId && targetId !== realProfile.id) {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("id, email, role, is_active")
+        .eq("id", targetId)
+        .single();
+
+      if (data) return data as UserProfile;
+    }
+  }
+
+  return realProfile;
 }
 
 export async function requireRole(minRole: UserRole): Promise<UserProfile> {
