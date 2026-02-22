@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon, actionTitle, actions }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode; actionTitle?: string; actions?: { href: string; icon: React.ReactNode; title: string }[] }) {
+function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, actionIcon, actionTitle, actions, badge }: { href: string; label: string; icon: React.ReactNode; exact?: boolean; alsoMatch?: string; actionHref?: string; actionIcon?: React.ReactNode; actionTitle?: string; actions?: { href: string; icon: React.ReactNode; title: string }[]; badge?: number }) {
   const pathname = usePathname();
   const isActive = (exact ? pathname === href : pathname?.startsWith(href)) || (alsoMatch && pathname?.startsWith(alsoMatch));
   const isActionActive = actionHref && pathname?.startsWith(actionHref);
@@ -22,6 +22,11 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
       >
         {icon}
         {label}
+        {badge != null && badge > 0 && (
+          <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[10px] font-bold text-white">
+            {badge}
+          </span>
+        )}
       </Link>
       {allActions.map((action) => {
         const active = pathname?.startsWith(action.href);
@@ -55,7 +60,7 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-export default function DesktopNav({ isManager }: { isManager: boolean }) {
+export default function DesktopNav({ isManager, pendingTaskCount = 0 }: { isManager: boolean; pendingTaskCount?: number }) {
   return (
     <nav className="flex-1 space-y-0.5 overflow-hidden p-3">
       {/* ── VENTAS ── */}
@@ -146,6 +151,7 @@ export default function DesktopNav({ isManager }: { isManager: boolean }) {
       <NavLink
         href="/dashboard/tareas"
         label="Tareas"
+        badge={pendingTaskCount}
         icon={
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />

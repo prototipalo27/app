@@ -47,6 +47,14 @@ export default async function DashboardLayout({
     impersonatableUsers = data ?? [];
   }
 
+  // Count pending/in_progress tasks assigned to this user
+  const supabaseForTasks = await createClient();
+  const { count: pendingTaskCount } = await supabaseForTasks
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("assigned_to", profile.id)
+    .in("status", ["pending", "in_progress"]);
+
   const isManager = hasRole(profile.role, "manager");
   const isSuperAdmin = profile.role === "super_admin";
 
@@ -108,7 +116,7 @@ export default async function DashboardLayout({
       )}
 
       {/* Mobile sidebar + top bar */}
-      <MobileSidebar isManager={isManager}>{bottomSection}</MobileSidebar>
+      <MobileSidebar isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
       <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900 ${isImpersonating ? "pt-10" : ""}`}>
@@ -119,7 +127,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
 
-        <DesktopNav isManager={isManager} />
+        <DesktopNav isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0} />
 
         <div className="shrink-0 border-t border-zinc-200 p-2 dark:border-zinc-800">
           {bottomSection}

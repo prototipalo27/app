@@ -80,6 +80,13 @@ export async function markAsPurchased(
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
+  // Fetch item details before updating (for notification)
+  const { data: item } = await supabase
+    .from("purchase_items")
+    .select("description, created_by")
+    .eq("id", itemId)
+    .single();
+
   const { error } = await supabase
     .from("purchase_items")
     .update({
@@ -93,6 +100,16 @@ export async function markAsPurchased(
     .eq("id", itemId);
 
   if (error) throw new Error(error.message);
+
+  // Notify the person who requested the purchase
+  if (item?.created_by && item.created_by !== profile.id) {
+    sendPushToUser(item.created_by, {
+      title: "Tu compra ha sido procesada",
+      body: item.description,
+      url: PATH,
+    }).catch(() => {});
+  }
+
   revalidatePath(PATH);
 }
 

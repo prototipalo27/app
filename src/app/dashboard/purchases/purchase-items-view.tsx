@@ -310,14 +310,6 @@ export default function PurchaseItemsView({
                             Motivo: {item.rejection_reason}
                           </span>
                         )}
-                        {status === "purchased" && item.estimated_delivery && (
-                          <span className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            Entrega est.:{" "}
-                            {new Date(
-                              item.estimated_delivery
-                            ).toLocaleDateString("es-ES")}
-                          </span>
-                        )}
                       </div>
                     </td>
 
@@ -354,6 +346,14 @@ export default function PurchaseItemsView({
                         >
                           {STATUS_LABELS[status]}
                         </span>
+                        {status === "purchased" && item.estimated_delivery && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                            Entrega:{" "}
+                            {new Date(
+                              item.estimated_delivery
+                            ).toLocaleDateString("es-ES")}
+                          </span>
+                        )}
                         {status === "received" && item.provider && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400">
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
