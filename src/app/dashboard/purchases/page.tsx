@@ -22,6 +22,12 @@ export default async function PurchasesPage() {
     .select("id, name")
     .order("name");
 
+  // Fetch suppliers for the purchase prompt
+  const { data: suppliers } = await supabase
+    .from("suppliers")
+    .select("id, name")
+    .order("name");
+
   // Get creator emails
   const creatorIds = [
     ...new Set(
@@ -45,9 +51,12 @@ export default async function PurchasesPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
+      <h1 className="mb-1 text-2xl font-bold text-zinc-900 dark:text-white">
         Compras
       </h1>
+      <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
+        Solicita materiales o productos que necesites. El equipo de gestión revisará las solicitudes, las comprará y confirmará cuando se reciban.
+      </p>
       <PurchaseItemsView
         items={(items || []).map((item) => ({
           ...item,
@@ -57,6 +66,7 @@ export default async function PurchasesPage() {
           project_name: item.project?.name || null,
         }))}
         projects={projects || []}
+        suppliers={suppliers || []}
         isManager={isManager}
         userId={profile.id}
       />

@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole, getUserProfile } from "@/lib/rbac";
+import { sendPushToUser } from "@/lib/push-notifications/server";
 
 const PATH = "/dashboard/purchases";
+const IAN_USER_ID = "cd95b109-3af7-4658-b782-cb0f2f3419c3";
 
 // ── Add item (any employee) ───────────────────────────────
 
@@ -21,17 +23,50 @@ export async function addPurchaseItem(formData: FormData) {
   const estimatedPrice = formData.get("estimated_price") as string;
   const projectId = (formData.get("project_id") as string)?.trim() || null;
 
-  const { error } = await supabase.from("purchase_items").insert({
-    description: description.trim(),
-    link: (formData.get("link") as string)?.trim() || null,
-    quantity: quantity ? parseInt(quantity, 10) : 1,
-    estimated_price: estimatedPrice ? parseFloat(estimatedPrice) : null,
-    project_id: projectId || null,
-    created_by: profile.id,
-  });
+  const { data: purchaseItem, error } = await supabase
+    .from("purchase_items")
+    .insert({
+      description: description.trim(),
+      link: (formData.get("link") as string)?.trim() || null,
+      quantity: quantity ? parseInt(quantity, 10) : 1,
+      estimated_price: estimatedPrice ? parseFloat(estimatedPrice) : null,
+      project_id: projectId || null,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
 
   if (error) throw new Error(error.message);
+
+  // Auto-create task assigned to Ian for every purchase request
+  const taskTitle = `Compra solicitada: ${description.trim()}`;
+  const qty = quantity ? parseInt(quantity, 10) : 1;
+  const priceInfo = estimatedPrice ? ` · Precio est. ${parseFloat(estimatedPrice).toFixed(2)}€` : "";
+  const taskDescription = `Solicitud de compra de ${profile.email.split("@")[0]}.\n\nItem: ${description.trim()} (x${qty})${priceInfo}`;
+
+  const { data: task } = await supabase
+    .from("tasks")
+    .insert({
+      title: taskTitle,
+      description: taskDescription,
+      priority: "medium",
+      assigned_to: IAN_USER_ID,
+      project_id: projectId || null,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
+
+  if (task) {
+    sendPushToUser(IAN_USER_ID, {
+      title: "Nueva solicitud de compra",
+      body: taskTitle,
+      url: `/dashboard/tareas/${task.id}`,
+    }).catch(() => {});
+  }
+
   revalidatePath(PATH);
+  revalidatePath("/dashboard/tareas");
 }
 
 // ── Mark as purchased (manager) ───────────────────────────
@@ -39,7 +74,8 @@ export async function addPurchaseItem(formData: FormData) {
 export async function markAsPurchased(
   itemId: string,
   actualPrice: number | null,
-  estimatedDelivery: string | null
+  estimatedDelivery: string | null,
+  supplierId: string | null
 ) {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -52,6 +88,7 @@ export async function markAsPurchased(
       estimated_delivery: estimatedDelivery || null,
       purchased_at: new Date().toISOString(),
       purchased_by: profile.id,
+      provider: supplierId || null,
     })
     .eq("id", itemId);
 
@@ -92,7 +129,25 @@ export async function markAsReceived(itemId: string) {
     .eq("id", itemId);
 
   if (error) throw new Error(error.message);
+
+  // Auto-add to supplier catalogue if item has a provider
+  const { data: item } = await supabase
+    .from("purchase_items")
+    .select("description, link, actual_price, provider")
+    .eq("id", itemId)
+    .single();
+
+  if (item?.provider) {
+    await supabase.from("supplier_products").insert({
+      supplier_id: item.provider,
+      name: item.description,
+      url: item.link,
+      price: item.actual_price,
+    });
+  }
+
   revalidatePath(PATH);
+  revalidatePath("/dashboard/suppliers/products");
 }
 
 // ── Delete item (creator or manager) ──────────────────────

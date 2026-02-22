@@ -24,11 +24,17 @@ interface PurchaseItem {
   estimated_delivery: string | null;
   rejection_reason: string | null;
   project_id: string | null;
+  provider: string | null;
   creator_name: string;
   project_name: string | null;
 }
 
 interface Project {
+  id: string;
+  name: string;
+}
+
+interface Supplier {
   id: string;
   name: string;
 }
@@ -57,11 +63,13 @@ type ActivePrompt =
 export default function PurchaseItemsView({
   items,
   projects,
+  suppliers,
   isManager,
   userId,
 }: {
   items: PurchaseItem[];
   projects: Project[];
+  suppliers: Supplier[];
   isManager: boolean;
   userId: string;
 }) {
@@ -69,6 +77,7 @@ export default function PurchaseItemsView({
   const [activePrompt, setActivePrompt] = useState<ActivePrompt>(null);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [purchaseDelivery, setPurchaseDelivery] = useState("");
+  const [purchaseSupplier, setPurchaseSupplier] = useState("");
   const [rejectReason, setRejectReason] = useState("");
 
   // Sort: pending first, then purchased, then received/rejected
@@ -92,10 +101,12 @@ export default function PurchaseItemsView({
   async function handleConfirmPurchase(itemId: string) {
     const price = purchasePrice ? parseFloat(purchasePrice) : null;
     const delivery = purchaseDelivery || null;
-    await markAsPurchased(itemId, price, delivery);
+    const supplier = purchaseSupplier || null;
+    await markAsPurchased(itemId, price, delivery, supplier);
     setActivePrompt(null);
     setPurchasePrice("");
     setPurchaseDelivery("");
+    setPurchaseSupplier("");
   }
 
   async function handleConfirmReject(itemId: string) {
@@ -335,13 +346,23 @@ export default function PurchaseItemsView({
 
                     {/* Status */}
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          STATUS_COLORS[status]
-                        }`}
-                      >
-                        {STATUS_LABELS[status]}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            STATUS_COLORS[status]
+                          }`}
+                        >
+                          {STATUS_LABELS[status]}
+                        </span>
+                        {status === "received" && item.provider && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Añadido al catálogo
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Actions */}
@@ -371,6 +392,20 @@ export default function PurchaseItemsView({
                                 className="w-32 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                               />
                             </div>
+                            <select
+                              value={purchaseSupplier}
+                              onChange={(e) =>
+                                setPurchaseSupplier(e.target.value)
+                              }
+                              className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                            >
+                              <option value="">Proveedor (opcional)</option>
+                              {suppliers.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
@@ -432,6 +467,7 @@ export default function PurchaseItemsView({
                                     });
                                     setPurchasePrice("");
                                     setPurchaseDelivery("");
+                                    setPurchaseSupplier("");
                                   }}
                                   className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700"
                                 >
