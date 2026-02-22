@@ -228,42 +228,42 @@ export default function MobileSidebar({
           </Link>
 
           {/* ── COMPRAS ── */}
-          {isManager && (
-            <>
-              <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
-              <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Compras
-              </p>
-              <Link
-                href="/dashboard/purchases"
-                onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  pathname?.startsWith("/dashboard/purchases")
-                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-                </svg>
-                Lista de Compras
-              </Link>
+          <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
+          <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Compras
+          </p>
+          <div className="flex items-center gap-0.5">
+            <Link
+              href="/dashboard/purchases"
+              onClick={handleNavClick}
+              className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                pathname?.startsWith("/dashboard/purchases")
+                  ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+              </svg>
+              Compras
+            </Link>
+            {isManager && (
               <Link
                 href="/dashboard/suppliers"
                 onClick={handleNavClick}
-                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                className={`flex items-center rounded-lg p-2 ${
                   pathname === "/dashboard/suppliers"
                     ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
                 }`}
+                title="Proveedores"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
-                Proveedores
               </Link>
-            </>
-          )}
+            )}
+          </div>
 
           {/* ── FINANZAS ── */}
           {isManager && (

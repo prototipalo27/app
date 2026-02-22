@@ -1168,17 +1168,20 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           description: string
+          estimated_delivery: string | null
           estimated_price: number | null
           id: string
           item_type: string | null
           link: string | null
           notes: string | null
+          project_id: string | null
           provider: string | null
           purchase_list_id: string | null
           purchased_at: string | null
           purchased_by: string | null
           quantity: number | null
           received_at: string | null
+          rejection_reason: string | null
           status: string | null
         }
         Insert: {
@@ -1186,17 +1189,20 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description: string
+          estimated_delivery?: string | null
           estimated_price?: number | null
           id?: string
           item_type?: string | null
           link?: string | null
           notes?: string | null
+          project_id?: string | null
           provider?: string | null
           purchase_list_id?: string | null
           purchased_at?: string | null
           purchased_by?: string | null
           quantity?: number | null
           received_at?: string | null
+          rejection_reason?: string | null
           status?: string | null
         }
         Update: {
@@ -1204,17 +1210,20 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string
+          estimated_delivery?: string | null
           estimated_price?: number | null
           id?: string
           item_type?: string | null
           link?: string | null
           notes?: string | null
+          project_id?: string | null
           provider?: string | null
           purchase_list_id?: string | null
           purchased_at?: string | null
           purchased_by?: string | null
           quantity?: number | null
           received_at?: string | null
+          rejection_reason?: string | null
           status?: string | null
         }
         Relationships: [
@@ -1223,6 +1232,13 @@ export type Database = {
             columns: ["purchase_list_id"]
             isOneToOne: false
             referencedRelation: "purchase_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]

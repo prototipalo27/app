@@ -3,187 +3,124 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, getUserProfile } from "@/lib/rbac";
 
-// ── Purchase Lists ─────────────────────────────────────────
+const PATH = "/dashboard/purchases";
 
-export async function createPurchaseList(formData: FormData) {
-  await requireRole("manager");
-  const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
-
-  const title = formData.get("title") as string;
-  if (!title?.trim()) {
-    redirect("/dashboard/purchases/new");
-  }
-
-  const projectId = (formData.get("project_id") as string)?.trim() || null;
-
-  const { data, error } = await supabase
-    .from("purchase_lists")
-    .insert({
-      title: title.trim(),
-      notes: (formData.get("notes") as string)?.trim() || null,
-      project_id: projectId || null,
-      created_by: userData.user.id,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard/purchases");
-  redirect(`/dashboard/purchases/${data.id}`);
-}
-
-export async function closePurchaseList(listId: string) {
-  await requireRole("manager");
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .update({ status: "closed", updated_at: new Date().toISOString() })
-    .eq("id", listId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
-}
-
-export async function reopenPurchaseList(listId: string) {
-  await requireRole("manager");
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .update({ status: "open", updated_at: new Date().toISOString() })
-    .eq("id", listId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
-}
-
-export async function deletePurchaseList(listId: string) {
-  await requireRole("manager");
-
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("purchase_lists")
-    .delete()
-    .eq("id", listId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard/purchases");
-  redirect("/dashboard/purchases");
-}
-
-// ── Purchase Items ─────────────────────────────────────────
+// ── Add item (any employee) ───────────────────────────────
 
 export async function addPurchaseItem(formData: FormData) {
-  await requireRole("manager");
+  const profile = await getUserProfile();
+  if (!profile || !profile.is_active) redirect("/login");
+
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    redirect("/login");
-  }
-
   const description = formData.get("description") as string;
   if (!description?.trim()) return;
 
-  const listId = formData.get("purchase_list_id") as string;
   const quantity = formData.get("quantity") as string;
   const estimatedPrice = formData.get("estimated_price") as string;
+  const projectId = (formData.get("project_id") as string)?.trim() || null;
 
   const { error } = await supabase.from("purchase_items").insert({
-    purchase_list_id: listId,
     description: description.trim(),
     link: (formData.get("link") as string)?.trim() || null,
     quantity: quantity ? parseInt(quantity, 10) : 1,
-    item_type: (formData.get("item_type") as string) || "general",
     estimated_price: estimatedPrice ? parseFloat(estimatedPrice) : null,
-    notes: (formData.get("notes") as string)?.trim() || null,
-    created_by: userData.user.id,
+    project_id: projectId || null,
+    created_by: profile.id,
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
 }
 
-export async function updatePurchaseItemStatus(
+// ── Mark as purchased (manager) ───────────────────────────
+
+export async function markAsPurchased(
   itemId: string,
-  status: string,
-  listId: string,
-  actualPrice?: number
+  actualPrice: number | null,
+  estimatedDelivery: string | null
 ) {
-  await requireRole("manager");
+  const profile = await requireRole("manager");
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !userData.user) {
-    throw new Error("Unauthorized");
-  }
-
-  const updates: Record<string, unknown> = { status };
-
-  if (status === "purchased") {
-    updates.purchased_at = new Date().toISOString();
-    updates.purchased_by = userData.user.id;
-    if (actualPrice !== undefined) {
-      updates.actual_price = actualPrice;
-    }
-  } else if (status === "received") {
-    updates.received_at = new Date().toISOString();
-  }
 
   const { error } = await supabase
     .from("purchase_items")
-    .update(updates)
+    .update({
+      status: "purchased",
+      actual_price: actualPrice,
+      estimated_delivery: estimatedDelivery || null,
+      purchased_at: new Date().toISOString(),
+      purchased_by: profile.id,
+    })
     .eq("id", itemId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
 }
 
-export async function deletePurchaseItem(itemId: string, listId: string) {
+// ── Reject item (manager) ─────────────────────────────────
+
+export async function rejectItem(itemId: string, reason: string) {
   await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("purchase_items")
+    .update({
+      status: "rejected",
+      rejection_reason: reason.trim() || null,
+    })
+    .eq("id", itemId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
+}
+
+// ── Mark as received (manager) ────────────────────────────
+
+export async function markAsReceived(itemId: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("purchase_items")
+    .update({
+      status: "received",
+      received_at: new Date().toISOString(),
+    })
+    .eq("id", itemId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
+}
+
+// ── Delete item (creator or manager) ──────────────────────
+
+export async function deletePurchaseItem(itemId: string) {
+  const profile = await getUserProfile();
+  if (!profile || !profile.is_active) redirect("/login");
 
   const supabase = await createClient();
+
+  // Check ownership — managers can delete any, employees only their own
+  if (profile.role === "employee") {
+    const { data: item } = await supabase
+      .from("purchase_items")
+      .select("created_by")
+      .eq("id", itemId)
+      .single();
+
+    if (!item || item.created_by !== profile.id) {
+      throw new Error("No tienes permiso para eliminar este item");
+    }
+  }
 
   const { error } = await supabase
     .from("purchase_items")
     .delete()
     .eq("id", itemId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath(`/dashboard/purchases/${listId}`);
-  revalidatePath("/dashboard/purchases");
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
 }
