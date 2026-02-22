@@ -18,10 +18,10 @@ Prototipalo.com`;
 
 const DEFAULT_SIGNATURE_HTML = `
 <br>
-<table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;line-height:1.6;">
+<table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#333333;line-height:1.6;">
   <tr>
-    <td style="padding-bottom:12px;">
-      <strong style="font-size:15px;color:#1a1a1a;">Manuel de la Vi&ntilde;a</strong>
+    <td style="padding-bottom:10px;">
+      <strong style="font-size:12px;color:#1a1a1a;">Manuel de la Vi&ntilde;a</strong>
     </td>
   </tr>
   <tr>
@@ -31,12 +31,12 @@ const DEFAULT_SIGNATURE_HTML = `
     <td style="padding-bottom:2px;"><a href="tel:+34628673917" style="color:#333333;text-decoration:none;">+34 628 67 39 17</a></td>
   </tr>
   <tr>
-    <td style="padding-bottom:14px;"><a href="https://prototipalo.com" style="color:#2563eb;text-decoration:underline;">Prototipalo.com</a></td>
+    <td style="padding-bottom:11px;"><a href="https://prototipalo.com" style="color:#2563eb;text-decoration:underline;">Prototipalo.com</a></td>
   </tr>
   <tr>
-    <td style="border-top:2px solid #dc2626;padding-top:14px;">
+    <td style="padding-top:11px;">
       <a href="https://prototipalo.com" style="text-decoration:none;">
-        <img src="https://rqqwvgdmbmgdbegpcvmz.supabase.co/storage/v1/object/public/assets/logo-email.png" alt="prototipalo — better in 3d" width="280" height="auto" style="display:block;" />
+        <img src="https://rqqwvgdmbmgdbegpcvmz.supabase.co/storage/v1/object/public/assets/logo-email.png" alt="prototipalo — better in 3d" width="224" height="auto" style="display:block;" />
       </a>
     </td>
   </tr>
