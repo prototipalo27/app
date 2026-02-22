@@ -36,7 +36,7 @@ const DEFAULT_SIGNATURE_HTML = `
   <tr>
     <td style="border-top:2px solid #dc2626;padding-top:14px;">
       <a href="https://prototipalo.com" style="text-decoration:none;">
-        <img src="https://prototipalo.com/logo-email.png" alt="prototipalo — better in 3d" width="280" height="auto" style="display:block;" />
+        <img src="https://rqqwvgdmbmgdbegpcvmz.supabase.co/storage/v1/object/public/assets/logo-email.png" alt="prototipalo — better in 3d" width="280" height="auto" style="display:block;" />
       </a>
     </td>
   </tr>
