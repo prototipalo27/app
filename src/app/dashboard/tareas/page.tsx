@@ -93,7 +93,7 @@ export default async function TareasPage({
                   >
                     <td className="px-4 py-3">
                       <Link
-                        href={`/dashboard/tareas/${t.id}`}
+                        href={t.title.startsWith("Compra solicitada:") ? "/dashboard/purchases" : `/dashboard/tareas/${t.id}`}
                         className="font-medium text-zinc-900 hover:text-green-600 dark:text-white dark:hover:text-green-400"
                       >
                         {t.title}

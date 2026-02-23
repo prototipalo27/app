@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
+import type { EnrichedJob } from "./printer-grid";
 
 type Printer = Tables<"printers">;
 type PrinterType = Tables<"printer_types">;
@@ -39,11 +40,31 @@ function formatRemaining(minutes: number | null) {
   return `${h}h ${m}m`;
 }
 
-export default function PrinterCard({ printer, printerTypes = [] }: { printer: Printer; printerTypes?: PrinterType[] }) {
+function formatEstimate(minutes: number) {
+  if (minutes < 60) return `~${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `~${h}h ${m}m` : `~${h}h`;
+}
+
+export default function PrinterCard({
+  printer,
+  printerTypes = [],
+  jobs = [],
+}: {
+  printer: Printer;
+  printerTypes?: PrinterType[];
+  jobs?: EnrichedJob[];
+}) {
   const isOffline = !printer.online;
   const isRunning = printer.gcode_state === "RUNNING";
   const [typeId, setTypeId] = useState(printer.printer_type_id || "");
   const [saving, setSaving] = useState(false);
+
+  const printingJob = jobs.find((j) => j.status === "printing");
+  const queuedJobs = jobs
+    .filter((j) => j.status === "queued")
+    .sort((a, b) => a.position - b.position);
 
   async function handleTypeChange(newTypeId: string) {
     setTypeId(newTypeId);
@@ -90,13 +111,38 @@ export default function PrinterCard({ printer, printerTypes = [] }: { printer: P
         <StateBadge state={isOffline ? null : printer.gcode_state} />
       </div>
 
+      {/* Project/item info when printing */}
+      {isRunning && printingJob && (
+        <div className="mb-2 space-y-0.5">
+          <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">Proyecto:</span>{" "}
+            {printingJob.project_name}
+          </p>
+          <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">Pieza:</span>{" "}
+            {printingJob.item_name}
+            {printingJob.batch_number > 0 && (
+              <span className="text-zinc-400 dark:text-zinc-500"> (Batch {printingJob.batch_number})</span>
+            )}
+          </p>
+        </div>
+      )}
+
       {/* Progress section (only when printing) */}
       {isRunning && printer.current_file && (
         <div>
-          <div className="mb-1 flex items-center justify-between text-xs sm:text-sm">
-            <span className="truncate text-zinc-700 dark:text-zinc-300">{printer.current_file}</span>
-            <span className="ml-2 font-mono text-zinc-900 dark:text-zinc-100">{printer.print_percent}%</span>
-          </div>
+          {/* Only show raw filename if there's no enriched job info */}
+          {!printingJob && (
+            <div className="mb-1 flex items-center justify-between text-xs sm:text-sm">
+              <span className="truncate text-zinc-700 dark:text-zinc-300">{printer.current_file}</span>
+              <span className="ml-2 font-mono text-zinc-900 dark:text-zinc-100">{printer.print_percent}%</span>
+            </div>
+          )}
+          {printingJob && (
+            <div className="mb-1 flex items-center justify-end">
+              <span className="font-mono text-xs sm:text-sm text-zinc-900 dark:text-zinc-100">{printer.print_percent}%</span>
+            </div>
+          )}
           <div className="h-1.5 sm:h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
             <div
               className="h-full rounded-full bg-green-500 transition-all duration-500"
@@ -111,6 +157,28 @@ export default function PrinterCard({ printer, printerTypes = [] }: { printer: P
             </span>
             <span>{formatRemaining(printer.remaining_minutes)}</span>
           </div>
+        </div>
+      )}
+
+      {/* Queued jobs for this printer */}
+      {queuedJobs.length > 0 && (
+        <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+          <p className="mb-1 text-[10px] sm:text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            Pendientes ({queuedJobs.length})
+          </p>
+          <ul className="space-y-0.5">
+            {queuedJobs.map((job) => (
+              <li key={job.id} className="flex items-center justify-between text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="truncate">
+                  · {job.item_name}
+                  {job.batch_number > 0 && ` (B${job.batch_number})`}
+                </span>
+                <span className="ml-1 shrink-0 text-zinc-400 dark:text-zinc-500">
+                  {formatEstimate(job.estimated_minutes)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

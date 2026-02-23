@@ -8,10 +8,35 @@ import PrinterCard from "./printer-card";
 type Printer = Tables<"printers">;
 type PrinterType = Tables<"printer_types">;
 
+export interface EnrichedJob {
+  id: string;
+  printer_id: string | null;
+  batch_number: number;
+  pieces_in_batch: number;
+  estimated_minutes: number;
+  status: string;
+  position: number;
+  scheduled_start: string | null;
+  project_item_id: string;
+  item_name: string;
+  project_name: string;
+  project_id: string | null;
+  queue_priority: number;
+}
+
 const SYNC_INTERVAL = 5 * 60_000; // 5 minutes (matches Vercel Cron)
 
-export default function PrinterGrid({ initialPrinters, printerTypes = [] }: { initialPrinters: Printer[]; printerTypes?: PrinterType[] }) {
+export default function PrinterGrid({
+  initialPrinters,
+  printerTypes = [],
+  initialJobs = [],
+}: {
+  initialPrinters: Printer[];
+  printerTypes?: PrinterType[];
+  initialJobs?: EnrichedJob[];
+}) {
   const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
+  const [jobs, setJobs] = useState<EnrichedJob[]>(initialJobs);
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
 
@@ -31,7 +56,7 @@ export default function PrinterGrid({ initialPrinters, printerTypes = [] }: { in
     }
   }, []);
 
-  // Subscribe to Supabase Realtime for instant UI updates
+  // Subscribe to Supabase Realtime for printers + print_jobs
   useEffect(() => {
     const supabase = createClient();
 
@@ -53,6 +78,62 @@ export default function PrinterGrid({ initialPrinters, printerTypes = [] }: { in
             const deleted = payload.old as { id: string };
             setPrinters((prev) => prev.filter((p) => p.id !== deleted.id));
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "print_jobs" },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const deleted = payload.old as { id: string };
+            setJobs((prev) => prev.filter((j) => j.id !== deleted.id));
+            return;
+          }
+
+          const row = payload.new as Record<string, unknown>;
+          const status = row.status as string;
+
+          // Only care about queued/printing jobs
+          if (status !== "queued" && status !== "printing") {
+            // Job moved out of active states — remove it
+            setJobs((prev) => prev.filter((j) => j.id !== (row.id as string)));
+            return;
+          }
+
+          // Fetch enriched data for this job
+          const { data: item } = await supabase
+            .from("project_items")
+            .select("id, name, project_id, projects(name, queue_priority)")
+            .eq("id", row.project_item_id as string)
+            .single();
+
+          const proj = item?.projects as unknown as { name: string; queue_priority: number } | null;
+
+          const enriched: EnrichedJob = {
+            id: row.id as string,
+            printer_id: row.printer_id as string | null,
+            batch_number: row.batch_number as number,
+            pieces_in_batch: row.pieces_in_batch as number,
+            estimated_minutes: row.estimated_minutes as number,
+            status,
+            position: row.position as number,
+            scheduled_start: row.scheduled_start as string | null,
+            project_item_id: row.project_item_id as string,
+            item_name: item?.name ?? "Unknown",
+            project_name: proj?.name ?? "Unknown",
+            project_id: item?.project_id ?? null,
+            queue_priority: proj?.queue_priority ?? 0,
+          };
+
+          setJobs((prev) => {
+            const idx = prev.findIndex((j) => j.id === enriched.id);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = enriched;
+              return next;
+            }
+            return [...prev, enriched];
+          });
         }
       )
       .subscribe();
@@ -122,7 +203,12 @@ export default function PrinterGrid({ initialPrinters, printerTypes = [] }: { in
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((printer) => (
-            <PrinterCard key={printer.id} printer={printer} printerTypes={printerTypes} />
+            <PrinterCard
+              key={printer.id}
+              printer={printer}
+              printerTypes={printerTypes}
+              jobs={jobs.filter((j) => j.printer_id === printer.id)}
+            />
           ))}
         </div>
       )}

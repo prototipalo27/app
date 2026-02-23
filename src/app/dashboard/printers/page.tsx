@@ -156,7 +156,7 @@ export default async function PrintersPage() {
         <PrinterStats stats={dailyStats} workDayMinutes={WORK_DAY_MINUTES} />
       </div>
 
-      <PrinterGrid initialPrinters={printers ?? []} printerTypes={printerTypes ?? []} />
+      <PrinterGrid initialPrinters={printers ?? []} printerTypes={printerTypes ?? []} initialJobs={enrichedJobs} />
     </div>
   );
 }

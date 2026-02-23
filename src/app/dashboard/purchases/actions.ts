@@ -61,7 +61,7 @@ export async function addPurchaseItem(formData: FormData) {
     sendPushToUser(IAN_USER_ID, {
       title: "Nueva solicitud de compra",
       body: taskTitle,
-      url: `/dashboard/tareas/${task.id}`,
+      url: `/dashboard/purchases`,
     }).catch(() => {});
   }
 
@@ -101,6 +101,16 @@ export async function markAsPurchased(
 
   if (error) throw new Error(error.message);
 
+  // Auto-close the associated purchase task
+  if (item?.description) {
+    const taskTitle = `Compra solicitada: ${item.description}`;
+    await supabase
+      .from("tasks")
+      .update({ status: "done", updated_at: new Date().toISOString() })
+      .eq("title", taskTitle)
+      .eq("status", "pending");
+  }
+
   // Notify the person who requested the purchase
   if (item?.created_by && item.created_by !== profile.id) {
     sendPushToUser(item.created_by, {
@@ -111,6 +121,7 @@ export async function markAsPurchased(
   }
 
   revalidatePath(PATH);
+  revalidatePath("/dashboard/tareas");
 }
 
 // ── Reject item (manager) ─────────────────────────────────

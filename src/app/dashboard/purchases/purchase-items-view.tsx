@@ -372,25 +372,29 @@ export default function PurchaseItemsView({
                         {activePrompt?.type === "purchase" &&
                         activePrompt.itemId === item.id ? (
                           <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={purchasePrice}
-                                onChange={(e) =>
-                                  setPurchasePrice(e.target.value)
-                                }
-                                placeholder="Precio"
-                                className="w-20 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                              />
-                              <input
-                                type="date"
-                                value={purchaseDelivery}
-                                onChange={(e) =>
-                                  setPurchaseDelivery(e.target.value)
-                                }
-                                className="w-32 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                              />
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={purchasePrice}
+                                  onChange={(e) =>
+                                    setPurchasePrice(e.target.value)
+                                  }
+                                  placeholder="Precio"
+                                  className="w-20 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                                />
+                                <input
+                                  type="date"
+                                  value={purchaseDelivery}
+                                  onChange={(e) =>
+                                    setPurchaseDelivery(e.target.value)
+                                  }
+                                  title="Fecha estimada de entrega"
+                                  className="w-32 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                                />
+                              </div>
+                              <span className="text-[9px] text-zinc-400 dark:text-zinc-500">Fecha = entrega estimada</span>
                             </div>
                             <select
                               value={purchaseSupplier}
