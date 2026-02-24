@@ -44,7 +44,7 @@ export async function createProformaWithItems(
 
     // Add line items
     await updateProforma(proforma.id, {
-      products: items.map((item) => ({
+      items: items.map((item) => ({
         name: item.concept,
         units: item.units,
         subtotal: item.price,
