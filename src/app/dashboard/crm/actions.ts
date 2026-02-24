@@ -632,11 +632,12 @@ export async function generateEmailDraft(
     .order("created_at", { ascending: true })
     .limit(20);
 
-  // Get snippets for tone reference
+  // Get ALL snippets as knowledge base
   const { data: snippets } = await supabase
     .from("email_snippets")
     .select("title, content, category")
-    .limit(10);
+    .order("category")
+    .order("sort_order", { ascending: true });
 
   // Build context for the prompt
   const leadContext = [
@@ -659,9 +660,19 @@ export async function generateEmailDraft(
       .join("\n---\n");
   }
 
+  // Group snippets by category for structured knowledge
   let snippetRef = "";
   if (snippets && snippets.length > 0) {
-    snippetRef = snippets.map((s) => `[${s.category}] ${s.title}: ${s.content}`).join("\n");
+    const byCategory = new Map<string, typeof snippets>();
+    for (const s of snippets) {
+      if (!byCategory.has(s.category)) byCategory.set(s.category, []);
+      byCategory.get(s.category)!.push(s);
+    }
+    snippetRef = Array.from(byCategory.entries())
+      .map(([cat, items]) =>
+        `[${cat.toUpperCase()}]\n${items.map((s) => `- ${s.title}: ${s.content}`).join("\n")}`
+      )
+      .join("\n\n");
   }
 
   const systemPrompt = `Eres un asistente de ventas de Prototipalo, un taller de producción especializado en impresión 3D con impresoras Bambu Lab.
@@ -675,7 +686,10 @@ Reglas:
 - NO incluyas línea de asunto
 - NO uses emojis
 - Si es una respuesta, responde directamente al contenido del email recibido
-- Si es un email nuevo, preséntate brevemente y aborda el mensaje/consulta del lead`;
+- Si es un email nuevo, preséntate brevemente y aborda el mensaje/consulta del lead
+- Usa la información de los SNIPPETS DE CONOCIMIENTO como fuente de verdad para precios, plazos, materiales, envíos y condiciones de pago
+- Si el lead pregunta algo que está cubierto en los snippets, usa esa información en tu respuesta
+- Si no tienes datos suficientes para dar un precio concreto, indica que se preparará un presupuesto personalizado`;
 
   const userPrompt = [
     "Genera un borrador de email para este lead.",
@@ -689,7 +703,7 @@ Reglas:
       ? `\n--- EMAIL AL QUE RESPONDER ---\n${replyToContent}`
       : "",
     snippetRef
-      ? `\n--- SNIPPETS DE REFERENCIA (usa como guía de tono y contenido) ---\n${snippetRef}`
+      ? `\n--- SNIPPETS DE CONOCIMIENTO (precios, plazos, materiales, condiciones — ÚSALOS como fuente de verdad) ---\n${snippetRef}`
       : "",
     "",
     replyToContent
