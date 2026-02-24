@@ -131,6 +131,25 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
   const threads = groupIntoThreads(activities);
 
+  // Auto-generate AI draft for leads with no sent emails
+  useEffect(() => {
+    const hasSentEmails = activities.some((a) => a.activity_type === "email_sent");
+    if (hasSentEmails || !leadEmail) return;
+
+    let cancelled = false;
+    setIsGenerating(true);
+    generateEmailDraft(leadId).then((result) => {
+      if (cancelled) return;
+      if (result.success && result.draft) {
+        setEmailBody(result.draft);
+      }
+    }).finally(() => {
+      if (!cancelled) setIsGenerating(false);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
+
   // Listen for "send-proforma" event from lead-actions
   useEffect(() => {
     const handler = () => {
