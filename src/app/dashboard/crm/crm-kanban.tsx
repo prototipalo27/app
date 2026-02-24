@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
-import { CrmCard, type LeadWithAssignee } from "./crm-card";
+import { CrmCard, agingClasses, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
 import { ContactModal } from "./contact-modal";
 
@@ -297,6 +297,18 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     </span>
                   )}
                 </div>
+
+                {/* Aging badge */}
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
+                  {(() => {
+                    const diff = Date.now() - new Date(lead.updated_at).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    if (mins < 60) return `${mins}m`;
+                    const hours = Math.floor(mins / 60);
+                    if (hours < 24) return `${hours}h`;
+                    return `${Math.floor(hours / 24)}d`;
+                  })()}
+                </span>
 
                 {/* Phone */}
                 {lead.phone ? (

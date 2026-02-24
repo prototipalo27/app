@@ -22,6 +22,22 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
+/** Returns Tailwind classes for lead aging badge based on time since last update */
+export function agingClasses(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = diff / 3_600_000;
+  if (hours < 24) {
+    // Green — less than 1 day
+    return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400";
+  }
+  if (hours < 72) {
+    // Orange — 1-2 days
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400";
+  }
+  // Red — 3+ days
+  return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
+}
+
 export function CrmCard({ lead }: CrmCardProps) {
   const router = useRouter();
   const { ref, isDragging } = useDraggable({
@@ -49,7 +65,7 @@ export function CrmCard({ lead }: CrmCardProps) {
         <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
           {lead.full_name}
         </h4>
-        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
           {age}
         </span>
       </div>
