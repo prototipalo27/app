@@ -5,6 +5,7 @@ import {
   createProjectFolder,
 } from "@/lib/google-drive/client";
 import { sendPushToAll } from "@/lib/push-notifications/server";
+import { classifyAndApplyTemplate } from "@/lib/ai-classify-project";
 
 export interface SyncResult {
   newUpcoming: number;
@@ -189,6 +190,37 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         );
       }
     }
+
+    // AI: auto-classify project and apply matching template
+    if (project) {
+      const productNames = proforma.products
+        ?.filter((p) => p.name?.trim())
+        .map((p) => p.name.trim());
+
+      // Try to get lead message for extra context
+      let leadMessage: string | null = null;
+      if (proforma.contact) {
+        try {
+          const contact = await getContact(proforma.contact);
+          if (contact?.email) {
+            const { data: lead } = await supabase
+              .from("leads")
+              .select("message")
+              .ilike("email", contact.email.toLowerCase().trim())
+              .limit(1)
+              .single();
+            leadMessage = lead?.message || null;
+          }
+        } catch { /* non-critical */ }
+      }
+
+      classifyAndApplyTemplate(project.id, {
+        projectName: proforma.contactName,
+        description: proforma.desc || null,
+        products: productNames,
+        leadMessage,
+      }).catch((err) => console.error("AI classify error:", err));
+    }
   }
 
   // ── Phase B: Billed proformas → confirmed projects ───────
@@ -356,6 +388,19 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
           `Items for invoice ${invoice.docNumber}: ${itemsError.message}`,
         );
       }
+    }
+
+    // AI: auto-classify project and apply matching template
+    if (project) {
+      const productNames = invoice.products
+        ?.filter((p) => p.name?.trim())
+        .map((p) => p.name.trim());
+
+      classifyAndApplyTemplate(project.id, {
+        projectName: invoice.contactName,
+        description: invoice.desc || null,
+        products: productNames,
+      }).catch((err) => console.error("AI classify error:", err));
     }
   }
 
