@@ -533,6 +533,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          ai_draft: string | null
           assigned_to: string | null
           attachments: string | null
           company: string | null
@@ -552,6 +553,7 @@ export type Database = {
           webflow_submission_id: string | null
         }
         Insert: {
+          ai_draft?: string | null
           assigned_to?: string | null
           attachments?: string | null
           company?: string | null
@@ -571,6 +573,7 @@ export type Database = {
           webflow_submission_id?: string | null
         }
         Update: {
+          ai_draft?: string | null
           assigned_to?: string | null
           attachments?: string | null
           company?: string | null

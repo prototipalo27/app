@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
+import { generateAndSaveDraft } from "@/lib/ai-draft";
 
 function getSupabase() {
   return createClient(
@@ -198,6 +199,13 @@ export async function POST(request: NextRequest) {
       console.error("CRM webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Generate AI draft in background (non-blocking)
+    generateAndSaveDraft(lead.id, {
+      fullName: fullName.trim(),
+      company: company?.trim(),
+      message: message?.trim(),
+    }).catch((err) => console.error("AI draft error:", err));
 
     // Send push notification
     await sendPushToAll({

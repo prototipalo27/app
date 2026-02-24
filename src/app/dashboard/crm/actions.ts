@@ -9,7 +9,7 @@ import { decrypt } from "@/lib/encryption";
 import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateAndSaveDraft } from "@/lib/ai-draft";
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
@@ -242,6 +242,9 @@ export async function sendLeadEmail(
     .select("status, assigned_to")
     .eq("id", id)
     .single();
+
+  // Clear AI draft after sending
+  await supabase.from("leads").update({ ai_draft: null }).eq("id", id);
 
   if (lead?.status === "new") {
     await supabase
@@ -609,11 +612,6 @@ export async function generateEmailDraft(
   await requireRole("manager");
   const supabase = await createClient();
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: "ANTHROPIC_API_KEY no configurada" };
-  }
-
   // Get lead info
   const { data: lead } = await supabase
     .from("leads")
@@ -623,109 +621,21 @@ export async function generateEmailDraft(
 
   if (!lead) return { success: false, error: "Lead no encontrado" };
 
-  // Get recent email history
-  const { data: emailActivities } = await supabase
-    .from("lead_activities")
-    .select("activity_type, content, metadata, created_at")
-    .eq("lead_id", leadId)
-    .in("activity_type", ["email_sent", "email_received"])
-    .order("created_at", { ascending: true })
-    .limit(20);
-
-  // Get ALL snippets as knowledge base
-  const { data: snippets } = await supabase
-    .from("email_snippets")
-    .select("title, content, category")
-    .order("category")
-    .order("sort_order", { ascending: true });
-
-  // Build context for the prompt
-  const leadContext = [
-    `Nombre: ${lead.full_name}`,
-    lead.company ? `Empresa: ${lead.company}` : null,
-    lead.message ? `Mensaje original del lead: ${lead.message}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  let emailHistory = "";
-  if (emailActivities && emailActivities.length > 0) {
-    emailHistory = emailActivities
-      .map((e) => {
-        const direction = e.activity_type === "email_sent" ? "ENVIADO" : "RECIBIDO";
-        const meta = e.metadata as Record<string, unknown> | null;
-        const subject = meta?.email_subject ? ` (Asunto: ${meta.email_subject})` : "";
-        return `[${direction}]${subject}\n${e.content || "(sin contenido)"}`;
-      })
-      .join("\n---\n");
-  }
-
-  // Group snippets by category for structured knowledge
-  let snippetRef = "";
-  if (snippets && snippets.length > 0) {
-    const byCategory = new Map<string, typeof snippets>();
-    for (const s of snippets) {
-      if (!byCategory.has(s.category)) byCategory.set(s.category, []);
-      byCategory.get(s.category)!.push(s);
-    }
-    snippetRef = Array.from(byCategory.entries())
-      .map(([cat, items]) =>
-        `[${cat.toUpperCase()}]\n${items.map((s) => `- ${s.title}: ${s.content}`).join("\n")}`
-      )
-      .join("\n\n");
-  }
-
-  const systemPrompt = `Eres un asistente de ventas de Prototipalo, un taller de producción especializado en impresión 3D con impresoras Bambu Lab.
-Generas borradores de email profesionales pero cercanos, siempre en español.
-
-Reglas:
-- Tono profesional pero cercano y amigable
-- En español
-- Conciso, ve al grano
-- NO incluyas firma (se añade automáticamente)
-- NO incluyas línea de asunto
-- NO uses emojis
-- Si es una respuesta, responde directamente al contenido del email recibido
-- Si es un email nuevo, preséntate brevemente y aborda el mensaje/consulta del lead
-- Usa la información de los SNIPPETS DE CONOCIMIENTO como fuente de verdad para precios, plazos, materiales, envíos y condiciones de pago
-- Si el lead pregunta algo que está cubierto en los snippets, usa esa información en tu respuesta
-- Si no tienes datos suficientes para dar un precio concreto, indica que se preparará un presupuesto personalizado`;
-
-  const userPrompt = [
-    "Genera un borrador de email para este lead.",
-    "",
-    "--- DATOS DEL LEAD ---",
-    leadContext,
-    emailHistory
-      ? `\n--- HISTORIAL DE EMAILS ---\n${emailHistory}`
-      : "",
-    replyToContent
-      ? `\n--- EMAIL AL QUE RESPONDER ---\n${replyToContent}`
-      : "",
-    snippetRef
-      ? `\n--- SNIPPETS DE CONOCIMIENTO (precios, plazos, materiales, condiciones — ÚSALOS como fuente de verdad) ---\n${snippetRef}`
-      : "",
-    "",
-    replyToContent
-      ? "Genera una respuesta adecuada al email recibido."
-      : "Genera un email inicial adecuado para este lead.",
-  ]
-    .filter((line) => line !== undefined)
-    .join("\n");
-
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: userPrompt }],
-      system: systemPrompt,
-    });
+    await generateAndSaveDraft(
+      leadId,
+      { fullName: lead.full_name, company: lead.company, message: lead.message },
+      replyToContent
+    );
 
-    const draft =
-      response.content[0].type === "text" ? response.content[0].text : "";
+    // Read back the saved draft
+    const { data: updated } = await supabase
+      .from("leads")
+      .select("ai_draft")
+      .eq("id", leadId)
+      .single();
 
-    return { success: true, draft };
+    return { success: true, draft: updated?.ai_draft || "" };
   } catch (e) {
     return {
       success: false,

@@ -40,6 +40,7 @@ interface EmailPanelProps {
   holdedProformaId: string | null;
   snippets?: Snippet[];
   leadMessage?: string | null;
+  aiDraft?: string | null;
 }
 
 function normalizeSubject(subject: string): string {
@@ -104,7 +105,7 @@ const SNIPPET_CATEGORIES = [
   { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
 ] as const;
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [], leadMessage }: EmailPanelProps) {
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [], leadMessage, aiDraft }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -131,24 +132,13 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
   const threads = groupIntoThreads(activities);
 
-  // Auto-generate AI draft for leads with no sent emails
+  // Pre-fill with saved AI draft (generated when the lead arrived)
   useEffect(() => {
-    const hasSentEmails = activities.some((a) => a.activity_type === "email_sent");
-    if (hasSentEmails || !leadEmail) return;
-
-    let cancelled = false;
-    setIsGenerating(true);
-    generateEmailDraft(leadId).then((result) => {
-      if (cancelled) return;
-      if (result.success && result.draft) {
-        setEmailBody(result.draft);
-      }
-    }).finally(() => {
-      if (!cancelled) setIsGenerating(false);
-    });
-    return () => { cancelled = true; };
+    if (aiDraft && !emailBody) {
+      setEmailBody(aiDraft);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadId]);
+  }, [aiDraft]);
 
   // Listen for "send-proforma" event from lead-actions
   useEffect(() => {

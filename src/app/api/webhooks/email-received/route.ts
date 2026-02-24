@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { generateAndSaveDraft } from "@/lib/ai-draft";
 
 function getSupabase() {
   return createClient(
@@ -203,6 +204,22 @@ export async function POST(request: NextRequest) {
       console.error("Email webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Generate AI reply draft in background (non-blocking)
+    (async () => {
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("full_name, company, message")
+        .eq("id", leadId)
+        .single();
+      if (leadData) {
+        await generateAndSaveDraft(
+          leadId,
+          { fullName: leadData.full_name, company: leadData.company, message: leadData.message },
+          body
+        );
+      }
+    })().catch((err) => console.error("AI draft error:", err));
 
     return NextResponse.json({
       ok: true,
