@@ -145,18 +145,43 @@ export async function updateContact(
 
 // ── Documents (write) ─────────────────────────────────────
 
-/** Create a proforma draft for a contact (no line items) */
+/** Create a proforma for a contact, optionally with line items */
 export async function createProforma(
   contactId: string,
+  options?: {
+    items?: Array<{
+      name: string;
+      desc?: string;
+      units: number;
+      subtotal: number;
+      tax: number;
+    }>;
+    notes?: string;
+  },
 ): Promise<{ id: string }> {
+  const body: Record<string, unknown> = {
+    contactId,
+    date: Math.floor(Date.now() / 1000),
+  };
+
+  if (options?.items && options.items.length > 0) {
+    body.items = options.items.map((item) => ({
+      name: item.name,
+      desc: item.desc || "",
+      units: item.units,
+      subtotal: item.subtotal,
+      tax: item.tax,
+    }));
+  } else {
+    body.desc = "Borrador — pendiente de completar líneas";
+  }
+
+  if (options?.notes) body.notes = options.notes;
+
   const res = await fetch(`${HOLDED_API_BASE}/documents/proform`, {
     method: "POST",
     headers: { key: getApiKey(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contactId,
-      date: Math.floor(Date.now() / 1000),
-      desc: "Borrador — pendiente de completar líneas",
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -170,7 +195,7 @@ export async function createProforma(
 export async function updateProforma(
   documentId: string,
   data: {
-    products: Array<{
+    items: Array<{
       name: string;
       desc?: string;
       units: number;
@@ -181,7 +206,7 @@ export async function updateProforma(
   },
 ): Promise<{ id: string }> {
   const body: Record<string, unknown> = {
-    products: data.products.map((p) => ({
+    items: data.items.map((p) => ({
       name: p.name,
       desc: p.desc || "",
       units: p.units,

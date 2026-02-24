@@ -5,6 +5,7 @@ import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
 import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
+import ProformaEditor from "./proforma-editor";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -246,6 +247,15 @@ export default async function LeadDetailPage({
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Proforma editor — visible when quote_request has Holded contact */}
+          {quoteRequest?.status === "submitted" && (
+            <ProformaEditor
+              leadId={lead.id}
+              hasHoldedContact={!!quoteRequest?.holded_contact_id}
+              existingProformaId={quoteRequest?.holded_proforma_id || null}
+            />
           )}
 
           {/* Email panel (threads + compose + inline snippets) */}

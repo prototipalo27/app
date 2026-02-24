@@ -16,7 +16,6 @@ import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
 import ProjectChecklist from "./project-checklist";
-import ProformaEditor from "./proforma-editor";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -291,16 +290,38 @@ export default async function ProjectDetailPage({
         />
       </div>
 
-      {/* Proforma */}
-      <div className="mb-6">
-        <ProformaEditor
-          projectId={project.id}
-          hasHoldedContact={!!project.holded_contact_id}
-          existingProformaId={project.holded_proforma_id}
-          proformaSentAt={project.proforma_sent_at ?? null}
-          projectPrice={project.price}
-        />
-      </div>
+      {/* Proforma status (read-only — editor is now in CRM) */}
+      {project.holded_proforma_id && (
+        <div className="mb-6">
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Proforma</h2>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  project.proforma_sent_at
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                }`}
+              >
+                {project.proforma_sent_at ? "Enviada" : "Creada en Holded"}
+              </span>
+              <a
+                href={`https://app.holded.com/invoicing/proform/${project.holded_proforma_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Ver en Holded
+              </a>
+            </div>
+            {project.price !== null && (
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                Total: <strong>{Number(project.price).toFixed(2)} €</strong>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Shipping */}
       <div className="mb-6">

@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import {
-  createProformaWithItems,
-  sendProformaToClient,
+  createLeadProforma,
+  sendLeadProforma,
   type ProformaLineItem,
-} from "./proforma-actions";
+} from "../actions";
 
 const TAX_OPTIONS = [
   { value: 0, label: "0%" },
@@ -19,26 +19,22 @@ function emptyLine(): ProformaLineItem {
 }
 
 interface ProformaEditorProps {
-  projectId: string;
+  leadId: string;
   hasHoldedContact: boolean;
   existingProformaId: string | null;
-  proformaSentAt: string | null;
-  projectPrice: number | null;
 }
 
 export default function ProformaEditor({
-  projectId,
+  leadId,
   hasHoldedContact,
   existingProformaId,
-  proformaSentAt,
-  projectPrice,
 }: ProformaEditorProps) {
   const [isPending, startTransition] = useTransition();
   const [lines, setLines] = useState<ProformaLineItem[]>([emptyLine()]);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [proformaId, setProformaId] = useState<string | null>(existingProformaId);
-  const [sentAt, setSentAt] = useState<string | null>(proformaSentAt);
+  const [sent, setSent] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
 
   const inputClass =
@@ -74,7 +70,7 @@ export default function ProformaEditor({
       return;
     }
     startTransition(async () => {
-      const result = await createProformaWithItems(projectId, validLines, notes || undefined);
+      const result = await createLeadProforma(leadId, validLines, notes || undefined);
       if (result.success) {
         setProformaId(result.proformaId ?? null);
       } else {
@@ -86,9 +82,9 @@ export default function ProformaEditor({
   const handleSend = () => {
     setError(null);
     startTransition(async () => {
-      const result = await sendProformaToClient(projectId);
+      const result = await sendLeadProforma(leadId);
       if (result.success) {
-        setSentAt(new Date().toISOString());
+        setSent(true);
       } else {
         setError(result.error || "Error al enviar");
       }
@@ -96,23 +92,18 @@ export default function ProformaEditor({
   };
 
   // State: already sent
-  if (sentAt) {
+  if (sent) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Proforma</h2>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-            Enviada
+            Enviado
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {new Date(sentAt).toLocaleString()}
+            Enviado por email al cliente
           </span>
         </div>
-        {projectPrice !== null && (
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-            Total: <strong>{Number(projectPrice).toFixed(2)} €</strong>
-          </p>
-        )}
       </div>
     );
   }
@@ -121,16 +112,19 @@ export default function ProformaEditor({
   if (proformaId && !showEditor) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Proforma</h2>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
         <div className="flex items-center gap-2 mb-3">
           <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
             Creada en Holded
           </span>
-          {projectPrice !== null && (
-            <span className="text-sm text-zinc-600 dark:text-zinc-300">
-              {Number(projectPrice).toFixed(2)} €
-            </span>
-          )}
+          <a
+            href={`https://app.holded.com/invoicing/proform/${proformaId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Ver en Holded
+          </a>
         </div>
         {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2">
@@ -152,21 +146,22 @@ export default function ProformaEditor({
     );
   }
 
-  // State: no proforma — show editor
+  // State: no Holded contact
   if (!hasHoldedContact) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Proforma</h2>
+        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Vincula un contacto de Holded al proyecto para poder crear proformas.
+          El lead necesita rellenar los datos de facturación para crear un presupuesto.
         </p>
       </div>
     );
   }
 
+  // State: show line-item editor
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Proforma</h2>
+      <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
 
       {/* Lines */}
       <div className="space-y-3">
@@ -288,7 +283,7 @@ export default function ProformaEditor({
         disabled={isPending}
         className="mt-4 w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
       >
-        {isPending ? "Creando proforma..." : "Crear proforma en Holded"}
+        {isPending ? "Creando presupuesto..." : "Crear presupuesto en Holded"}
       </button>
     </div>
   );

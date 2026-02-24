@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
-import { getDocumentPdf, getDocument } from "@/lib/holded/api";
+import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 
@@ -539,4 +539,138 @@ export async function dismissLead(
 
   revalidatePath("/dashboard/crm");
   return { success: true };
+}
+
+// ── Proforma (create & send) ─────────────────────────────
+
+export interface ProformaLineItem {
+  concept: string;
+  price: number;
+  units: number;
+  tax: number; // 0, 4, 10, 21
+}
+
+export async function createLeadProforma(
+  leadId: string,
+  items: ProformaLineItem[],
+  notes?: string,
+): Promise<{ success: boolean; error?: string; proformaId?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get the latest quote_request for this lead
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_contact_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr?.holded_contact_id) {
+    return { success: false, error: "El lead no tiene contacto de Holded vinculado" };
+  }
+
+  try {
+    // Create proforma with items in a single call
+    const proforma = await createProforma(qr.holded_contact_id, {
+      items: items.map((item) => ({
+        name: item.concept,
+        units: item.units,
+        subtotal: item.price,
+        tax: item.tax,
+      })),
+      notes,
+    });
+
+    // Save proforma ID to quote_request
+    await supabase
+      .from("quote_requests")
+      .update({ holded_proforma_id: proforma.id })
+      .eq("id", qr.id);
+
+    revalidatePath(`/dashboard/crm/${leadId}`);
+    return { success: true, proformaId: proforma.id };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error al crear la proforma",
+    };
+  }
+}
+
+export async function sendLeadProforma(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get lead info
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  // Get proforma ID from quote_request
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_proforma_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr?.holded_proforma_id) {
+    return { success: false, error: "No hay proforma creada" };
+  }
+
+  try {
+    // Download PDF from Holded
+    const pdfBuffer = await getDocumentPdf("proform", qr.holded_proforma_id);
+
+    // Get per-user SMTP config
+    const smtpConfig = await getUserSmtpConfig(profile.id);
+
+    // Send email with PDF attachment
+    await sendEmail({
+      to: lead.email,
+      subject: `Presupuesto — Prototipalo`,
+      text: `Hola ${lead.full_name},\n\nAdjuntamos el presupuesto para tu proyecto.\n\nSi tienes alguna duda, no dudes en contestar a este email.\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Adjuntamos el presupuesto para tu proyecto.</p><p>Si tienes alguna duda, no dudes en contestar a este email.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
+      attachments: [
+        {
+          filename: `Presupuesto-Prototipalo.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    // Log activity
+    await supabase.from("lead_activities").insert({
+      lead_id: leadId,
+      activity_type: "email_sent",
+      content: "Presupuesto enviado por email",
+      metadata: {
+        email_to: lead.email,
+        email_subject: "Presupuesto — Prototipalo",
+        holded_proforma_id: qr.holded_proforma_id,
+      },
+      created_by: profile.id,
+    });
+
+    revalidatePath(`/dashboard/crm/${leadId}`);
+    return { success: true };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error al enviar la proforma",
+    };
+  }
 }
