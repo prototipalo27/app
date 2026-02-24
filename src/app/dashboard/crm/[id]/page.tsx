@@ -269,6 +269,7 @@ export default async function LeadDetailPage({
             leadNumber={lead.lead_number}
             holdedProformaId={quoteRequest?.holded_proforma_id || null}
             snippets={snippets || []}
+            leadMessage={lead.message}
           />
 
           {/* Activity timeline */}

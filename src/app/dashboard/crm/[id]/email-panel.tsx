@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { sendLeadEmail } from "../actions";
+import { sendLeadEmail, generateEmailDraft } from "../actions";
 
 interface Activity {
   id: string;
@@ -39,6 +39,7 @@ interface EmailPanelProps {
   leadNumber: number | null;
   holdedProformaId: string | null;
   snippets?: Snippet[];
+  leadMessage?: string | null;
 }
 
 function normalizeSubject(subject: string): string {
@@ -103,7 +104,7 @@ const SNIPPET_CATEGORIES = [
   { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
 ] as const;
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [] }: EmailPanelProps) {
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [], leadMessage }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -121,6 +122,9 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
+
+  // AI draft state
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Expanded threads
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
@@ -163,6 +167,26 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     setReplyBanner(null);
     setEmailSubject(defaultSubject);
     setEmailBody("");
+  };
+
+  const handleGenerateDraft = async () => {
+    setIsGenerating(true);
+    try {
+      // If replying, find the content of the email being replied to
+      let replyContent: string | undefined;
+      if (replyToMessageId) {
+        const replyEmail = activities.find(
+          (a) => (a.metadata as Record<string, unknown>)?.message_id === replyToMessageId
+        );
+        replyContent = replyEmail?.content || undefined;
+      }
+      const result = await generateEmailDraft(leadId, replyContent);
+      if (result.success && result.draft) {
+        setEmailBody(result.draft);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleSend = () => {
@@ -339,6 +363,25 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
             {replyBanner ? "Responder email" : "Nuevo email"}
           </h3>
+          <button
+            type="button"
+            onClick={handleGenerateDraft}
+            disabled={isGenerating}
+            title="Generar borrador con IA"
+            className="flex items-center gap-1 rounded-lg bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-200 disabled:opacity-50 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
+          >
+            {isGenerating ? (
+              <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+              </svg>
+            )}
+            {isGenerating ? "Generando..." : "IA"}
+          </button>
           {snippets.length > 0 && (
             <>
               <span className="text-zinc-300 dark:text-zinc-600">|</span>
