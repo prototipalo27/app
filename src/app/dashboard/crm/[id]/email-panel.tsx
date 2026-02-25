@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail, generateEmailDraft } from "../actions";
 
@@ -124,6 +124,15 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
 
+  // Auto-resize textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resizeTextarea = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, []);
+
   // AI draft state
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -139,6 +148,11 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiDraft]);
+
+  // Auto-resize textarea when body changes
+  useEffect(() => {
+    resizeTextarea();
+  }, [emailBody, resizeTextarea]);
 
   // Listen for "send-proforma" event from lead-actions
   useEffect(() => {
@@ -467,11 +481,11 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
           />
           <textarea
+            ref={textareaRef}
             value={emailBody}
             onChange={(e) => setEmailBody(e.target.value)}
             placeholder="Escribe tu mensaje..."
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-            rows={4}
+            className="min-h-[6rem] w-full resize-none overflow-hidden rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
           />
           <div className="flex items-center justify-between">
             {holdedProformaId ? (
