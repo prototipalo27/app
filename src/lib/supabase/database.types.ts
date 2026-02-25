@@ -220,6 +220,60 @@ export type Database = {
         }
         Relationships: []
       }
+      financings: {
+        Row: {
+          id: string
+          name: string
+          category: string
+          total_amount: number
+          monthly_payment: number
+          total_installments: number
+          paid_installments: number
+          interest_rate: number | null
+          start_date: string
+          end_date: string
+          bank_vendor_name: string | null
+          notes: string | null
+          is_active: boolean
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          category?: string
+          total_amount: number
+          monthly_payment: number
+          total_installments: number
+          paid_installments?: number
+          interest_rate?: number | null
+          start_date: string
+          end_date: string
+          bank_vendor_name?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          category?: string
+          total_amount?: number
+          monthly_payment?: number
+          total_installments?: number
+          paid_installments?: number
+          interest_rate?: number | null
+          start_date?: string
+          end_date?: string
+          bank_vendor_name?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       fixed_expenses: {
         Row: {
           amount: number
@@ -227,11 +281,13 @@ export type Database = {
           category: string
           created_at: string | null
           day_of_month: number | null
+          end_date: string | null
           frequency: string
           id: string
           is_active: boolean
           name: string
           notes: string | null
+          start_date: string | null
           supplier_id: string | null
           updated_at: string | null
         }
@@ -241,11 +297,13 @@ export type Database = {
           category?: string
           created_at?: string | null
           day_of_month?: number | null
+          end_date?: string | null
           frequency?: string
           id?: string
           is_active?: boolean
           name: string
           notes?: string | null
+          start_date?: string | null
           supplier_id?: string | null
           updated_at?: string | null
         }
@@ -255,11 +313,13 @@ export type Database = {
           category?: string
           created_at?: string | null
           day_of_month?: number | null
+          end_date?: string | null
           frequency?: string
           id?: string
           is_active?: boolean
           name?: string
           notes?: string | null
+          start_date?: string | null
           supplier_id?: string | null
           updated_at?: string | null
         }

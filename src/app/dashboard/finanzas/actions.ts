@@ -17,6 +17,8 @@ export async function createFixedExpense(data: {
   bank_vendor_name?: string;
   supplier_id?: string;
   notes?: string;
+  start_date?: string;
+  end_date?: string | null;
 }) {
   await requireRole("manager");
   const supabase = await createClient();
@@ -30,6 +32,8 @@ export async function createFixedExpense(data: {
     bank_vendor_name: data.bank_vendor_name ?? null,
     supplier_id: data.supplier_id ?? null,
     notes: data.notes ?? null,
+    start_date: data.start_date ?? null,
+    end_date: data.end_date ?? null,
   });
 
   if (error) return { success: false, error: error.message };
@@ -48,6 +52,8 @@ export async function updateFixedExpense(
     bank_vendor_name?: string | null;
     supplier_id?: string | null;
     notes?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
   }
 ) {
   await requireRole("manager");
@@ -157,7 +163,102 @@ export async function getFixedExpenses() {
     .from("fixed_expenses")
     .select("*")
     .eq("is_active", true)
+    .order("category")
     .order("name");
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// ── Financings CRUD ──
+
+export async function createFinancing(data: {
+  name: string;
+  category: string;
+  total_amount: number;
+  monthly_payment: number;
+  total_installments: number;
+  paid_installments?: number;
+  interest_rate?: number;
+  start_date: string;
+  end_date: string;
+  bank_vendor_name?: string;
+  notes?: string;
+}) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("financings").insert({
+    name: data.name,
+    category: data.category,
+    total_amount: data.total_amount,
+    monthly_payment: data.monthly_payment,
+    total_installments: data.total_installments,
+    paid_installments: data.paid_installments ?? 0,
+    interest_rate: data.interest_rate ?? null,
+    start_date: data.start_date,
+    end_date: data.end_date,
+    bank_vendor_name: data.bank_vendor_name ?? null,
+    notes: data.notes ?? null,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function updateFinancing(
+  id: string,
+  data: {
+    name?: string;
+    category?: string;
+    total_amount?: number;
+    monthly_payment?: number;
+    total_installments?: number;
+    paid_installments?: number;
+    interest_rate?: number | null;
+    start_date?: string;
+    end_date?: string;
+    bank_vendor_name?: string | null;
+    notes?: string | null;
+  }
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("financings")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function deactivateFinancing(id: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("financings")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function getFinancings() {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("financings")
+    .select("*")
+    .eq("is_active", true)
+    .order("end_date");
 
   if (error) throw new Error(error.message);
   return data;

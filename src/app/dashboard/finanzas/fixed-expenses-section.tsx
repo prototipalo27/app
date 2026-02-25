@@ -12,9 +12,12 @@ interface FixedExpense {
   day_of_month: number | null;
   bank_vendor_name: string | null;
   notes: string | null;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 const CATEGORIES: Record<string, string> = {
+  payroll: "Nominas",
   rent: "Alquiler",
   utilities: "Suministros",
   insurance: "Seguros",
@@ -59,10 +62,13 @@ export default function FixedExpensesSection({
     day_of_month: "",
     bank_vendor_name: "",
     notes: "",
+    start_date: "",
+    end_date: "",
+    indefinite: true,
   });
 
   const resetForm = () => {
-    setForm({ name: "", category: "other", amount: "", frequency: "monthly", day_of_month: "", bank_vendor_name: "", notes: "" });
+    setForm({ name: "", category: "other", amount: "", frequency: "monthly", day_of_month: "", bank_vendor_name: "", notes: "", start_date: "", end_date: "", indefinite: true });
     setShowForm(false);
     setEditingId(null);
   };
@@ -76,6 +82,9 @@ export default function FixedExpensesSection({
       day_of_month: e.day_of_month ? String(e.day_of_month) : "",
       bank_vendor_name: e.bank_vendor_name ?? "",
       notes: e.notes ?? "",
+      start_date: e.start_date ?? "",
+      end_date: e.end_date ?? "",
+      indefinite: !e.end_date,
     });
     setEditingId(e.id);
     setShowForm(true);
@@ -92,6 +101,8 @@ export default function FixedExpensesSection({
       day_of_month: form.day_of_month ? parseInt(form.day_of_month) : undefined,
       bank_vendor_name: form.bank_vendor_name || undefined,
       notes: form.notes || undefined,
+      start_date: form.start_date || undefined,
+      end_date: form.indefinite ? null : (form.end_date || undefined),
     };
 
     const result = editingId
@@ -110,6 +121,8 @@ export default function FixedExpensesSection({
         day_of_month: actionData.day_of_month ?? null,
         bank_vendor_name: actionData.bank_vendor_name ?? null,
         notes: actionData.notes ?? null,
+        start_date: actionData.start_date ?? null,
+        end_date: actionData.end_date ?? null,
       };
       if (editingId) {
         setExpenses((prev) => prev.map((e) => (e.id === editingId ? localData : e)));
@@ -204,6 +217,36 @@ export default function FixedExpensesSection({
               </select>
             </div>
             <div>
+              <label className="mb-1 block text-xs text-zinc-500">Fecha inicio</label>
+              <input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+                Fecha fin
+                <label className="flex items-center gap-1 text-[10px]">
+                  <input
+                    type="checkbox"
+                    checked={form.indefinite}
+                    onChange={(e) => setForm({ ...form, indefinite: e.target.checked, end_date: "" })}
+                    className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600"
+                  />
+                  Indefinido
+                </label>
+              </label>
+              <input
+                type="date"
+                value={form.end_date}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                disabled={form.indefinite}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-xs text-zinc-500">Nombre en BBVA</label>
               <input
                 value={form.bank_vendor_name}
@@ -212,7 +255,7 @@ export default function FixedExpensesSection({
                 className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
-            <div className="col-span-2 lg:col-span-3">
+            <div>
               <label className="mb-1 block text-xs text-zinc-500">Notas</label>
               <input
                 value={form.notes}
@@ -252,6 +295,7 @@ export default function FixedExpensesSection({
                 <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Categoria</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Importe</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Frecuencia</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Vigencia</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Acciones</th>
               </tr>
             </thead>
@@ -274,6 +318,15 @@ export default function FixedExpensesSection({
                   <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{CATEGORIES[e.category] ?? e.category}</td>
                   <td className="px-3 py-2 text-right font-medium text-zinc-900 dark:text-white">{formatEur(e.amount)}</td>
                   <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{FREQUENCIES[e.frequency] ?? e.frequency}</td>
+                  <td className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    {e.start_date
+                      ? new Date(e.start_date).toLocaleDateString("es-ES", { month: "short", year: "2-digit" })
+                      : "—"}
+                    {" → "}
+                    {e.end_date
+                      ? new Date(e.end_date).toLocaleDateString("es-ES", { month: "short", year: "2-digit" })
+                      : "Indefinido"}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <button
                       onClick={() => startEdit(e)}
