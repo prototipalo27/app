@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getFixedExpenses, getTaxPayments, getPendingInvoices } from "./actions";
+import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings } from "./actions";
 import { getNextTaxDeadline, getModelName } from "@/lib/finance/tax-calendar";
 import FixedExpensesSection from "./fixed-expenses-section";
+import FinancingsSection from "./financings-section";
 import TaxCalendarSection from "./tax-calendar-section";
 
 function formatEur(n: number) {
@@ -49,6 +50,7 @@ export default async function FinanzasPage() {
     fixedExpenses,
     taxPayments,
     pendingInvoices,
+    financings,
     { data: projects },
     { data: purchaseItems },
     { data: shipments },
@@ -57,6 +59,7 @@ export default async function FinanzasPage() {
     getFixedExpenses(),
     getTaxPayments(),
     getPendingInvoices(),
+    getFinancings(),
     supabase
       .from("projects")
       .select("id, price, created_at, project_type")
@@ -92,7 +95,13 @@ export default async function FinanzasPage() {
       .filter((s) => isThisMonth(s.created_at))
       .reduce((s, sh) => s + (sh.price ?? 0), 0);
 
-  const balanceThisMonth = revenueThisMonth - monthlyFixedExpenses - variableExpensesThisMonth;
+  // Financing monthly payments (only active ones within their period)
+  const monthlyFinancingPayments = financings.reduce((sum, f) => {
+    if (f.paid_installments >= f.total_installments) return sum;
+    return sum + f.monthly_payment;
+  }, 0);
+
+  const balanceThisMonth = revenueThisMonth - monthlyFixedExpenses - variableExpensesThisMonth - monthlyFinancingPayments;
 
   const pendingTotal = pendingInvoices.reduce((s, inv) => s + inv.total, 0);
 
@@ -117,9 +126,9 @@ export default async function FinanzasPage() {
       allShipments
         .filter((s) => s.created_at && getMonthKey(s.created_at) === key)
         .reduce((s, sh) => s + (sh.price ?? 0), 0);
-    const balance = revenue - monthlyFixedExpenses - varExpenses;
+    const balance = revenue - monthlyFixedExpenses - varExpenses - monthlyFinancingPayments;
 
-    return { label, revenue, fixedExpenses: monthlyFixedExpenses, varExpenses, balance };
+    return { label, revenue, fixedExpenses: monthlyFixedExpenses, varExpenses, financingPayments: monthlyFinancingPayments, balance };
   });
 
   // ── Bank statement matching for fixed expenses ──
@@ -149,10 +158,13 @@ export default async function FinanzasPage() {
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
 
       {/* ── A. KPIs ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard label="Ingresos mes" value={formatEur(revenueThisMonth)} />
         <KpiCard label="Gastos fijos mes" value={formatEur(monthlyFixedExpenses)} />
         <KpiCard label="Gastos variables mes" value={formatEur(variableExpensesThisMonth)} />
+        {monthlyFinancingPayments > 0 && (
+          <KpiCard label="Financiaciones mes" value={formatEur(monthlyFinancingPayments)} />
+        )}
         <KpiCard
           label="Balance neto"
           value={formatEur(balanceThisMonth)}
@@ -215,6 +227,7 @@ export default async function FinanzasPage() {
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Ingresos</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Fijos</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Variables</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Financ.</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Balance</th>
               </tr>
             </thead>
@@ -225,6 +238,7 @@ export default async function FinanzasPage() {
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.revenue)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.fixedExpenses)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.varExpenses)}</td>
+                  <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.financingPayments)}</td>
                   <td className={`px-3 py-2 text-right font-medium ${m.balance >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
                     {formatEur(m.balance)}
                   </td>
@@ -238,7 +252,10 @@ export default async function FinanzasPage() {
       {/* ── C. Gastos Fijos ── */}
       <FixedExpensesSection expenses={fixedExpenses} matchMap={Object.fromEntries(matchMap)} />
 
-      {/* ── D. Calendario Fiscal ── */}
+      {/* ── D. Financiaciones ── */}
+      <FinancingsSection financings={financings} />
+
+      {/* ── E. Calendario Fiscal ── */}
       <TaxCalendarSection taxPayments={taxPayments} />
 
       {/* ── E. Cobros Pendientes ── */}
