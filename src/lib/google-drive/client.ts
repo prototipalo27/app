@@ -291,6 +291,14 @@ export async function resolveSectionFolder(
 }
 
 /**
+ * Delete a file from Drive.
+ */
+export async function deleteFile(fileId: string): Promise<void> {
+  const drive = getDriveClient();
+  await drive.files.delete({ fileId, supportsAllDrives: true });
+}
+
+/**
  * Get a thumbnail/preview URL for a file.
  */
 export async function getFilePreviewUrl(

@@ -220,56 +220,104 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_documents: {
+        Row: {
+          document_type: string
+          file_name: string
+          file_path: string
+          id: string
+          notes: string | null
+          uploaded_at: string
+          uploaded_by: string
+          user_id: string
+        }
+        Insert: {
+          document_type: string
+          file_name: string
+          file_path: string
+          id?: string
+          notes?: string | null
+          uploaded_at?: string
+          uploaded_by: string
+          user_id: string
+        }
+        Update: {
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          notes?: string | null
+          uploaded_at?: string
+          uploaded_by?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financings: {
         Row: {
-          id: string
-          name: string
-          category: string
-          total_amount: number
-          monthly_payment: number
-          total_installments: number
-          paid_installments: number
-          interest_rate: number | null
-          start_date: string
-          end_date: string
           bank_vendor_name: string | null
-          notes: string | null
-          is_active: boolean
+          category: string
           created_at: string | null
+          end_date: string
+          id: string
+          interest_rate: number | null
+          is_active: boolean
+          monthly_payment: number
+          name: string
+          notes: string | null
+          paid_installments: number
+          start_date: string
+          total_amount: number
+          total_installments: number
           updated_at: string | null
         }
         Insert: {
-          id?: string
-          name: string
-          category?: string
-          total_amount: number
-          monthly_payment: number
-          total_installments: number
-          paid_installments?: number
-          interest_rate?: number | null
-          start_date: string
-          end_date: string
           bank_vendor_name?: string | null
-          notes?: string | null
-          is_active?: boolean
+          category?: string
           created_at?: string | null
+          end_date: string
+          id?: string
+          interest_rate?: number | null
+          is_active?: boolean
+          monthly_payment: number
+          name: string
+          notes?: string | null
+          paid_installments?: number
+          start_date: string
+          total_amount: number
+          total_installments: number
           updated_at?: string | null
         }
         Update: {
-          id?: string
-          name?: string
-          category?: string
-          total_amount?: number
-          monthly_payment?: number
-          total_installments?: number
-          paid_installments?: number
-          interest_rate?: number | null
-          start_date?: string
-          end_date?: string
           bank_vendor_name?: string | null
-          notes?: string | null
-          is_active?: boolean
+          category?: string
           created_at?: string | null
+          end_date?: string
+          id?: string
+          interest_rate?: number | null
+          is_active?: boolean
+          monthly_payment?: number
+          name?: string
+          notes?: string | null
+          paid_installments?: number
+          start_date?: string
+          total_amount?: number
+          total_installments?: number
           updated_at?: string | null
         }
         Relationships: []
@@ -1291,17 +1339,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "purchase_items_purchase_list_id_fkey"
-            columns: ["purchase_list_id"]
-            isOneToOne: false
-            referencedRelation: "purchase_lists"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "purchase_items_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_items_purchase_list_id_fkey"
+            columns: ["purchase_list_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_lists"
             referencedColumns: ["id"]
           },
         ]
@@ -1876,26 +1924,41 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          birthday: string | null
+          career_plan: string | null
           created_at: string | null
           email: string
+          full_name: string | null
+          hire_date: string | null
           id: string
           is_active: boolean
+          phone: string | null
           role: string
           updated_at: string | null
         }
         Insert: {
+          birthday?: string | null
+          career_plan?: string | null
           created_at?: string | null
           email: string
+          full_name?: string | null
+          hire_date?: string | null
           id: string
           is_active?: boolean
+          phone?: string | null
           role?: string
           updated_at?: string | null
         }
         Update: {
+          birthday?: string | null
+          career_plan?: string | null
           created_at?: string | null
           email?: string
+          full_name?: string | null
+          hire_date?: string | null
           id?: string
           is_active?: boolean
+          phone?: string | null
           role?: string
           updated_at?: string | null
         }
@@ -2025,6 +2088,133 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversations: {
+        Row: {
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          instance_id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          remote_jid: string
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          instance_id: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          remote_jid: string
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          instance_id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          remote_jid?: string
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_conversations_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_instances: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          id: string
+          instance_name: string
+          phone_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          instance_name: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          instance_name?: string
+          phone_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          content: string | null
+          conversation_id: string
+          created_at: string
+          from_me: boolean
+          id: string
+          message_type: string
+          metadata: Json | null
+          remote_jid: string
+          status: string
+          timestamp: string
+          whatsapp_message_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          message_type?: string
+          metadata?: Json | null
+          remote_jid: string
+          status?: string
+          timestamp?: string
+          whatsapp_message_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          message_type?: string
+          metadata?: Json | null
+          remote_jid?: string
+          status?: string
+          timestamp?: string
+          whatsapp_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2035,6 +2225,7 @@ export type Database = {
         Args: { p_date: string; p_printer_id: string; p_seconds: number }
         Returns: undefined
       }
+      increment_unread: { Args: { conv_id: string }; Returns: undefined }
       is_user_active: { Args: never; Returns: boolean }
       upsert_lead_by_email: {
         Args: {

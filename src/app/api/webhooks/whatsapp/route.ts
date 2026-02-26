@@ -1,0 +1,192 @@
+import { createServiceClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(request: NextRequest) {
+  // Validate webhook secret
+  const apiKey = request.headers.get("apikey");
+  if (apiKey !== process.env.WHATSAPP_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const event = body.event;
+  const instanceName = body.instance;
+
+  const supabase = createServiceClient();
+
+  // Get instance from DB
+  const { data: instance } = await supabase
+    .from("whatsapp_instances")
+    .select("id")
+    .eq("instance_name", instanceName)
+    .single();
+
+  if (!instance) {
+    return NextResponse.json({ error: "Instance not found" }, { status: 404 });
+  }
+
+  try {
+    switch (event) {
+      case "CONNECTION_UPDATE":
+        await handleConnectionUpdate(supabase, instance.id, body.data);
+        break;
+      case "MESSAGES_UPSERT":
+        await handleMessagesUpsert(supabase, instance.id, body.data);
+        break;
+      case "MESSAGES_UPDATE":
+        await handleMessagesUpdate(supabase, body.data);
+        break;
+    }
+  } catch (err) {
+    console.error(`[WhatsApp Webhook] Error processing ${event}:`, err);
+    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+async function handleConnectionUpdate(
+  supabase: ReturnType<typeof createServiceClient>,
+  instanceId: string,
+  data: { state: string }
+) {
+  const statusMap: Record<string, string> = {
+    open: "connected",
+    close: "disconnected",
+    connecting: "connecting",
+  };
+
+  const status = statusMap[data.state] || "disconnected";
+
+  await supabase
+    .from("whatsapp_instances")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", instanceId);
+}
+
+async function handleMessagesUpsert(
+  supabase: ReturnType<typeof createServiceClient>,
+  instanceId: string,
+  data: Array<{
+    key: { remoteJid: string; fromMe: boolean; id: string };
+    message?: { conversation?: string; extendedTextMessage?: { text?: string }; imageMessage?: { caption?: string }; videoMessage?: { caption?: string }; documentMessage?: { title?: string }; audioMessage?: unknown };
+    pushName?: string;
+    messageTimestamp?: number;
+  }>
+) {
+  for (const msg of data) {
+    const remoteJid = msg.key.remoteJid;
+    // Skip status broadcasts and group messages
+    if (remoteJid === "status@broadcast" || remoteJid?.endsWith("@g.us")) {
+      continue;
+    }
+
+    const fromMe = msg.key.fromMe;
+    const content = extractMessageContent(msg.message);
+    const messageType = detectMessageType(msg.message);
+    const contactPhone = remoteJid?.replace("@s.whatsapp.net", "");
+    const contactName = msg.pushName || contactPhone;
+    const timestamp = msg.messageTimestamp
+      ? new Date(msg.messageTimestamp * 1000).toISOString()
+      : new Date().toISOString();
+
+    // Upsert conversation
+    const { data: conversation } = await supabase
+      .from("whatsapp_conversations")
+      .upsert(
+        {
+          instance_id: instanceId,
+          remote_jid: remoteJid,
+          contact_name: contactName,
+          contact_phone: contactPhone,
+          last_message_at: timestamp,
+          last_message_preview: content?.substring(0, 100) || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "instance_id,remote_jid" }
+      )
+      .select("id")
+      .single();
+
+    if (!conversation) continue;
+
+    // Insert message
+    await supabase.from("whatsapp_messages").insert({
+      conversation_id: conversation.id,
+      remote_jid: remoteJid,
+      from_me: fromMe,
+      content,
+      message_type: messageType,
+      whatsapp_message_id: msg.key.id,
+      status: fromMe ? "sent" : "delivered",
+      timestamp,
+    });
+
+    // Increment unread count for incoming messages
+    if (!fromMe) {
+      await supabase.rpc("increment_unread", {
+        conv_id: conversation.id,
+      }).then(() => {}, () => {
+        // Fallback: manual increment if RPC doesn't exist
+        supabase
+          .from("whatsapp_conversations")
+          .update({ unread_count: (conversation as { unread_count?: number }).unread_count ? (conversation as { unread_count?: number }).unread_count! + 1 : 1 })
+          .eq("id", conversation.id)
+          .then(() => {}, () => {});
+      });
+    }
+  }
+}
+
+async function handleMessagesUpdate(
+  supabase: ReturnType<typeof createServiceClient>,
+  data: Array<{ key: { id: string }; update: { status?: number } }>
+) {
+  for (const update of data) {
+    const statusMap: Record<number, string> = {
+      2: "sent",
+      3: "delivered",
+      4: "read",
+    };
+
+    const status = statusMap[update.update?.status ?? 0];
+    if (!status) continue;
+
+    await supabase
+      .from("whatsapp_messages")
+      .update({ status })
+      .eq("whatsapp_message_id", update.key.id);
+  }
+}
+
+function extractMessageContent(
+  message?: Record<string, unknown>
+): string | null {
+  if (!message) return null;
+  if (message.conversation) return message.conversation as string;
+  if (message.extendedTextMessage)
+    return (message.extendedTextMessage as { text?: string }).text || null;
+  if (message.imageMessage)
+    return (message.imageMessage as { caption?: string }).caption || "[Imagen]";
+  if (message.videoMessage)
+    return (message.videoMessage as { caption?: string }).caption || "[Video]";
+  if (message.audioMessage) return "[Audio]";
+  if (message.documentMessage)
+    return (message.documentMessage as { title?: string }).title || "[Documento]";
+  if (message.stickerMessage) return "[Sticker]";
+  if (message.locationMessage) return "[Ubicación]";
+  if (message.contactMessage) return "[Contacto]";
+  return null;
+}
+
+function detectMessageType(message?: Record<string, unknown>): string {
+  if (!message) return "text";
+  if (message.imageMessage) return "image";
+  if (message.videoMessage) return "video";
+  if (message.audioMessage) return "audio";
+  if (message.documentMessage) return "document";
+  if (message.stickerMessage) return "sticker";
+  if (message.locationMessage) return "location";
+  if (message.contactMessage) return "contact";
+  return "text";
+}

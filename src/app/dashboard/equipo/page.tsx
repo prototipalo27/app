@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import SkillEditor from "./skill-editor";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -34,6 +35,25 @@ function getSkillColor(index: number) {
   return SKILL_COLORS[index % SKILL_COLORS.length];
 }
 
+function isBirthdaySoon(birthday: string | null): boolean {
+  if (!birthday) return false;
+  const today = new Date();
+  const bd = new Date(birthday);
+  bd.setFullYear(today.getFullYear());
+  if (bd < today) {
+    bd.setFullYear(today.getFullYear() + 1);
+  }
+  const diff = bd.getTime() - today.getTime();
+  const days = diff / (1000 * 60 * 60 * 24);
+  return days >= 0 && days <= 7;
+}
+
+function formatBirthday(birthday: string | null): string | null {
+  if (!birthday) return null;
+  const d = new Date(birthday + "T00:00:00");
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+}
+
 export default async function EquipoPage() {
   const profile = await getUserProfile();
   if (!profile || !profile.is_active) redirect("/login");
@@ -45,7 +65,7 @@ export default async function EquipoPage() {
     await Promise.all([
       supabase
         .from("user_profiles")
-        .select("id, email, role, is_active")
+        .select("id, email, role, is_active, full_name, birthday, hire_date")
         .eq("is_active", true)
         .order("email"),
       supabase.from("skills").select("id, name").order("name"),
@@ -71,13 +91,16 @@ export default async function EquipoPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {
-          const displayName = user.email.split("@")[0];
+          const displayName = user.full_name || user.email.split("@")[0];
           const skillIds = userSkillMap.get(user.id) ?? [];
+          const birthdaySoon = isBirthdaySoon(user.birthday);
+          const birthdayStr = formatBirthday(user.birthday);
 
           return (
-            <div
+            <Link
               key={user.id}
-              className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+              href={`/dashboard/equipo/${user.id}`}
+              className="group rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold capitalize text-zinc-900 dark:text-white">
@@ -89,6 +112,15 @@ export default async function EquipoPage() {
                   {ROLE_LABELS[user.role] ?? user.role}
                 </span>
               </div>
+
+              {birthdayStr && (
+                <div className="mt-1.5 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {birthdaySoon && (
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  )}
+                  <span>{birthdayStr}</span>
+                </div>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-1">
                 {skillIds.length === 0 && (
@@ -105,13 +137,15 @@ export default async function EquipoPage() {
               </div>
 
               {isManager && (
-                <SkillEditor
-                  userId={user.id}
-                  allSkills={allSkills}
-                  userSkillIds={skillIds}
-                />
+                <div onClick={(e) => e.preventDefault()}>
+                  <SkillEditor
+                    userId={user.id}
+                    allSkills={allSkills}
+                    userSkillIds={skillIds}
+                  />
+                </div>
               )}
-            </div>
+            </Link>
           );
         })}
       </div>

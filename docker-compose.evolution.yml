@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: evolution-api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # Server
+      - SERVER_URL=https://evo.tudominio.com
+      - SERVER_PORT=8080
+      # Authentication
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      # Database (PostgreSQL)
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${POSTGRES_PASSWORD}@postgres:5432/evolution
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution
+      # Cache (Redis)
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=false
+      - CACHE_LOCAL_ENABLED=false
+      # Webhook global
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=
+      # QR code
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#198754
+      # Log
+      - LOG_LEVEL=ERROR,WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - evolution-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_pgdata:/var/lib/postgresql/data
+    networks:
+      - evolution-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: always
+    volumes:
+      - evolution_redis:/data
+    networks:
+      - evolution-network
+
+volumes:
+  evolution_instances:
+  evolution_pgdata:
+  evolution_redis:
+
+networks:
+  evolution-network:
+    driver: bridge
