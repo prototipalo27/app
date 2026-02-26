@@ -62,21 +62,33 @@ export default async function FinanzasPage() {
     getFinancings(),
     supabase
       .from("projects")
-      .select("id, price, created_at, project_type")
-      .eq("project_type", "confirmed"),
+      .select("id, name, price, invoice_date, status, project_type"),
     supabase.from("purchase_items").select("id, status, actual_price, estimated_price, created_at"),
     supabase.from("shipping_info").select("id, price, created_at"),
     supabase.from("bank_statements").select("month, year, transactions").order("year").order("month"),
   ]);
 
   const allProjects = projects ?? [];
+  const confirmedProjects = allProjects.filter((p) => p.project_type === "confirmed");
+  const upcomingProjects = allProjects.filter((p) => p.project_type === "upcoming");
   const allPurchases = purchaseItems ?? [];
   const allShipments = shipments ?? [];
   const allBankStatements = bankStatements ?? [];
 
   // ── KPIs ──
-  const revenueThisMonth = allProjects
-    .filter((p) => isThisMonth(p.created_at))
+  // Ofertado: upcoming projects (proformas) by invoice_date
+  const offeredThisMonth = upcomingProjects
+    .filter((p) => isThisMonth(p.invoice_date))
+    .reduce((s, p) => s + (p.price ?? 0), 0);
+
+  // Facturado: confirmed projects by invoice_date
+  const invoicedThisMonth = confirmedProjects
+    .filter((p) => isThisMonth(p.invoice_date))
+    .reduce((s, p) => s + (p.price ?? 0), 0);
+
+  // Producido (entregado): confirmed + delivered projects by invoice_date
+  const deliveredThisMonth = confirmedProjects
+    .filter((p) => p.status === "delivered" && isThisMonth(p.invoice_date))
     .reduce((s, p) => s + (p.price ?? 0), 0);
 
   // Fixed expenses prorated to monthly
@@ -101,7 +113,7 @@ export default async function FinanzasPage() {
     return sum + f.monthly_payment;
   }, 0);
 
-  const balanceThisMonth = revenueThisMonth - monthlyFixedExpenses - variableExpensesThisMonth - monthlyFinancingPayments;
+  const balanceThisMonth = invoicedThisMonth - monthlyFixedExpenses - variableExpensesThisMonth - monthlyFinancingPayments;
 
   const pendingTotal = pendingInvoices.reduce((s, inv) => s + inv.total, 0);
 
@@ -116,8 +128,14 @@ export default async function FinanzasPage() {
   }
 
   const monthlyData = months6.map(({ key, label }) => {
-    const revenue = allProjects
-      .filter((p) => p.created_at && getMonthKey(p.created_at) === key)
+    const offered = upcomingProjects
+      .filter((p) => p.invoice_date && getMonthKey(p.invoice_date) === key)
+      .reduce((s, p) => s + (p.price ?? 0), 0);
+    const invoiced = confirmedProjects
+      .filter((p) => p.invoice_date && getMonthKey(p.invoice_date) === key)
+      .reduce((s, p) => s + (p.price ?? 0), 0);
+    const delivered = confirmedProjects
+      .filter((p) => p.status === "delivered" && p.invoice_date && getMonthKey(p.invoice_date) === key)
       .reduce((s, p) => s + (p.price ?? 0), 0);
     const varExpenses =
       allPurchases
@@ -126,9 +144,9 @@ export default async function FinanzasPage() {
       allShipments
         .filter((s) => s.created_at && getMonthKey(s.created_at) === key)
         .reduce((s, sh) => s + (sh.price ?? 0), 0);
-    const balance = revenue - monthlyFixedExpenses - varExpenses - monthlyFinancingPayments;
+    const balance = invoiced - monthlyFixedExpenses - varExpenses - monthlyFinancingPayments;
 
-    return { label, revenue, fixedExpenses: monthlyFixedExpenses, varExpenses, financingPayments: monthlyFinancingPayments, balance };
+    return { label, offered, invoiced, delivered, fixedExpenses: monthlyFixedExpenses, varExpenses, financingPayments: monthlyFinancingPayments, balance };
   });
 
   // ── Bank statement matching for fixed expenses ──
@@ -158,8 +176,12 @@ export default async function FinanzasPage() {
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
 
       {/* ── A. KPIs ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <KpiCard label="Ingresos mes" value={formatEur(revenueThisMonth)} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <KpiCard label="Ofertado mes" value={formatEur(offeredThisMonth)} sub="Proformas enviadas" accent="amber" />
+        <KpiCard label="Facturado mes" value={formatEur(invoicedThisMonth)} sub="Facturas emitidas" />
+        <KpiCard label="Producido mes" value={formatEur(deliveredThisMonth)} sub="Proyectos entregados" accent="green" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Gastos fijos mes" value={formatEur(monthlyFixedExpenses)} />
         <KpiCard label="Gastos variables mes" value={formatEur(variableExpensesThisMonth)} />
         {monthlyFinancingPayments > 0 && (
@@ -168,6 +190,7 @@ export default async function FinanzasPage() {
         <KpiCard
           label="Balance neto"
           value={formatEur(balanceThisMonth)}
+          sub="Facturado - gastos"
           accent={balanceThisMonth >= 0 ? "green" : "red"}
         />
       </div>
@@ -224,9 +247,11 @@ export default async function FinanzasPage() {
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
                 <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Mes</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Ingresos</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-amber-500">Ofertado</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Facturado</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-green-500">Producido</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Fijos</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Variables</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Var.</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Financ.</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Balance</th>
               </tr>
@@ -235,7 +260,9 @@ export default async function FinanzasPage() {
               {monthlyData.map((m) => (
                 <tr key={m.label}>
                   <td className="px-3 py-2 font-medium text-zinc-900 dark:text-white capitalize">{m.label}</td>
-                  <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.revenue)}</td>
+                  <td className="px-3 py-2 text-right text-amber-600 dark:text-amber-400">{formatEur(m.offered)}</td>
+                  <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.invoiced)}</td>
+                  <td className="px-3 py-2 text-right text-green-600 dark:text-green-400">{formatEur(m.delivered)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.fixedExpenses)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.varExpenses)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.financingPayments)}</td>
