@@ -9,10 +9,18 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const event = body.event;
+  // Evolution v2 sends event as "messages.upsert", v1 as "MESSAGES_UPSERT"
+  const event = (body.event || "").toUpperCase().replace(/\./g, "_");
   const instanceName = body.instance;
 
   const supabase = createServiceClient();
+
+  // Log incoming webhook for debugging
+  await supabase.from("webhook_logs").insert({
+    endpoint: "/api/webhooks/whatsapp",
+    method: "POST",
+    body: JSON.stringify({ event: body.event, instance: instanceName, dataType: typeof body.data, isArray: Array.isArray(body.data), dataKeys: body.data ? Object.keys(body.data) : null }),
+  }).then(() => {}, () => {});
 
   // Get instance from DB
   const { data: instance } = await supabase
@@ -30,12 +38,17 @@ export async function POST(request: NextRequest) {
       case "CONNECTION_UPDATE":
         await handleConnectionUpdate(supabase, instance.id, body.data);
         break;
-      case "MESSAGES_UPSERT":
-        await handleMessagesUpsert(supabase, instance.id, body.data);
+      case "MESSAGES_UPSERT": {
+        // Evolution v2 may send data as a single object or as an array
+        const messages = Array.isArray(body.data) ? body.data : [body.data];
+        await handleMessagesUpsert(supabase, instance.id, messages);
         break;
-      case "MESSAGES_UPDATE":
-        await handleMessagesUpdate(supabase, body.data);
+      }
+      case "MESSAGES_UPDATE": {
+        const updates = Array.isArray(body.data) ? body.data : [body.data];
+        await handleMessagesUpdate(supabase, updates);
         break;
+      }
     }
   } catch (err) {
     console.error(`[WhatsApp Webhook] Error processing ${event}:`, err);
