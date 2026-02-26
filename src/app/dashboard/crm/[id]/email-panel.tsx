@@ -124,6 +124,9 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
 
+  // Send error
+  const [sendError, setSendError] = useState<string | null>(null);
+
   // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeTextarea = useCallback(() => {
@@ -214,8 +217,9 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
   const handleSend = () => {
     if (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return;
+    setSendError(null);
     startTransition(async () => {
-      await sendLeadEmail(
+      const result = await sendLeadEmail(
         leadId,
         emailTo,
         emailSubject,
@@ -224,9 +228,13 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         replyThreadId || undefined,
         attachProforma || undefined
       );
-      cancelReply();
-      setAttachProforma(false);
-      router.refresh();
+      if (result.success) {
+        cancelReply();
+        setAttachProforma(false);
+        router.refresh();
+      } else {
+        setSendError(result.error || "Error al enviar el email");
+      }
     });
   };
 
@@ -488,6 +496,9 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
             placeholder="Escribe tu mensaje..."
             className="min-h-[6rem] w-full resize-none overflow-hidden rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
           />
+          {sendError && (
+            <p className="text-xs text-red-600 dark:text-red-400">{sendError}</p>
+          )}
           <div className="flex items-center justify-between">
             {holdedProformaId ? (
               <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">

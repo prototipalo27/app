@@ -71,7 +71,7 @@ export async function updateLeadStatus(
   id: string,
   newStatus: LeadStatus,
   lostReason?: string
-) {
+): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
@@ -82,7 +82,7 @@ export async function updateLeadStatus(
     .eq("id", id)
     .single();
 
-  if (!lead) throw new Error("Lead no encontrado");
+  if (!lead) return { success: false, error: "Lead no encontrado" };
 
   const oldStatus = lead.status;
 
@@ -93,7 +93,7 @@ export async function updateLeadStatus(
 
   const { error } = await supabase.from("leads").update(updates).eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   // Log status change activity
   await supabase.from("lead_activities").insert({
@@ -106,11 +106,12 @@ export async function updateLeadStatus(
 
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
+  return { success: true };
 }
 
 // ── Assign Lead ──────────────────────────────────────────
 
-export async function assignLead(id: string, userId: string | null) {
+export async function assignLead(id: string, userId: string | null): Promise<{ success: boolean; error?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
@@ -119,19 +120,20 @@ export async function assignLead(id: string, userId: string | null) {
     .update({ assigned_to: userId })
     .eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
+  return { success: true };
 }
 
 // ── Add Note ─────────────────────────────────────────────
 
-export async function addNote(id: string, content: string) {
+export async function addNote(id: string, content: string): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
-  if (!content?.trim()) return;
+  if (!content?.trim()) return { success: false, error: "Contenido vacío" };
 
   const { error } = await supabase.from("lead_activities").insert({
     lead_id: id,
@@ -140,9 +142,10 @@ export async function addNote(id: string, content: string) {
     created_by: profile.id,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/dashboard/crm/${id}`);
+  return { success: true };
 }
 
 // ── Send Email ───────────────────────────────────────────
@@ -155,12 +158,12 @@ export async function sendLeadEmail(
   replyToMessageId?: string,
   threadId?: string,
   attachProforma?: boolean
-) {
+): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
   if (!to?.trim() || !subject?.trim() || !body?.trim()) {
-    throw new Error("Email, asunto y cuerpo son obligatorios");
+    return { success: false, error: "Email, asunto y cuerpo son obligatorios" };
   }
 
   // Build threading headers for replies
@@ -207,74 +210,82 @@ export async function sendLeadEmail(
     }
   }
 
-  const result = await sendEmail({
-    to: to.trim(),
-    subject: subject.trim(),
-    text: body.trim(),
-    html: body.trim().replace(/\n/g, "<br>"),
-    inReplyTo,
-    references,
-    smtpConfig,
-    attachments,
-  });
+  try {
+    const result = await sendEmail({
+      to: to.trim(),
+      subject: subject.trim(),
+      text: body.trim(),
+      html: body.trim().replace(/\n/g, "<br>"),
+      inReplyTo,
+      references,
+      smtpConfig,
+      attachments,
+    });
 
-  // Determine thread_id for this sent email
-  const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;
+    // Determine thread_id for this sent email
+    const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;
 
-  // Log email activity
-  await supabase.from("lead_activities").insert({
-    lead_id: id,
-    activity_type: "email_sent",
-    content: body.trim(),
-    thread_id: finalThreadId,
-    metadata: {
-      email_to: to.trim(),
-      email_subject: subject.trim(),
-      message_id: result.messageId || null,
-      in_reply_to: inReplyTo || null,
-    },
-    created_by: profile.id,
-  });
-
-  // Auto-mark as "contacted" and assign to sender if lead is still "new"
-  const { data: lead } = await supabase
-    .from("leads")
-    .select("status, assigned_to")
-    .eq("id", id)
-    .single();
-
-  // Clear AI draft after sending
-  await supabase.from("leads").update({ ai_draft: null }).eq("id", id);
-
-  if (lead?.status === "new") {
-    await supabase
-      .from("leads")
-      .update({ status: "contacted", assigned_to: profile.id })
-      .eq("id", id);
-
-    // Log status change
+    // Log email activity
     await supabase.from("lead_activities").insert({
       lead_id: id,
-      activity_type: "status_change",
-      content: "Estado cambiado de new a contacted",
-      metadata: { old_status: "new", new_status: "contacted", auto: true },
+      activity_type: "email_sent",
+      content: body.trim(),
+      thread_id: finalThreadId,
+      metadata: {
+        email_to: to.trim(),
+        email_subject: subject.trim(),
+        message_id: result.messageId || null,
+        in_reply_to: inReplyTo || null,
+      },
       created_by: profile.id,
     });
-  } else if (!lead?.assigned_to) {
-    // If not "new" but unassigned, still claim ownership
-    await supabase
-      .from("leads")
-      .update({ assigned_to: profile.id })
-      .eq("id", id);
-  }
 
-  revalidatePath(`/dashboard/crm/${id}`);
-  revalidatePath("/dashboard/crm");
+    // Auto-mark as "contacted" and assign to sender if lead is still "new"
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("status, assigned_to")
+      .eq("id", id)
+      .single();
+
+    // Clear AI draft after sending
+    await supabase.from("leads").update({ ai_draft: null }).eq("id", id);
+
+    if (lead?.status === "new") {
+      await supabase
+        .from("leads")
+        .update({ status: "contacted", assigned_to: profile.id })
+        .eq("id", id);
+
+      // Log status change
+      await supabase.from("lead_activities").insert({
+        lead_id: id,
+        activity_type: "status_change",
+        content: "Estado cambiado de new a contacted",
+        metadata: { old_status: "new", new_status: "contacted", auto: true },
+        created_by: profile.id,
+      });
+    } else if (!lead?.assigned_to) {
+      // If not "new" but unassigned, still claim ownership
+      await supabase
+        .from("leads")
+        .update({ assigned_to: profile.id })
+        .eq("id", id);
+    }
+
+    revalidatePath(`/dashboard/crm/${id}`);
+    revalidatePath("/dashboard/crm");
+    return { success: true };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error al enviar el email",
+    };
+  }
 }
 
 // ── Link Lead to Project ─────────────────────────────────
 
-export async function linkLeadToProject(leadId: string, projectId: string) {
+export async function linkLeadToProject(leadId: string, projectId: string): Promise<{ success: boolean; error?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
@@ -283,11 +294,12 @@ export async function linkLeadToProject(leadId: string, projectId: string) {
     .update({ lead_id: leadId })
     .eq("id", projectId);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/dashboard/crm/${leadId}`);
   revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard");
+  return { success: true };
 }
 
 // ── Quote Request ────────────────────────────────────────
@@ -416,13 +428,11 @@ export async function searchLeads(query: string) {
   await requireRole("manager");
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("leads")
     .select("id, full_name, email, company")
     .or(`full_name.ilike.%${query}%,email.ilike.%${query}%,company.ilike.%${query}%`)
     .limit(10);
-
-  if (error) throw new Error(error.message);
 
   return data || [];
 }
@@ -433,11 +443,11 @@ export async function blockEmailAndDeleteLead(
   leadId: string,
   email: string,
   reason?: string
-) {
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
-  if (!email?.trim()) throw new Error("Email es obligatorio");
+  if (!email?.trim()) return { success: false, error: "Email es obligatorio" };
 
   // Insert into blocked_emails (ignore if already blocked)
   await supabase
@@ -447,7 +457,7 @@ export async function blockEmailAndDeleteLead(
 
   // Delete the lead
   const { error } = await supabase.from("leads").delete().eq("id", leadId);
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/crm");
   redirect("/dashboard/crm");
@@ -455,13 +465,13 @@ export async function blockEmailAndDeleteLead(
 
 // ── Delete Lead ──────────────────────────────────────────
 
-export async function deleteLead(id: string) {
+export async function deleteLead(id: string): Promise<{ success: boolean; error?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
   const { error } = await supabase.from("leads").delete().eq("id", id);
 
-  if (error) throw new Error(error.message);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/crm");
   redirect("/dashboard/crm");
