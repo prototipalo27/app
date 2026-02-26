@@ -3,6 +3,7 @@ import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import SkillEditor from "./skill-editor";
+import LinkStop from "./link-stop";
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin:
@@ -137,13 +138,13 @@ export default async function EquipoPage() {
               </div>
 
               {isManager && (
-                <div onClick={(e) => e.preventDefault()}>
+                <LinkStop>
                   <SkillEditor
                     userId={user.id}
                     allSkills={allSkills}
                     userSkillIds={skillIds}
                   />
-                </div>
+                </LinkStop>
               )}
             </Link>
           );
