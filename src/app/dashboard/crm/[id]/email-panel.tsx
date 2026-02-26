@@ -477,8 +477,9 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
           <input
             type="text"
             value={emailSubject}
-            readOnly
-            className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+            onChange={(e) => setEmailSubject(e.target.value)}
+            placeholder="Asunto"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
           />
           <textarea
             ref={textareaRef}
