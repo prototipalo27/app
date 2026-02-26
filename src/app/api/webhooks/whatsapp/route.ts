@@ -15,13 +15,6 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // Log incoming webhook for debugging
-  await supabase.from("webhook_logs").insert({
-    endpoint: "/api/webhooks/whatsapp",
-    method: "POST",
-    body: JSON.stringify({ event: body.event, instance: instanceName, dataType: typeof body.data, isArray: Array.isArray(body.data), dataKeys: body.data ? Object.keys(body.data) : null }),
-  }).then(() => {}, () => {});
-
   // Get instance from DB
   const { data: instance } = await supabase
     .from("whatsapp_instances")
@@ -153,7 +146,7 @@ async function handleMessagesUpsert(
 
 async function handleMessagesUpdate(
   supabase: ReturnType<typeof createServiceClient>,
-  data: Array<{ key: { id: string }; update: { status?: number } }>
+  data: Array<Record<string, unknown>>
 ) {
   for (const update of data) {
     const statusMap: Record<number, string> = {
@@ -162,13 +155,21 @@ async function handleMessagesUpdate(
       4: "read",
     };
 
-    const status = statusMap[update.update?.status ?? 0];
+    const rawStatus = (update.update as { status?: number })?.status
+      ?? (update.status as number | undefined)
+      ?? 0;
+    const status = statusMap[rawStatus];
     if (!status) continue;
+
+    // Evolution v2 uses keyId at top level, v1 uses key.id
+    const messageId = (update.keyId as string)
+      || (update.key as { id?: string })?.id;
+    if (!messageId) continue;
 
     await supabase
       .from("whatsapp_messages")
       .update({ status })
-      .eq("whatsapp_message_id", update.key.id);
+      .eq("whatsapp_message_id", messageId);
   }
 }
 
