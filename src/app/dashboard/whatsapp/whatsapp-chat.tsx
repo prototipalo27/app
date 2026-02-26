@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { sendMessage, markConversationAsRead, startNewConversation } from "./actions";
 
@@ -44,8 +44,16 @@ export default function WhatsAppChat({
   const [newFirstMessage, setNewFirstMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  // Mobile: track whether we're viewing a chat
+  const [mobileShowChat, setMobileShowChat] = useState(false);
 
   const selected = conversations.find((c) => c.id === selectedId);
+
+  // Keep ref in sync
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   // Load messages when conversation is selected
   useEffect(() => {
@@ -59,12 +67,13 @@ export default function WhatsAppChat({
       .select("*")
       .eq("conversation_id", selectedId)
       .order("timestamp", { ascending: true })
+      .limit(200)
       .then(({ data }) => {
         setMessages(data || []);
         setLoadingMessages(false);
       });
 
-    // Mark as read
+    // Mark as read (fire-and-forget, no revalidation needed)
     markConversationAsRead(selectedId);
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedId ? { ...c, unread_count: 0 } : c))
@@ -72,55 +81,92 @@ export default function WhatsAppChat({
   }, [selectedId]);
 
   // Scroll to bottom on new messages
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, []);
 
-  // Real-time subscriptions
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  // Single global realtime subscription (never depends on selectedId)
   useEffect(() => {
     const supabase = createClient();
 
     const channel = supabase
-      .channel("whatsapp-realtime")
+      .channel("whatsapp-global")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "whatsapp_messages" },
         (payload) => {
           const newMsg = payload.new as Message;
-          // Add to current chat if matches
-          if (newMsg.conversation_id === selectedId) {
+          // Add to current chat if it matches the selected conversation
+          if (newMsg.conversation_id === selectedIdRef.current) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
+              // Remove optimistic message if real one arrived
+              const filtered = prev.filter(
+                (m) => !m.id.startsWith("temp-") || m.content !== newMsg.content
+              );
+              return [...filtered, newMsg];
             });
-            // Mark as read if we're viewing this conversation
+            // Auto-mark as read
             if (!newMsg.from_me) {
               markConversationAsRead(newMsg.conversation_id);
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === newMsg.conversation_id
+                    ? { ...c, unread_count: 0 }
+                    : c
+                )
+              );
             }
           }
         }
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "whatsapp_conversations" },
+        { event: "INSERT", schema: "public", table: "whatsapp_conversations" },
         (payload) => {
-          if (payload.eventType === "INSERT") {
-            setConversations((prev) => [payload.new as Conversation, ...prev]);
-          } else if (payload.eventType === "UPDATE") {
-            setConversations((prev) =>
-              prev
-                .map((c) =>
-                  c.id === (payload.new as Conversation).id
-                    ? { ...c, ...(payload.new as Conversation) }
-                    : c
-                )
-                .sort(
-                  (a, b) =>
-                    new Date(b.last_message_at || 0).getTime() -
-                    new Date(a.last_message_at || 0).getTime()
-                )
+          const newConv = payload.new as Conversation;
+          setConversations((prev) => {
+            if (prev.some((c) => c.id === newConv.id)) return prev;
+            return [newConv, ...prev];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "whatsapp_conversations" },
+        (payload) => {
+          const updated = payload.new as Conversation;
+          setConversations((prev) => {
+            const exists = prev.some((c) => c.id === updated.id);
+            let next: Conversation[];
+            if (exists) {
+              next = prev.map((c) =>
+                c.id === updated.id
+                  ? {
+                      ...c,
+                      ...updated,
+                      // Don't overwrite unread_count if we're viewing this chat
+                      unread_count:
+                        c.id === selectedIdRef.current
+                          ? 0
+                          : updated.unread_count,
+                    }
+                  : c
+              );
+            } else {
+              next = [updated, ...prev];
+            }
+            // Sort by last message
+            return next.sort(
+              (a, b) =>
+                new Date(b.last_message_at || 0).getTime() -
+                new Date(a.last_message_at || 0).getTime()
             );
-          }
+          });
         }
       )
       .subscribe();
@@ -128,7 +174,7 @@ export default function WhatsAppChat({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedId]);
+  }, []); // Empty deps — single global subscription
 
   const handleSend = () => {
     if (!newText.trim() || !selected || !instanceConnected) return;
@@ -155,7 +201,6 @@ export default function WhatsAppChat({
         text
       );
       if (!result.success) {
-        // Mark as failed
         setMessages((prev) =>
           prev.map((m) =>
             m.id === optimistic.id ? { ...m, status: "failed" } : m
@@ -172,11 +217,22 @@ export default function WhatsAppChat({
       const result = await startNewConversation(newPhone, newFirstMessage);
       if (result.success && result.conversationId) {
         setSelectedId(result.conversationId);
+        setMobileShowChat(true);
         setShowNewChat(false);
         setNewPhone("");
         setNewFirstMessage("");
       }
     });
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedId(id);
+    setMobileShowChat(true);
+    setShowNewChat(false);
+  };
+
+  const handleBackToList = () => {
+    setMobileShowChat(false);
   };
 
   const filteredConversations = conversations.filter((c) => {
@@ -189,10 +245,19 @@ export default function WhatsAppChat({
     );
   });
 
+  const totalUnread = conversations.reduce(
+    (sum, c) => sum + (c.unread_count || 0),
+    0
+  );
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       {/* Conversation list */}
-      <div className="flex w-80 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800">
+      <div
+        className={`flex w-full flex-col border-r border-zinc-200 dark:border-zinc-800 md:w-80 md:shrink-0 ${
+          mobileShowChat ? "hidden md:flex" : "flex"
+        }`}
+      >
         {/* Search + new chat button */}
         <div className="flex items-center gap-2 border-b border-zinc-200 p-3 dark:border-zinc-800">
           <input
@@ -202,8 +267,16 @@ export default function WhatsAppChat({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-green-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           />
+          {totalUnread > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[10px] font-bold text-white">
+              {totalUnread}
+            </span>
+          )}
           <button
-            onClick={() => setShowNewChat(true)}
+            onClick={() => {
+              setShowNewChat(true);
+              setMobileShowChat(true);
+            }}
             className="rounded-lg bg-green-600 p-1.5 text-white hover:bg-green-700"
             title="Nueva conversación"
           >
@@ -223,10 +296,7 @@ export default function WhatsAppChat({
             filteredConversations.map((conv) => (
               <button
                 key={conv.id}
-                onClick={() => {
-                  setSelectedId(conv.id);
-                  setShowNewChat(false);
-                }}
+                onClick={() => handleSelectConversation(conv.id)}
                 className={`flex w-full items-start gap-3 border-b border-zinc-100 px-4 py-3 text-left transition-colors dark:border-zinc-800 ${
                   selectedId === conv.id
                     ? "bg-zinc-100 dark:bg-zinc-800"
@@ -239,17 +309,17 @@ export default function WhatsAppChat({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                    <p className={`truncate text-sm ${conv.unread_count > 0 ? "font-bold text-zinc-900 dark:text-white" : "font-medium text-zinc-900 dark:text-white"}`}>
                       {conv.contact_name || conv.contact_phone || "Desconocido"}
                     </p>
                     {conv.last_message_at && (
-                      <span className="shrink-0 text-[11px] text-zinc-400">
+                      <span className={`shrink-0 text-[11px] ${conv.unread_count > 0 ? "font-semibold text-green-600" : "text-zinc-400"}`}>
                         {formatTime(conv.last_message_at)}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    <p className={`truncate text-xs ${conv.unread_count > 0 ? "font-medium text-zinc-700 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
                       {conv.last_message_preview || "Sin mensajes"}
                     </p>
                     {conv.unread_count > 0 && (
@@ -266,10 +336,20 @@ export default function WhatsAppChat({
       </div>
 
       {/* Chat area */}
-      <div className="flex flex-1 flex-col">
+      <div
+        className={`flex flex-1 flex-col ${
+          !mobileShowChat ? "hidden md:flex" : "flex"
+        }`}
+      >
         {showNewChat ? (
           /* New conversation form */
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
+            <button
+              onClick={handleBackToList}
+              className="self-start text-sm text-zinc-500 hover:text-zinc-700 md:hidden dark:text-zinc-400"
+            >
+              &larr; Volver
+            </button>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
               Nueva conversación
             </h2>
@@ -289,7 +369,10 @@ export default function WhatsAppChat({
             />
             <div className="flex gap-2">
               <button
-                onClick={() => setShowNewChat(false)}
+                onClick={() => {
+                  setShowNewChat(false);
+                  setMobileShowChat(false);
+                }}
                 className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancelar
@@ -307,6 +390,14 @@ export default function WhatsAppChat({
           <>
             {/* Chat header */}
             <div className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+              <button
+                onClick={handleBackToList}
+                className="text-zinc-500 hover:text-zinc-700 md:hidden dark:text-zinc-400"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700 dark:bg-green-900 dark:text-green-300">
                 {(selected.contact_name || selected.contact_phone || "?")?.[0]?.toUpperCase()}
               </div>
@@ -323,9 +414,12 @@ export default function WhatsAppChat({
             {/* Messages */}
             <div className="flex-1 overflow-y-auto bg-zinc-50 p-4 dark:bg-zinc-950">
               {loadingMessages ? (
-                <p className="text-center text-sm text-zinc-500">
-                  Cargando mensajes...
-                </p>
+                <div className="flex h-full items-center justify-center">
+                  <svg className="h-6 w-6 animate-spin text-green-600" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
               ) : messages.length === 0 ? (
                 <p className="text-center text-sm text-zinc-500">
                   No hay mensajes
@@ -338,7 +432,7 @@ export default function WhatsAppChat({
                       className={`flex ${msg.from_me ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                        className={`max-w-[80%] rounded-2xl px-4 py-2 md:max-w-[70%] ${
                           msg.from_me
                             ? "rounded-br-md bg-green-600 text-white"
                             : "rounded-bl-md bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white"

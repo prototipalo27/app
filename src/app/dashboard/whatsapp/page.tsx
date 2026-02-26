@@ -6,11 +6,12 @@ export default async function WhatsAppPage() {
   await requireRole("manager");
   const supabase = await createClient();
 
-  // Fetch conversations with last message info
+  // Fetch recent conversations (only needed fields)
   const { data: conversations } = await supabase
     .from("whatsapp_conversations")
-    .select("*")
-    .order("last_message_at", { ascending: false });
+    .select("id, remote_jid, contact_name, contact_phone, last_message_at, last_message_preview, unread_count, instance_id")
+    .order("last_message_at", { ascending: false })
+    .limit(100);
 
   // Fetch instance status
   const { data: instance } = await supabase

@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { revalidatePath } from "next/cache";
 import { sendTextMessage } from "@/lib/evolution-api";
 
 const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "prototipalo";
@@ -52,7 +51,6 @@ export async function sendMessage(
       })
       .eq("id", conversationId);
 
-    revalidatePath("/dashboard/whatsapp");
     return { success: true, error: null };
   } catch (err) {
     console.error("[WhatsApp] Send error:", err);
@@ -76,7 +74,6 @@ export async function markConversationAsRead(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/dashboard/whatsapp");
   return { success: true, error: null };
 }
 
@@ -137,7 +134,6 @@ export async function startNewConversation(
       timestamp: new Date().toISOString(),
     });
 
-    revalidatePath("/dashboard/whatsapp");
     return { success: true, error: null, conversationId: conversation.id };
   } catch (err) {
     console.error("[WhatsApp] New conversation error:", err);
