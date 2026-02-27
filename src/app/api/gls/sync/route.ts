@@ -94,15 +94,26 @@ export async function GET(request: NextRequest) {
 
       updated++;
 
-      // If delivered, also update the linked project
+      // If delivered, check if ALL shipments for the project are delivered
       if (newStatus === "delivered") {
         delivered++;
 
         if (shipment.project_id) {
-          await supabase
-            .from("projects")
-            .update({ status: "delivered" })
-            .eq("id", shipment.project_id);
+          const { data: allShipments } = await supabase
+            .from("shipping_info")
+            .select("id, shipment_status")
+            .eq("project_id", shipment.project_id);
+
+          const allDelivered = (allShipments ?? []).every(
+            (s) => s.id === shipment.id || s.shipment_status === "delivered",
+          );
+
+          if (allDelivered) {
+            await supabase
+              .from("projects")
+              .update({ status: "delivered" })
+              .eq("id", shipment.project_id);
+          }
         }
 
         // Send push notification

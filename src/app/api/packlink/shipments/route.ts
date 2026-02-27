@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     title,
     contentDescription,
     declaredValue,
+    addressId,
   } = body as {
     projectId?: string;
     serviceId: number;
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
     title?: string;
     contentDescription?: string;
     declaredValue?: number;
+    addressId?: string;
   };
 
   if (!serviceId || !from || !to || !packages?.length) {
@@ -85,32 +87,23 @@ export async function POST(request: NextRequest) {
     if (title) row.title = title;
     if (contentDescription) row.content_description = contentDescription;
     if (declaredValue != null) row.declared_value = declaredValue;
+    if (addressId) row.address_id = addressId;
+
+    if (projectId) row.project_id = projectId;
+
+    const { error: dbError } = await supabase
+      .from("shipping_info")
+      .insert(row);
+
+    if (dbError) {
+      throw new Error(`DB error: ${dbError.message}`);
+    }
 
     if (projectId) {
-      // Linked to a project — upsert with onConflict
-      row.project_id = projectId;
-      const { error: dbError } = await supabase
-        .from("shipping_info")
-        .upsert(row, { onConflict: "project_id" });
-
-      if (dbError) {
-        throw new Error(`DB error: ${dbError.message}`);
-      }
-
-      // Update project status to "shipping"
       await supabase
         .from("projects")
         .update({ status: "shipping" })
         .eq("id", projectId);
-    } else {
-      // Standalone shipment — plain insert
-      const { error: dbError } = await supabase
-        .from("shipping_info")
-        .insert(row);
-
-      if (dbError) {
-        throw new Error(`DB error: ${dbError.message}`);
-      }
     }
 
     return NextResponse.json({ reference: result.reference });

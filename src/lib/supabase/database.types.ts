@@ -122,6 +122,57 @@ export type Database = {
         }
         Relationships: []
       }
+      client_addresses: {
+        Row: {
+          address_line: string | null
+          city: string | null
+          country: string | null
+          created_at: string | null
+          created_by: string | null
+          holded_contact_id: string
+          id: string
+          is_default: boolean | null
+          label: string | null
+          postal_code: string | null
+          province: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+        }
+        Insert: {
+          address_line?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          holded_contact_id: string
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          postal_code?: string | null
+          province?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+        }
+        Update: {
+          address_line?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          holded_contact_id?: string
+          id?: string
+          is_default?: boolean | null
+          label?: string | null
+          postal_code?: string | null
+          province?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+        }
+        Relationships: []
+      }
       client_drive_folders: {
         Row: {
           client_name: string
@@ -1510,6 +1561,7 @@ export type Database = {
       }
       shipping_info: {
         Row: {
+          address_id: string | null
           address_line: string | null
           cabify_parcel_id: string | null
           carrier: string | null
@@ -1544,6 +1596,7 @@ export type Database = {
           tracking_number: string | null
         }
         Insert: {
+          address_id?: string | null
           address_line?: string | null
           cabify_parcel_id?: string | null
           carrier?: string | null
@@ -1578,6 +1631,7 @@ export type Database = {
           tracking_number?: string | null
         }
         Update: {
+          address_id?: string | null
           address_line?: string | null
           cabify_parcel_id?: string | null
           carrier?: string | null
@@ -1612,6 +1666,13 @@ export type Database = {
           tracking_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "shipping_info_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "client_addresses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shipping_info_project_id_fkey"
             columns: ["project_id"]
@@ -2368,3 +2429,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

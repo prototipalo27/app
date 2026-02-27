@@ -41,12 +41,23 @@ export async function POST(request: NextRequest) {
 
   if (status === "DELIVERED") {
     updates.delivered_at = new Date().toISOString();
-    // Only update project status if linked to a project
+    // Only update project status if ALL shipments for this project are delivered
     if (shipping.project_id) {
-      await supabase
-        .from("projects")
-        .update({ status: "delivered" })
-        .eq("id", shipping.project_id);
+      const { data: allShipments } = await supabase
+        .from("shipping_info")
+        .select("id, shipment_status")
+        .eq("project_id", shipping.project_id);
+
+      const allDelivered = (allShipments ?? []).every(
+        (s) => s.id === shipping.id || s.shipment_status === "delivered" || s.shipment_status === "DELIVERED",
+      );
+
+      if (allDelivered) {
+        await supabase
+          .from("projects")
+          .update({ status: "delivered" })
+          .eq("id", shipping.project_id);
+      }
     }
   }
 

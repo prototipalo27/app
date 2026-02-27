@@ -49,12 +49,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  // If delivered and linked to a project, update project status
+  // If delivered and linked to a project, check if ALL shipments are delivered
   if (status === "delivered" && shipment?.project_id) {
-    await supabase
-      .from("projects")
-      .update({ status: "delivered" })
-      .eq("id", shipment.project_id);
+    const { data: allShipments } = await supabase
+      .from("shipping_info")
+      .select("id, shipment_status")
+      .eq("project_id", shipment.project_id);
+
+    const allDelivered = (allShipments ?? []).every(
+      (s) => s.shipment_status === "delivered",
+    );
+
+    if (allDelivered) {
+      await supabase
+        .from("projects")
+        .update({ status: "delivered" })
+        .eq("id", shipment.project_id);
+    }
   }
 
   return NextResponse.json({ ok: true });

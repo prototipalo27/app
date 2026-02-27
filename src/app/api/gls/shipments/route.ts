@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     packageHeight,
     packageLength,
     horario,
+    addressId,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
     packageHeight?: number;
     packageLength?: number;
     horario?: string;
+    addressId?: string;
   };
 
   if (!recipientName || !recipientAddress || !recipientCity || !recipientPostalCode || !recipientCountry) {
@@ -149,25 +151,21 @@ export async function POST(request: NextRequest) {
     if (title) row.title = title;
     if (contentDescription) row.content_description = contentDescription;
     if (declaredValue != null) row.declared_value = declaredValue;
+    if (addressId) row.address_id = addressId;
+
+    if (projectId) row.project_id = projectId;
+
+    const { error: dbError } = await supabase
+      .from("shipping_info")
+      .insert(row);
+
+    if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
     if (projectId) {
-      row.project_id = projectId;
-      const { error: dbError } = await supabase
-        .from("shipping_info")
-        .upsert(row, { onConflict: "project_id" });
-
-      if (dbError) throw new Error(`DB error: ${dbError.message}`);
-
       await supabase
         .from("projects")
         .update({ status: "shipping" })
         .eq("id", projectId);
-    } else {
-      const { error: dbError } = await supabase
-        .from("shipping_info")
-        .insert(row);
-
-      if (dbError) throw new Error(`DB error: ${dbError.message}`);
     }
 
     return NextResponse.json({
