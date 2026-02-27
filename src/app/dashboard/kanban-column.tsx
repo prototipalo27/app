@@ -24,17 +24,20 @@ export function KanbanColumn({ column, projects, className, responsibles }: Kanb
           <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             {column.label}
           </h3>
+          {responsibles && responsibles.length > 0 && responsibles.map((name) => (
+            <span
+              key={name}
+              className="rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+            >
+              {name}
+            </span>
+          ))}
           <span
             className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${column.badge}`}
           >
             {projects.length}
           </span>
         </div>
-        {responsibles && responsibles.length > 0 && (
-          <p className="mt-0.5 truncate pl-[18px] text-[10px] text-zinc-400 dark:text-zinc-500">
-            {responsibles.join(", ")}
-          </p>
-        )}
       </div>
 
       {/* Cards area — scrolls internally */}
