@@ -22,6 +22,7 @@ export default function QuoteForm({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsShipping, setNeedsShipping] = useState(false);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -37,6 +38,14 @@ export default function QuoteForm({
         billing_city: fd.get("billing_city") as string,
         billing_province: fd.get("billing_province") as string,
         billing_country: (fd.get("billing_country") as string) || "España",
+        needs_shipping: needsShipping,
+        shipping_recipient_name: needsShipping ? (fd.get("shipping_recipient_name") as string) || null : null,
+        shipping_recipient_phone: needsShipping ? (fd.get("shipping_recipient_phone") as string) || null : null,
+        shipping_address: needsShipping ? (fd.get("shipping_address") as string) || null : null,
+        shipping_postal_code: needsShipping ? (fd.get("shipping_postal_code") as string) || null : null,
+        shipping_city: needsShipping ? (fd.get("shipping_city") as string) || null : null,
+        shipping_province: needsShipping ? (fd.get("shipping_province") as string) || null : null,
+        shipping_country: needsShipping ? ((fd.get("shipping_country") as string) || "España") : null,
       });
 
       if (result.success) {
@@ -200,6 +209,82 @@ export default function QuoteForm({
             </div>
           </div>
         </div>
+
+        {/* Shipping toggle */}
+        <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={needsShipping}
+              onChange={(e) => setNeedsShipping(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-900"
+            />
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Necesito que me enviéis el producto
+            </span>
+          </label>
+        </div>
+
+        {/* Shipping fields */}
+        {needsShipping && (
+          <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              Dirección de envío
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Nombre del destinatario *
+                </label>
+                <input name="shipping_recipient_name" type="text" required className={inputClass} placeholder="Juan Pérez" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Teléfono de contacto *
+                </label>
+                <input name="shipping_recipient_phone" type="tel" required className={inputClass} placeholder="612 345 678" />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Dirección (calle y número) *
+              </label>
+              <input name="shipping_address" type="text" required className={inputClass} placeholder="Calle Mayor, 1" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Código postal *
+                </label>
+                <input name="shipping_postal_code" type="text" required className={inputClass} placeholder="28001" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Ciudad *
+                </label>
+                <input name="shipping_city" type="text" required className={inputClass} placeholder="Madrid" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Provincia *
+                </label>
+                <input name="shipping_province" type="text" required className={inputClass} placeholder="Madrid" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  País
+                </label>
+                <input name="shipping_country" type="text" defaultValue="España" className={inputClass} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
