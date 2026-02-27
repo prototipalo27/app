@@ -12,6 +12,7 @@ const MAX_DELIVERED = 6;
 
 interface KanbanBoardProps {
   initialProjects: ProjectWithItems[];
+  zoneResponsibles?: Record<string, string[]>;
 }
 
 function DiscardZone() {
@@ -36,7 +37,7 @@ function DiscardZone() {
   );
 }
 
-export function KanbanBoard({ initialProjects }: KanbanBoardProps) {
+export function KanbanBoard({ initialProjects, zoneResponsibles = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
 

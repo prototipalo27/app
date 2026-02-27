@@ -19,6 +19,8 @@ export default async function DashboardPage() {
     { data: upcomingProjects },
     { data: confirmedProjects },
     { data: syncMeta },
+    { data: zoneAssignments },
+    { data: userProfiles },
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -35,7 +37,20 @@ export default async function DashboardPage() {
       .select("value")
       .eq("key", "last_holded_sync")
       .single(),
+    supabase.from("zone_assignments").select("user_id, zone"),
+    supabase.from("user_profiles").select("id, full_name, email").eq("is_active", true),
   ]);
+
+  // Build zone → responsible names map
+  const userMap = new Map((userProfiles ?? []).map((u) => [u.id, u.full_name || u.email.split("@")[0]]));
+  const zoneResponsibles: Record<string, string[]> = {};
+  for (const za of zoneAssignments ?? []) {
+    const name = userMap.get(za.user_id);
+    if (name) {
+      if (!zoneResponsibles[za.zone]) zoneResponsibles[za.zone] = [];
+      zoneResponsibles[za.zone].push(name);
+    }
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
@@ -72,7 +87,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <KanbanBoard initialProjects={confirmedProjects} />
+          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} />
         </div>
       )}
     </div>
