@@ -9,6 +9,9 @@ const TAX_MODEL_NAMES: Record<string, string> = {
   "303": "IVA trimestral",
   "130": "IRPF trimestral",
   "200": "Impuesto de Sociedades",
+  "111": "Retenciones IRPF trimestral",
+  "115": "Retenciones alquileres trimestral",
+  "349": "Operaciones intracomunitarias trimestral",
 };
 
 export function getTaxDeadlines(year: number): TaxDeadline[] {
@@ -28,6 +31,30 @@ export function getTaxDeadlines(year: number): TaxDeadline[] {
     { model: "130", period: `${year}-Q2`, dueDate: `${year}-07-20`, name: "IRPF Q2" },
     { model: "130", period: `${year}-Q3`, dueDate: `${year}-10-20`, name: "IRPF Q3" },
     { model: "130", period: `${year}-Q4`, dueDate: `${year + 1}-01-30`, name: "IRPF Q4" },
+  );
+
+  // Modelo 111 — Retenciones IRPF trimestral
+  deadlines.push(
+    { model: "111", period: `${year}-Q1`, dueDate: `${year}-04-20`, name: "Ret. IRPF Q1" },
+    { model: "111", period: `${year}-Q2`, dueDate: `${year}-07-20`, name: "Ret. IRPF Q2" },
+    { model: "111", period: `${year}-Q3`, dueDate: `${year}-10-20`, name: "Ret. IRPF Q3" },
+    { model: "111", period: `${year}-Q4`, dueDate: `${year + 1}-01-30`, name: "Ret. IRPF Q4" },
+  );
+
+  // Modelo 115 — Retenciones alquileres trimestral
+  deadlines.push(
+    { model: "115", period: `${year}-Q1`, dueDate: `${year}-04-20`, name: "Ret. Alq. Q1" },
+    { model: "115", period: `${year}-Q2`, dueDate: `${year}-07-20`, name: "Ret. Alq. Q2" },
+    { model: "115", period: `${year}-Q3`, dueDate: `${year}-10-20`, name: "Ret. Alq. Q3" },
+    { model: "115", period: `${year}-Q4`, dueDate: `${year + 1}-01-30`, name: "Ret. Alq. Q4" },
+  );
+
+  // Modelo 349 — Operaciones intracomunitarias trimestral
+  deadlines.push(
+    { model: "349", period: `${year}-Q1`, dueDate: `${year}-04-20`, name: "Intracom. Q1" },
+    { model: "349", period: `${year}-Q2`, dueDate: `${year}-07-20`, name: "Intracom. Q2" },
+    { model: "349", period: `${year}-Q3`, dueDate: `${year}-10-20`, name: "Intracom. Q3" },
+    { model: "349", period: `${year}-Q4`, dueDate: `${year + 1}-01-30`, name: "Intracom. Q4" },
   );
 
   // Modelo 200 — Impuesto de Sociedades (anual)

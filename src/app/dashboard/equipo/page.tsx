@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import SkillEditor from "./skill-editor";
 import LinkStop from "./link-stop";
+import WorkCalendar from "./work-calendar";
+import { getHolidays, getTimeOffRequests, ensureHolidays } from "./calendar-actions";
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin:
@@ -62,7 +64,9 @@ export default async function EquipoPage() {
   const isManager = hasRole(profile.role, "manager");
   const supabase = await createClient();
 
-  const [{ data: users }, { data: skills }, { data: userSkills }] =
+  const currentYear = new Date().getFullYear();
+
+  const [{ data: users }, { data: skills }, { data: userSkills }, holidays, timeOffRequests] =
     await Promise.all([
       supabase
         .from("user_profiles")
@@ -71,7 +75,14 @@ export default async function EquipoPage() {
         .order("email"),
       supabase.from("skills").select("id, name").order("name"),
       supabase.from("user_skills").select("user_id, skill_id"),
+      getHolidays(currentYear),
+      getTimeOffRequests(currentYear),
     ]);
+
+  // Ensure holidays exist for current year (auto-seed)
+  if (holidays.length === 0 && isManager) {
+    await ensureHolidays(currentYear);
+  }
 
   const allSkills = skills ?? [];
   const skillMap = new Map(allSkills.map((s) => [s.id, s.name]));
@@ -89,6 +100,14 @@ export default async function EquipoPage() {
       <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
         Equipo
       </h1>
+
+      <WorkCalendar
+        holidays={holidays}
+        timeOffRequests={timeOffRequests as any}
+        isManager={isManager}
+        currentUserId={profile.id}
+        year={currentYear}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {

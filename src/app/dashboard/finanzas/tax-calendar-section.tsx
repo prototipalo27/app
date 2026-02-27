@@ -15,6 +15,15 @@ interface TaxPayment {
   notes: string | null;
 }
 
+const MODEL_COLORS: Record<string, string> = {
+  "303": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  "130": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  "200": "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  "111": "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  "115": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  "349": "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+};
+
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
     style: "currency",
@@ -118,13 +127,18 @@ export default function TaxCalendarSection({
 
                         return (
                           <div key={p.id} className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs font-medium text-zinc-900 dark:text-white">
-                                Mod. {p.model}
-                              </p>
-                              <p className="text-[10px] text-zinc-400">
-                                {dueDate.toLocaleDateString("es-ES")}
-                              </p>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${MODEL_COLORS[p.model] ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"}`}>
+                                {p.model}
+                              </span>
+                              <div>
+                                <p className="text-xs font-medium text-zinc-900 dark:text-white">
+                                  {getModelName(p.model).split(" ")[0]}
+                                </p>
+                                <p className="text-[10px] text-zinc-400">
+                                  {dueDate.toLocaleDateString("es-ES")}
+                                </p>
+                              </div>
                             </div>
                             {p.status === "paid" ? (
                               <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">

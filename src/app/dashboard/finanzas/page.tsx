@@ -6,6 +6,7 @@ import FixedExpensesSection from "./fixed-expenses-section";
 import FinancingsSection from "./financings-section";
 import TaxCalendarSection from "./tax-calendar-section";
 import CashFlowPipeline from "./cash-flow-pipeline";
+import PaymentCalendarSection from "./payment-calendar-section";
 
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -281,6 +282,13 @@ export default async function FinanzasPage() {
           </table>
         </div>
       </div>
+
+      {/* ── Calendario de pagos ── */}
+      <PaymentCalendarSection
+        fixedExpenses={fixedExpenses}
+        taxPayments={taxPayments}
+        financings={financings}
+      />
 
       {/* ── C. Gastos Fijos ── */}
       <FixedExpensesSection expenses={fixedExpenses} matchMap={Object.fromEntries(matchMap)} />
