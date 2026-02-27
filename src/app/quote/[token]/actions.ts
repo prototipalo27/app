@@ -11,6 +11,14 @@ interface BillingData {
   billing_city: string;
   billing_province: string;
   billing_country: string;
+  needs_shipping: boolean;
+  shipping_recipient_name: string | null;
+  shipping_recipient_phone: string | null;
+  shipping_address: string | null;
+  shipping_postal_code: string | null;
+  shipping_city: string | null;
+  shipping_province: string | null;
+  shipping_country: string | null;
 }
 
 interface QuoteItem {
@@ -38,18 +46,30 @@ export async function submitBillingData(
     return { success: false, error: "Enlace no válido o ya utilizado" };
   }
 
-  // 2. Save billing data
+  // 2. Save billing + shipping data
+  const updatePayload: Record<string, unknown> = {
+    billing_name: data.billing_name.trim(),
+    tax_id: data.tax_id.trim(),
+    billing_address: data.billing_address.trim(),
+    billing_city: data.billing_city.trim(),
+    billing_postal_code: data.billing_postal_code.trim(),
+    billing_province: data.billing_province.trim(),
+    billing_country: data.billing_country.trim(),
+  };
+
+  if (data.needs_shipping) {
+    updatePayload.shipping_recipient_name = data.shipping_recipient_name?.trim() || null;
+    updatePayload.shipping_recipient_phone = data.shipping_recipient_phone?.trim() || null;
+    updatePayload.shipping_address = data.shipping_address?.trim() || null;
+    updatePayload.shipping_city = data.shipping_city?.trim() || null;
+    updatePayload.shipping_postal_code = data.shipping_postal_code?.trim() || null;
+    updatePayload.shipping_province = data.shipping_province?.trim() || null;
+    updatePayload.shipping_country = data.shipping_country?.trim() || null;
+  }
+
   const { error: updateError } = await supabase
     .from("quote_requests")
-    .update({
-      billing_name: data.billing_name.trim(),
-      tax_id: data.tax_id.trim(),
-      billing_address: data.billing_address.trim(),
-      billing_city: data.billing_city.trim(),
-      billing_postal_code: data.billing_postal_code.trim(),
-      billing_province: data.billing_province.trim(),
-      billing_country: data.billing_country.trim(),
-    })
+    .update(updatePayload)
     .eq("id", qr.id);
 
   if (updateError) {
