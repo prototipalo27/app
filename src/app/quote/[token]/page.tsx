@@ -5,8 +5,15 @@ import type { Metadata } from "next";
 import QuoteForm from "./quote-form";
 
 export const metadata: Metadata = {
-  title: "Datos de facturación — Prototipalo",
+  title: "Presupuesto — Prototipalo",
 };
+
+interface QuoteItem {
+  concept: string;
+  price: number;
+  units: number;
+  tax: number;
+}
 
 export default async function QuotePage({
   params,
@@ -25,6 +32,7 @@ export default async function QuotePage({
   if (!quoteRequest) notFound();
 
   const lead = quoteRequest.leads as { full_name: string; company: string | null } | null;
+  const items = (quoteRequest.items || []) as unknown as QuoteItem[];
 
   if (quoteRequest.status === "submitted") {
     return (
@@ -61,7 +69,7 @@ export default async function QuotePage({
             <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="block h-8 w-auto dark:hidden" />
           </div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
-            Datos de facturación
+            {items.length > 0 ? "Presupuesto" : "Datos de facturación"}
           </h1>
           {lead && (
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -69,11 +77,17 @@ export default async function QuotePage({
               {lead.company ? ` — ${lead.company}` : ""}
             </p>
           )}
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Por favor, rellena los siguientes datos para que podamos preparar tu presupuesto.
-          </p>
+          {items.length > 0 ? (
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Revisa el presupuesto y rellena tus datos de facturación para confirmar.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Por favor, rellena los siguientes datos para que podamos preparar tu presupuesto.
+            </p>
+          )}
         </div>
-        <QuoteForm token={token} />
+        <QuoteForm token={token} items={items} notes={quoteRequest.notes} />
       </div>
     </div>
   );

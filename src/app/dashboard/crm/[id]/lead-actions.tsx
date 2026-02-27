@@ -8,9 +8,10 @@ import {
   addNote,
   deleteLead,
   blockEmailAndDeleteLead,
-  createQuoteRequest,
+  sendQuoteToClient,
   updatePaymentCondition,
   getProformaDetails,
+  createLeadProforma,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { HoldedDocument } from "@/lib/holded/types";
@@ -51,8 +52,7 @@ export default function LeadActions({
   const [showLostReason, setShowLostReason] = useState(false);
   const [lostReason, setLostReason] = useState("");
 
-  // Quote request
-  const [quoteSending, setQuoteSending] = useState(false);
+  // Quote
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -133,10 +133,6 @@ export default function LeadActions({
     } else {
       setProformaError(result.error || "Error al cargar la proforma");
     }
-  };
-
-  const handleSendProforma = () => {
-    window.dispatchEvent(new Event("send-proforma"));
   };
 
   // Available status transitions
@@ -250,190 +246,223 @@ export default function LeadActions({
         <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
           Presupuesto
         </h3>
-        {!quoteRequest ? (
-          leadEmail ? (
-            <div>
-              <button
-                onClick={() => {
-                  setQuoteSending(true);
-                  setQuoteError(null);
-                  startTransition(async () => {
-                    const result = await createQuoteRequest(leadId);
-                    setQuoteSending(false);
-                    if (!result.success) {
-                      setQuoteError(result.error || "Error");
-                    }
-                    router.refresh();
-                  });
-                }}
-                disabled={isPending || quoteSending}
-                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-              >
-                {quoteSending ? "Enviando..." : "Enviar formulario presupuesto"}
-              </button>
-              {quoteError && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{quoteError}</p>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              El lead necesita un email para enviar el formulario.
-            </p>
-          )
-        ) : quoteRequest.status === "pending" ? (
-          <div className="space-y-2">
-            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-              Formulario enviado — pendiente
-            </span>
-            <button
-              onClick={() => {
-                const baseUrl = window.location.origin;
-                navigator.clipboard.writeText(`${baseUrl}/quote/${quoteRequest.token}`);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
-            >
-              {copied ? "Copiado!" : "Copiar enlace del formulario"}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-              Datos recibidos
-            </span>
-            <div className="text-xs text-zinc-600 dark:text-zinc-400">
-              <p><strong>Razón social:</strong> {quoteRequest.billing_name}</p>
-              <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
-            </div>
-            {quoteRequest.holded_proforma_id && (
-              <>
-                <a
-                  href={`https://app.holded.com/invoicing/proform/${quoteRequest.holded_proforma_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+        {(() => {
+          // No quote request yet — prompt to create one via the editor
+          if (!quoteRequest || (!quoteRequest.items && quoteRequest.status === "pending")) {
+            return (
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Crea un presupuesto en el editor de la izquierda.
+                </p>
+              </div>
+            );
+          }
+
+          const hasItems = Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0;
+          const status = quoteRequest.status;
+
+          // Items saved but not yet sent to client
+          if (hasItems && status === "pending") {
+            return (
+              <div className="space-y-2">
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                  Presupuesto guardado
+                </span>
+                {leadEmail ? (
+                  <button
+                    onClick={() => {
+                      setQuoteError(null);
+                      startTransition(async () => {
+                        const result = await sendQuoteToClient(leadId);
+                        if (!result.success) {
+                          setQuoteError(result.error || "Error");
+                        }
+                        router.refresh();
+                      });
+                    }}
+                    disabled={isPending}
+                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {isPending ? "Enviando..." : "Enviar al cliente"}
+                  </button>
+                ) : (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    El lead necesita un email para enviar el presupuesto.
+                  </p>
+                )}
+                {quoteError && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{quoteError}</p>
+                )}
+              </div>
+            );
+          }
+
+          // Quote sent, waiting for client billing data
+          if (status === "quote_sent") {
+            return (
+              <div className="space-y-2">
+                <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                  Pendiente de datos del cliente
+                </span>
+                <button
+                  onClick={() => {
+                    const baseUrl = window.location.origin;
+                    navigator.clipboard.writeText(`${baseUrl}/quote/${quoteRequest.token}`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
                   className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Ver proforma en Holded
-                </a>
-
-                {/* View proforma details */}
-                <button
-                  onClick={handleViewProforma}
-                  disabled={proformaLoading}
-                  className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                >
-                  {proformaLoading ? (
-                    <>
-                      <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Cargando...
-                    </>
-                  ) : (
-                    <>
-                      <svg className={`h-3 w-3 transition-transform ${proformaOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                      {proformaOpen ? "Ocultar presupuesto" : "Ver presupuesto"}
-                    </>
-                  )}
+                  {copied ? "Copiado!" : "Copiar enlace del presupuesto"}
                 </button>
+              </div>
+            );
+          }
 
-                {proformaError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{proformaError}</p>
+          // Client submitted billing data
+          if (status === "submitted") {
+            return (
+              <div className="space-y-2">
+                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  Datos recibidos
+                </span>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                  <p><strong>Razón social:</strong> {quoteRequest.billing_name}</p>
+                  <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
+                </div>
+
+                {/* Create proforma in Holded if not yet created */}
+                {!quoteRequest.holded_proforma_id && quoteRequest.holded_contact_id && (
+                  <button
+                    onClick={() => {
+                      setQuoteError(null);
+                      startTransition(async () => {
+                        const result = await createLeadProforma(leadId);
+                        if (!result.success) {
+                          setQuoteError(result.error || "Error");
+                        }
+                        router.refresh();
+                      });
+                    }}
+                    disabled={isPending}
+                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                  >
+                    {isPending ? "Creando..." : "Crear proforma en Holded"}
+                  </button>
                 )}
 
-                {/* Proforma detail panel */}
-                {proformaOpen && proformaData && (
-                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-zinc-900 dark:text-white">
-                          Proforma {proformaData.docNumber}
-                        </p>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                          {new Date(proformaData.date * 1000).toLocaleDateString("es-ES", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Product lines table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-[11px]">
-                        <thead>
-                          <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
-                            <th className="pb-1.5 pr-2 font-medium">Producto</th>
-                            <th className="pb-1.5 pr-2 text-right font-medium">Uds</th>
-                            <th className="pb-1.5 pr-2 text-right font-medium">Precio</th>
-                            <th className="pb-1.5 pr-2 text-right font-medium">Dto%</th>
-                            <th className="pb-1.5 text-right font-medium">Subtotal</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-zinc-700 dark:text-zinc-300">
-                          {proformaData.products.map((p, i) => {
-                            const lineSubtotal = p.units * p.price * (1 - p.discount / 100);
-                            return (
-                              <tr key={i} className="border-b border-zinc-100 dark:border-zinc-700/50">
-                                <td className="py-1.5 pr-2">
-                                  <span className="font-medium">{p.name}</span>
-                                  {p.desc && (
-                                    <span className="block text-[10px] text-zinc-400">{p.desc}</span>
-                                  )}
-                                </td>
-                                <td className="py-1.5 pr-2 text-right tabular-nums">{p.units}</td>
-                                <td className="py-1.5 pr-2 text-right tabular-nums">{p.price.toFixed(2)} €</td>
-                                <td className="py-1.5 pr-2 text-right tabular-nums">
-                                  {p.discount > 0 ? `${p.discount}%` : "—"}
-                                </td>
-                                <td className="py-1.5 text-right tabular-nums">{lineSubtotal.toFixed(2)} €</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Totals */}
-                    <div className="mt-3 space-y-1 border-t border-zinc-200 pt-2 text-[11px] dark:border-zinc-600">
-                      <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
-                        <span>Subtotal</span>
-                        <span className="tabular-nums">{proformaData.subtotal.toFixed(2)} €</span>
-                      </div>
-                      {proformaData.discount > 0 && (
-                        <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
-                          <span>Descuento</span>
-                          <span className="tabular-nums">-{proformaData.discount.toFixed(2)} €</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
-                        <span>IVA</span>
-                        <span className="tabular-nums">{proformaData.tax.toFixed(2)} €</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-semibold text-zinc-900 dark:text-white">
-                        <span>Total</span>
-                        <span className="tabular-nums">{proformaData.total.toFixed(2)} €</span>
-                      </div>
-                    </div>
-
-                    {/* Send proforma button */}
-                    <button
-                      onClick={handleSendProforma}
-                      className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                {quoteRequest.holded_proforma_id && (
+                  <>
+                    <a
+                      href={`https://app.holded.com/invoicing/proform/${quoteRequest.holded_proforma_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      Enviar presupuesto
+                      Ver proforma en Holded
+                    </a>
+
+                    <button
+                      onClick={handleViewProforma}
+                      disabled={proformaLoading}
+                      className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      {proformaLoading ? (
+                        <>
+                          <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Cargando...
+                        </>
+                      ) : (
+                        <>
+                          <svg className={`h-3 w-3 transition-transform ${proformaOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          {proformaOpen ? "Ocultar proforma" : "Ver proforma"}
+                        </>
+                      )}
                     </button>
-                  </div>
+
+                    {proformaError && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{proformaError}</p>
+                    )}
+
+                    {proformaOpen && proformaData && (
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-zinc-900 dark:text-white">
+                            Proforma {proformaData.docNumber}
+                          </p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {new Date(proformaData.date * 1000).toLocaleDateString("es-ES", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-[11px]">
+                            <thead>
+                              <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
+                                <th className="pb-1.5 pr-2 font-medium">Producto</th>
+                                <th className="pb-1.5 pr-2 text-right font-medium">Uds</th>
+                                <th className="pb-1.5 pr-2 text-right font-medium">Precio</th>
+                                <th className="pb-1.5 text-right font-medium">Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-zinc-700 dark:text-zinc-300">
+                              {proformaData.products.map((p, i) => {
+                                const lineSubtotal = p.units * p.price * (1 - p.discount / 100);
+                                return (
+                                  <tr key={i} className="border-b border-zinc-100 dark:border-zinc-700/50">
+                                    <td className="py-1.5 pr-2">
+                                      <span className="font-medium">{p.name}</span>
+                                      {p.desc && (
+                                        <span className="block text-[10px] text-zinc-400">{p.desc}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 pr-2 text-right tabular-nums">{p.units}</td>
+                                    <td className="py-1.5 pr-2 text-right tabular-nums">{p.price.toFixed(2)} €</td>
+                                    <td className="py-1.5 text-right tabular-nums">{lineSubtotal.toFixed(2)} €</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="mt-3 space-y-1 border-t border-zinc-200 pt-2 text-[11px] dark:border-zinc-600">
+                          <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                            <span>Subtotal</span>
+                            <span className="tabular-nums">{proformaData.subtotal.toFixed(2)} €</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                            <span>IVA</span>
+                            <span className="tabular-nums">{proformaData.tax.toFixed(2)} €</span>
+                          </div>
+                          <div className="flex justify-between text-sm font-semibold text-zinc-900 dark:text-white">
+                            <span>Total</span>
+                            <span className="tabular-nums">{proformaData.total.toFixed(2)} €</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </div>
-        )}
+
+                {quoteError && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{quoteError}</p>
+                )}
+              </div>
+            );
+          }
+
+          return null;
+        })()}
       </div>
 
       {/* Add note */}

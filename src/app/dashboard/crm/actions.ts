@@ -302,7 +302,165 @@ export async function linkLeadToProject(leadId: string, projectId: string): Prom
   return { success: true };
 }
 
-// ── Quote Request ────────────────────────────────────────
+// ── Save Quote Items (presupuesto) ──────────────────────
+
+export async function saveQuoteItems(
+  leadId: string,
+  items: ProformaLineItem[],
+  notes?: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Check if a quote_request already exists for this lead
+  const { data: existing } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const itemsJson = JSON.parse(JSON.stringify(items));
+
+  if (existing) {
+    // Update existing
+    const { error } = await supabase
+      .from("quote_requests")
+      .update({ items: itemsJson, notes: notes || null })
+      .eq("id", existing.id);
+
+    if (error) return { success: false, error: error.message };
+  } else {
+    // Create new
+    const { error } = await supabase
+      .from("quote_requests")
+      .insert({
+        lead_id: leadId,
+        items: itemsJson,
+        notes: notes || null,
+      });
+
+    if (error) return { success: false, error: error.message };
+  }
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+// ── Send Quote to Client ────────────────────────────────
+
+export async function sendQuoteToClient(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get lead email
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  // Get the quote request with items
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, token, items")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) {
+    return { success: false, error: "No hay presupuesto guardado" };
+  }
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) {
+    return { success: false, error: "El presupuesto no tiene líneas" };
+  }
+
+  // Build public URL
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+  const quoteUrl = `${baseUrl}/quote/${qr.token}`;
+
+  // Build items HTML table for the email
+  const subtotal = items.reduce((s, i) => s + i.price * i.units, 0);
+  const taxTotal = items.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
+  const total = subtotal + taxTotal;
+
+  const itemsHtml = `
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <thead>
+        <tr style="border-bottom:2px solid #e4e4e7;">
+          <th style="text-align:left;padding:8px 4px;font-size:13px;color:#71717a;">Concepto</th>
+          <th style="text-align:right;padding:8px 4px;font-size:13px;color:#71717a;">Uds</th>
+          <th style="text-align:right;padding:8px 4px;font-size:13px;color:#71717a;">Precio</th>
+          <th style="text-align:right;padding:8px 4px;font-size:13px;color:#71717a;">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((i) => `
+          <tr style="border-bottom:1px solid #f4f4f5;">
+            <td style="padding:8px 4px;font-size:13px;">${i.concept}</td>
+            <td style="text-align:right;padding:8px 4px;font-size:13px;">${i.units}</td>
+            <td style="text-align:right;padding:8px 4px;font-size:13px;">${i.price.toFixed(2)} &euro;</td>
+            <td style="text-align:right;padding:8px 4px;font-size:13px;">${(i.price * i.units).toFixed(2)} &euro;</td>
+          </tr>
+        `).join("")}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="3" style="text-align:right;padding:4px;font-size:13px;color:#71717a;">Subtotal</td><td style="text-align:right;padding:4px;font-size:13px;">${subtotal.toFixed(2)} &euro;</td></tr>
+        <tr><td colspan="3" style="text-align:right;padding:4px;font-size:13px;color:#71717a;">IVA</td><td style="text-align:right;padding:4px;font-size:13px;">${taxTotal.toFixed(2)} &euro;</td></tr>
+        <tr style="border-top:2px solid #e4e4e7;"><td colspan="3" style="text-align:right;padding:8px 4px;font-size:14px;font-weight:600;">Total</td><td style="text-align:right;padding:8px 4px;font-size:14px;font-weight:600;">${total.toFixed(2)} &euro;</td></tr>
+      </tfoot>
+    </table>`;
+
+  // Get per-user SMTP config
+  const smtpConfig = await getUserSmtpConfig(profile.id);
+
+  // Send email
+  try {
+    await sendEmail({
+      to: lead.email,
+      subject: "Presupuesto — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
+    });
+  } catch {
+    return { success: false, error: "Error al enviar el email" };
+  }
+
+  // Update quote request status
+  await supabase
+    .from("quote_requests")
+    .update({ status: "quote_sent" })
+    .eq("id", qr.id);
+
+  // Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: "Presupuesto enviado al cliente",
+    metadata: {
+      email_to: lead.email,
+      email_subject: "Presupuesto — Prototipalo",
+      quote_token: qr.token,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+// ── Legacy: Quote Request (billing data form) ───────────
 
 export async function createQuoteRequest(
   leadId: string,
@@ -566,8 +724,6 @@ export interface ProformaLineItem {
 
 export async function createLeadProforma(
   leadId: string,
-  items: ProformaLineItem[],
-  notes?: string,
 ): Promise<{ success: boolean; error?: string; proformaId?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
@@ -575,7 +731,7 @@ export async function createLeadProforma(
   // Get the latest quote_request for this lead
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, holded_contact_id")
+    .select("id, holded_contact_id, items, notes")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -583,6 +739,11 @@ export async function createLeadProforma(
 
   if (!qr?.holded_contact_id) {
     return { success: false, error: "El lead no tiene contacto de Holded vinculado" };
+  }
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) {
+    return { success: false, error: "No hay líneas de presupuesto guardadas" };
   }
 
   try {
@@ -594,7 +755,7 @@ export async function createLeadProforma(
         subtotal: item.price,
         tax: item.tax,
       })),
-      notes,
+      notes: qr.notes || undefined,
     });
 
     // Save proforma ID to quote_request

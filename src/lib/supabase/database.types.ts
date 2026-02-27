@@ -1512,7 +1512,9 @@ export type Database = {
           holded_contact_id: string | null
           holded_proforma_id: string | null
           id: string
+          items: Json | null
           lead_id: string
+          notes: string | null
           proforma_accepted_at: string | null
           shipping_address: string | null
           shipping_city: string | null
@@ -1537,7 +1539,9 @@ export type Database = {
           holded_contact_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          items?: Json | null
           lead_id: string
+          notes?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
@@ -1562,7 +1566,9 @@ export type Database = {
           holded_contact_id?: string | null
           holded_proforma_id?: string | null
           id?: string
+          items?: Json | null
           lead_id?: string
+          notes?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null

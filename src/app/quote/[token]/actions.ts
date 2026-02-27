@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { searchContacts, updateContact, createProforma } from "@/lib/holded/api";
+import { searchContacts, createContact, updateContact, createProforma } from "@/lib/holded/api";
 
 interface BillingData {
   billing_name: string;
@@ -13,18 +13,25 @@ interface BillingData {
   billing_country: string;
 }
 
+interface QuoteItem {
+  concept: string;
+  price: number;
+  units: number;
+  tax: number;
+}
+
 export async function submitBillingData(
   token: string,
   data: BillingData,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = createServiceClient();
 
-  // 1. Validate token exists and is pending
+  // 1. Validate token exists and is pending/quote_sent
   const { data: qr, error: qrError } = await supabase
     .from("quote_requests")
     .select("*, leads(email, full_name, company)")
     .eq("token", token)
-    .eq("status", "pending")
+    .in("status", ["pending", "quote_sent"])
     .single();
 
   if (qrError || !qr) {
@@ -49,7 +56,7 @@ export async function submitBillingData(
     return { success: false, error: "Error al guardar datos" };
   }
 
-  // 3. Find or match contact in Holded
+  // 3. Find or create contact in Holded
   const lead = qr.leads as { email: string | null; full_name: string; company: string | null } | null;
   let holdedContactId: string | null = null;
 
@@ -71,30 +78,52 @@ export async function submitBillingData(
       }
     }
 
-    // 4. Update contact if found
+    const billAddress = {
+      address: data.billing_address.trim(),
+      city: data.billing_city.trim(),
+      postalCode: data.billing_postal_code.trim(),
+      province: data.billing_province.trim(),
+      country: data.billing_country.trim(),
+      countryCode: data.billing_country.trim().toLowerCase() === "españa" ? "ES" : undefined,
+    };
+
     if (holdedContactId) {
+      // Update existing contact
       await updateContact(holdedContactId, {
         name: data.billing_name.trim(),
         code: data.tax_id.trim(),
-        billAddress: {
-          address: data.billing_address.trim(),
-          city: data.billing_city.trim(),
-          postalCode: data.billing_postal_code.trim(),
-          province: data.billing_province.trim(),
-          country: data.billing_country.trim(),
-          countryCode: data.billing_country.trim().toLowerCase() === "españa" ? "ES" : undefined,
-        },
+        billAddress,
       });
+    } else {
+      // Create new contact
+      const newContact = await createContact({
+        name: data.billing_name.trim(),
+        code: data.tax_id.trim(),
+        email: lead?.email || undefined,
+        phone: undefined,
+        billAddress,
+      });
+      holdedContactId = newContact.id;
     }
 
-    // 5. Create proforma draft if we have a contact
+    // 4. Create proforma in Holded with the saved quote items
     let holdedProformaId: string | null = null;
-    if (holdedContactId) {
-      const proforma = await createProforma(holdedContactId);
+    const items = (qr.items || []) as unknown as QuoteItem[];
+
+    if (holdedContactId && items.length > 0) {
+      const proforma = await createProforma(holdedContactId, {
+        items: items.map((item) => ({
+          name: item.concept,
+          units: item.units,
+          subtotal: item.price,
+          tax: item.tax,
+        })),
+        notes: qr.notes || undefined,
+      });
       holdedProformaId = proforma.id;
     }
 
-    // 6. Mark as submitted
+    // 5. Mark as submitted
     await supabase
       .from("quote_requests")
       .update({
@@ -106,7 +135,7 @@ export async function submitBillingData(
       .eq("id", qr.id);
 
     return { success: true };
-  } catch (e) {
+  } catch {
     // Even if Holded fails, save the billing data and mark submitted
     await supabase
       .from("quote_requests")

@@ -261,14 +261,13 @@ export default async function LeadDetailPage({
             </div>
           )}
 
-          {/* Proforma editor — visible when quote_request has Holded contact */}
-          {quoteRequest?.status === "submitted" && (
-            <ProformaEditor
-              leadId={lead.id}
-              hasHoldedContact={!!quoteRequest?.holded_contact_id}
-              existingProformaId={quoteRequest?.holded_proforma_id || null}
-            />
-          )}
+          {/* Presupuesto editor */}
+          <ProformaEditor
+            leadId={lead.id}
+            existingItems={(quoteRequest?.items as { concept: string; price: number; units: number; tax: number }[] | null) || null}
+            existingNotes={quoteRequest?.notes || null}
+            quoteStatus={quoteRequest?.status || null}
+          />
 
           {/* Email panel (threads + compose + inline snippets) */}
           <EmailPanel

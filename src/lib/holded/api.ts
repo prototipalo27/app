@@ -114,6 +114,35 @@ export async function getDocument(
 
 // ── Contacts (write) ──────────────────────────────────────
 
+/** Create a new contact */
+export async function createContact(data: {
+  name: string;
+  code?: string;
+  email?: string;
+  phone?: string;
+  type?: string;
+  billAddress?: {
+    address?: string;
+    city?: string;
+    postalCode?: string;
+    province?: string;
+    country?: string;
+    countryCode?: string;
+  };
+}): Promise<{ id: string }> {
+  const res = await fetch(`${HOLDED_API_BASE}/contacts`, {
+    method: "POST",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify({ ...data, type: data.type || "client" }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as { id: string };
+}
+
 /** Update an existing contact */
 export async function updateContact(
   id: string,

@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import {
-  createLeadProforma,
-  sendLeadProforma,
+  saveQuoteItems,
+  sendQuoteToClient,
   type ProformaLineItem,
 } from "../actions";
 
@@ -20,22 +20,25 @@ function emptyLine(): ProformaLineItem {
 
 interface ProformaEditorProps {
   leadId: string;
-  hasHoldedContact: boolean;
-  existingProformaId: string | null;
+  existingItems: ProformaLineItem[] | null;
+  existingNotes: string | null;
+  quoteStatus: string | null;
 }
 
 export default function ProformaEditor({
   leadId,
-  hasHoldedContact,
-  existingProformaId,
+  existingItems,
+  existingNotes,
+  quoteStatus,
 }: ProformaEditorProps) {
   const [isPending, startTransition] = useTransition();
-  const [lines, setLines] = useState<ProformaLineItem[]>([emptyLine()]);
-  const [notes, setNotes] = useState("");
+  const [lines, setLines] = useState<ProformaLineItem[]>(
+    existingItems && existingItems.length > 0 ? existingItems : [emptyLine()],
+  );
+  const [notes, setNotes] = useState(existingNotes || "");
   const [error, setError] = useState<string | null>(null);
-  const [proformaId, setProformaId] = useState<string | null>(existingProformaId);
-  const [sent, setSent] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
+  const [saved, setSaved] = useState(!!existingItems && existingItems.length > 0);
+  const [sent, setSent] = useState(quoteStatus === "quote_sent");
 
   const inputClass =
     "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white";
@@ -46,11 +49,17 @@ export default function ProformaEditor({
         i === index ? { ...line, [field]: value } : line,
       ),
     );
+    setSaved(false);
   };
 
-  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
-  const removeLine = (index: number) =>
+  const addLine = () => {
+    setLines((prev) => [...prev, emptyLine()]);
+    setSaved(false);
+  };
+  const removeLine = (index: number) => {
     setLines((prev) => prev.filter((_, i) => i !== index));
+    setSaved(false);
+  };
 
   // Calculations
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.units, 0);
@@ -62,7 +71,7 @@ export default function ProformaEditor({
   const totalTax = Object.values(taxBreakdown).reduce((s, v) => s + v, 0);
   const total = subtotal + totalTax;
 
-  const handleCreate = () => {
+  const handleSave = () => {
     setError(null);
     const validLines = lines.filter((l) => l.concept.trim() && l.price > 0);
     if (validLines.length === 0) {
@@ -70,11 +79,11 @@ export default function ProformaEditor({
       return;
     }
     startTransition(async () => {
-      const result = await createLeadProforma(leadId, validLines, notes || undefined);
+      const result = await saveQuoteItems(leadId, validLines, notes || undefined);
       if (result.success) {
-        setProformaId(result.proformaId ?? null);
+        setSaved(true);
       } else {
-        setError(result.error || "Error al crear la proforma");
+        setError(result.error || "Error al guardar");
       }
     });
   };
@@ -82,7 +91,20 @@ export default function ProformaEditor({
   const handleSend = () => {
     setError(null);
     startTransition(async () => {
-      const result = await sendLeadProforma(leadId);
+      // Save first if not saved
+      if (!saved) {
+        const validLines = lines.filter((l) => l.concept.trim() && l.price > 0);
+        if (validLines.length === 0) {
+          setError("Añade al menos una línea con concepto y precio");
+          return;
+        }
+        const saveResult = await saveQuoteItems(leadId, validLines, notes || undefined);
+        if (!saveResult.success) {
+          setError(saveResult.error || "Error al guardar");
+          return;
+        }
+      }
+      const result = await sendQuoteToClient(leadId);
       if (result.success) {
         setSent(true);
       } else {
@@ -101,59 +123,15 @@ export default function ProformaEditor({
             Enviado
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Enviado por email al cliente
+            Presupuesto enviado por email al cliente
           </span>
         </div>
-      </div>
-    );
-  }
-
-  // State: proforma created but not sent
-  if (proformaId && !showEditor) {
-    return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-            Creada en Holded
-          </span>
-          <a
-            href={`https://app.holded.com/invoicing/proform/${proformaId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Ver en Holded
-          </a>
-        </div>
-        {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <div className="flex gap-2">
-          <button
-            onClick={handleSend}
-            disabled={isPending}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {isPending ? "Enviando..." : "Enviar al cliente"}
-          </button>
-          <button
-            onClick={() => setShowEditor(true)}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Nueva proforma
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // State: no Holded contact
-  if (!hasHoldedContact) {
-    return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Presupuesto</h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          El lead necesita rellenar los datos de facturación para crear un presupuesto.
-        </p>
+        <button
+          onClick={() => setSent(false)}
+          className="mt-3 text-xs font-medium text-brand hover:text-brand-dark"
+        >
+          Editar presupuesto
+        </button>
       </div>
     );
   }
@@ -249,7 +227,7 @@ export default function ProformaEditor({
         <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Notas</label>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => { setNotes(e.target.value); setSaved(false); }}
           rows={2}
           placeholder="Notas adicionales (opcional)"
           className={inputClass}
@@ -278,13 +256,22 @@ export default function ProformaEditor({
 
       {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <button
-        onClick={handleCreate}
-        disabled={isPending}
-        className="mt-4 w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-      >
-        {isPending ? "Creando presupuesto..." : "Crear presupuesto en Holded"}
-      </button>
+      <div className="mt-4 flex gap-3">
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {isPending ? "Guardando..." : saved ? "Guardado" : "Guardar presupuesto"}
+        </button>
+        <button
+          onClick={handleSend}
+          disabled={isPending}
+          className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+        >
+          {isPending ? "Enviando..." : "Enviar presupuesto al cliente"}
+        </button>
+      </div>
     </div>
   );
 }
