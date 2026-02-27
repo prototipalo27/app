@@ -15,8 +15,8 @@ interface TimeOffRequest {
   user_id: string;
   start_date: string;
   end_date: string;
-  type: string;
-  status: string;
+  type: string | null;
+  status: string | null;
   notes: string | null;
   user: { id: string; full_name: string | null; email: string } | null;
   approver: { full_name: string | null } | null;
@@ -273,7 +273,7 @@ export default function WorkCalendar({
                   <div
                     key={r.id}
                     className={`mt-0.5 truncate rounded px-1 text-[8px] font-medium ${emp?.color ?? "bg-zinc-200"} ${r.status === "pending" ? "opacity-60" : ""}`}
-                    title={`${emp?.name} - ${TYPE_LABELS[r.type] ?? r.type}${r.status === "pending" ? " (pendiente)" : ""}`}
+                    title={`${emp?.name} - ${TYPE_LABELS[r.type ?? "other"] ?? r.type}${r.status === "pending" ? " (pendiente)" : ""}`}
                   >
                     {emp?.name}
                   </div>
@@ -312,7 +312,7 @@ export default function WorkCalendar({
                     <div>
                       <p className="text-xs font-medium text-zinc-900 dark:text-white">{name}</p>
                       <p className="text-[10px] text-zinc-500">
-                        {TYPE_LABELS[r.type] ?? r.type}: {new Date(r.start_date).toLocaleDateString("es-ES")} — {new Date(r.end_date).toLocaleDateString("es-ES")}
+                        {TYPE_LABELS[r.type ?? "other"] ?? r.type}: {new Date(r.start_date).toLocaleDateString("es-ES")} — {new Date(r.end_date).toLocaleDateString("es-ES")}
                       </p>
                       {r.notes && <p className="text-[10px] text-zinc-400">{r.notes}</p>}
                     </div>

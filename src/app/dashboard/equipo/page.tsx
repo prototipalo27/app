@@ -6,7 +6,6 @@ import SkillEditor from "./skill-editor";
 import LinkStop from "./link-stop";
 import WorkCalendar from "./work-calendar";
 import ZoneEditor, { getZoneColor, getZoneLabel } from "./zone-editor";
-import { getHolidays, getTimeOffRequests, ensureHolidays } from "./calendar-actions";
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin:
@@ -67,24 +66,42 @@ export default async function EquipoPage() {
 
   const currentYear = new Date().getFullYear();
 
-  const [{ data: users }, { data: skills }, { data: userSkills }, { data: zoneAssignments }, holidays, timeOffRequests] =
-    await Promise.all([
-      supabase
-        .from("user_profiles")
-        .select("id, email, role, is_active, full_name, birthday, hire_date")
-        .eq("is_active", true)
-        .order("email"),
-      supabase.from("skills").select("id, name").order("name"),
-      supabase.from("user_skills").select("user_id, skill_id"),
-      supabase.from("zone_assignments").select("user_id, zone"),
-      getHolidays(currentYear),
-      getTimeOffRequests(currentYear),
-    ]);
+  const [
+    { data: users },
+    { data: skills },
+    { data: userSkills },
+    { data: zoneAssignments },
+    { data: holidays },
+    { data: timeOffRequests },
+  ] = await Promise.all([
+    supabase
+      .from("user_profiles")
+      .select("id, email, role, is_active, full_name, birthday, hire_date")
+      .eq("is_active", true)
+      .order("email"),
+    supabase.from("skills").select("id, name").order("name"),
+    supabase.from("user_skills").select("user_id, skill_id"),
+    supabase.from("zone_assignments").select("user_id, zone"),
+    supabase.from("holidays").select("*").eq("year", currentYear).order("date"),
+    supabase
+      .from("time_off_requests")
+      .select("id, user_id, start_date, end_date, type, status, notes, approved_by, created_at, updated_at")
+      .gte("start_date", `${currentYear}-01-01`)
+      .lte("end_date", `${currentYear}-12-31`)
+      .order("start_date"),
+  ]);
 
-  // Ensure holidays exist for current year (auto-seed)
-  if (holidays.length === 0 && isManager) {
-    await ensureHolidays(currentYear);
-  }
+  // Enrich time off requests with user info
+  const allUsers = users ?? [];
+  const userLookup = new Map(allUsers.map((u) => [u.id, u]));
+  const enrichedTimeOff = (timeOffRequests ?? []).map((r) => {
+    const user = userLookup.get(r.user_id);
+    return {
+      ...r,
+      user: user ? { id: user.id, full_name: user.full_name, email: user.email } : null,
+      approver: null as { full_name: string | null } | null,
+    };
+  });
 
   const allSkills = skills ?? [];
   const skillMap = new Map(allSkills.map((s) => [s.id, s.name]));
@@ -105,14 +122,14 @@ export default async function EquipoPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-4 md:p-8">
-      <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
         Equipo
       </h1>
 
       <WorkCalendar
-        holidays={holidays}
-        timeOffRequests={timeOffRequests as any}
+        holidays={holidays ?? []}
+        timeOffRequests={enrichedTimeOff}
         isManager={isManager}
         currentUserId={profile.id}
         year={currentYear}
