@@ -264,6 +264,125 @@ export async function getFinancings() {
   return data;
 }
 
+// ── Cash Flow Pipeline ──
+
+export type CashFlowProject = {
+  id: string;
+  name: string;
+  client_name: string | null;
+  price: number;
+  holded_doc_number: string | null;
+  holded_due_date: number | null;
+  days_overdue: number | null;
+};
+
+export type CashFlowStage = {
+  key: string;
+  label: string;
+  color: "zinc" | "amber" | "green" | "red";
+  total: number;
+  projects: CashFlowProject[];
+};
+
+export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, name, client_name, price, project_type, status, proforma_sent_at, holded_invoice_id, payment_confirmed_at")
+    .in("project_type", ["upcoming", "confirmed"]);
+
+  let invoiceMap = new Map<string, { status: number; docNumber: string; dueDate: number }>();
+  try {
+    const invoices = await listDocuments("invoice");
+    for (const inv of invoices) {
+      invoiceMap.set(inv.id, {
+        status: inv.status,
+        docNumber: inv.docNumber,
+        dueDate: inv.dueDate,
+      });
+    }
+  } catch {
+    // Holded API error — continue with local data only
+  }
+
+  const stages: CashFlowStage[] = [
+    { key: "quoted", label: "Presupuestado", color: "zinc", total: 0, projects: [] },
+    { key: "pending_first", label: "Pendiente 1er 50%", color: "amber", total: 0, projects: [] },
+    { key: "collected_first", label: "Cobrado 1er 50%", color: "green", total: 0, projects: [] },
+    { key: "pending_second", label: "Pendiente 2do 50%", color: "amber", total: 0, projects: [] },
+    { key: "owed_delivered", label: "Entregado, nos deben", color: "red", total: 0, projects: [] },
+  ];
+
+  const nowTs = Math.floor(Date.now() / 1000);
+
+  for (const p of projects ?? []) {
+    const price = p.price ?? 0;
+    const invoice = p.holded_invoice_id ? invoiceMap.get(p.holded_invoice_id) : null;
+    const holdedStatus = invoice?.status ?? null;
+
+    // Skip fully paid projects (Holded status 2)
+    if (holdedStatus === 2) continue;
+
+    const isDelivered = p.status === "delivered";
+    const isShippingOrDelivered = p.status === "shipping" || p.status === "delivered";
+
+    let stageIndex = -1;
+
+    if (p.project_type === "upcoming" && p.proforma_sent_at) {
+      // Stage 1: Presupuestado
+      stageIndex = 0;
+    } else if (p.project_type === "confirmed") {
+      if (holdedStatus !== null) {
+        // We have Holded data
+        if ((holdedStatus === 1 || holdedStatus === 4) && isDelivered) {
+          // Stage 5: Delivered but unpaid/overdue
+          stageIndex = 4;
+        } else if (holdedStatus === 3 && isShippingOrDelivered) {
+          // Stage 4: Partially paid + shipping/delivered
+          stageIndex = 3;
+        } else if (holdedStatus === 3) {
+          // Stage 3: Partially paid, still in production
+          stageIndex = 2;
+        } else if (holdedStatus === 1 || holdedStatus === 4) {
+          // Stage 2: Not paid, in production
+          stageIndex = 1;
+        }
+      } else {
+        // No Holded data — use payment_confirmed_at as fallback
+        if (p.payment_confirmed_at && isShippingOrDelivered) {
+          stageIndex = 3;
+        } else if (p.payment_confirmed_at) {
+          stageIndex = 2;
+        } else {
+          stageIndex = 1;
+        }
+      }
+    }
+
+    if (stageIndex === -1) continue;
+
+    let daysOverdue: number | null = null;
+    if (invoice?.dueDate && invoice.dueDate < nowTs) {
+      daysOverdue = Math.floor((nowTs - invoice.dueDate) / 86400);
+    }
+
+    stages[stageIndex].total += price;
+    stages[stageIndex].projects.push({
+      id: p.id,
+      name: p.name,
+      client_name: p.client_name,
+      price,
+      holded_doc_number: invoice?.docNumber ?? null,
+      holded_due_date: invoice?.dueDate ?? null,
+      days_overdue: daysOverdue,
+    });
+  }
+
+  return { stages };
+}
+
 export async function getTaxPayments(year?: number) {
   await requireRole("manager");
   const supabase = await createClient();

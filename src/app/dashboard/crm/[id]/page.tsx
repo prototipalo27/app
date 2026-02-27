@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
+import LeadNav from "./lead-nav";
 import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
 import ProformaEditor from "./proforma-editor";
@@ -34,6 +35,18 @@ export default async function LeadDetailPage({
     .single();
 
   if (!lead) notFound();
+
+  // Fetch active lead IDs for prev/next navigation (exclude won/lost)
+  const { data: activeLeadIds } = await supabase
+    .from("leads")
+    .select("id")
+    .not("status", "in", '("won","lost")')
+    .order("created_at", { ascending: false });
+
+  const ids = (activeLeadIds || []).map((l) => l.id);
+  const currentIndex = ids.indexOf(id);
+  const prevId = currentIndex > 0 ? ids[currentIndex - 1] : null;
+  const nextId = currentIndex >= 0 && currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
 
   // Fetch activities
   const { data: activities } = await supabase
@@ -103,14 +116,12 @@ export default async function LeadDetailPage({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/crm"
-          className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          &larr; Volver a CRM
-        </Link>
-      </div>
+      <LeadNav
+        prevId={prevId}
+        nextId={nextId}
+        current={currentIndex + 1}
+        total={ids.length}
+      />
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Left panel: lead info + emails + timeline */}
@@ -371,6 +382,7 @@ export default async function LeadDetailPage({
             assignedTo={lead.assigned_to}
             quoteRequest={quoteRequest}
             paymentCondition={lead.payment_condition}
+            nextId={nextId}
           />
         </div>
       </div>

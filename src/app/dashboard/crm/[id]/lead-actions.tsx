@@ -28,6 +28,7 @@ interface LeadActionsProps {
   assignedTo: string | null;
   quoteRequest: Tables<"quote_requests"> | null;
   paymentCondition: string | null;
+  nextId: string | null;
 }
 
 export default function LeadActions({
@@ -38,6 +39,7 @@ export default function LeadActions({
   assignedTo,
   quoteRequest,
   paymentCondition,
+  nextId,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -73,7 +75,11 @@ export default function LeadActions({
     }
     startTransition(async () => {
       await updateLeadStatus(leadId, newStatus);
-      router.refresh();
+      if (nextId) {
+        router.push(`/dashboard/crm/${nextId}`);
+      } else {
+        router.push("/dashboard/crm");
+      }
     });
   };
 
@@ -82,7 +88,11 @@ export default function LeadActions({
       await updateLeadStatus(leadId, "lost", lostReason || undefined);
       setShowLostReason(false);
       setLostReason("");
-      router.refresh();
+      if (nextId) {
+        router.push(`/dashboard/crm/${nextId}`);
+      } else {
+        router.push("/dashboard/crm");
+      }
     });
   };
 
