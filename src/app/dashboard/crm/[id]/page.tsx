@@ -40,7 +40,8 @@ export default async function LeadDetailPage({
   const { data: activeLeadIds } = await supabase
     .from("leads")
     .select("id")
-    .not("status", "in", '("won","lost")')
+    .not("status", "eq", "won")
+    .not("status", "eq", "lost")
     .order("created_at", { ascending: false });
 
   const ids = (activeLeadIds || []).map((l) => l.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, deleteItem } from "../items-actions";
+import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, updateItemName, updateItemQuantity, deleteItem } from "../items-actions";
 import { generateProjectQueue } from "../queue-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
@@ -24,6 +24,8 @@ function ItemRow({
   onBatchChange,
   onKeywordChange,
   onNotesChange,
+  onNameChange,
+  onQuantityChange,
   printerTypes,
   jobs,
   driveFiles,
@@ -35,11 +37,15 @@ function ItemRow({
   onBatchChange: (id: string, batchSize: number) => void;
   onKeywordChange: (id: string, keyword: string | null) => void;
   onNotesChange: (id: string, notes: string | null) => void;
+  onNameChange: (id: string, name: string) => void;
+  onQuantityChange: (id: string, quantity: number) => void;
   printerTypes: Tables<"printer_types">[];
   jobs: PrintJob[];
   driveFiles: Array<{ id: string; name: string }>;
 }) {
   const [local, setLocal] = useState(item.completed);
+  const [editingName, setEditingName] = useState(false);
+  const [editingQuantity, setEditingQuantity] = useState(false);
   const [editingBatch, setEditingBatch] = useState(false);
   const [editingKeyword, setEditingKeyword] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -81,9 +87,36 @@ function ItemRow({
         ) : (
           <span className="h-4 w-4" />
         )}
-        <span className={`flex-1 text-sm font-medium ${isComplete ? "text-green-600 dark:text-green-400" : "text-zinc-900 dark:text-white"}`}>
-          {item.name}
-        </span>
+        {editingName ? (
+          <input
+            type="text"
+            defaultValue={item.name}
+            autoFocus
+            className="flex-1 rounded border border-green-400 bg-white px-1.5 py-0.5 text-sm font-medium text-zinc-900 focus:outline-none dark:border-green-600 dark:bg-zinc-800 dark:text-white"
+            onBlur={(e) => {
+              const val = e.target.value.trim();
+              if (val && val !== item.name) {
+                onNameChange(item.id, val);
+              }
+              setEditingName(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                (e.target as HTMLInputElement).blur();
+              } else if (e.key === "Escape") {
+                setEditingName(false);
+              }
+            }}
+          />
+        ) : (
+          <span
+            className={`flex-1 cursor-pointer text-sm font-medium ${isComplete ? "text-green-600 dark:text-green-400" : "text-zinc-900 dark:text-white"} hover:text-green-600 dark:hover:text-green-400`}
+            onClick={() => setEditingName(true)}
+            title="Click para editar nombre"
+          >
+            {item.name}
+          </span>
+        )}
 
         {/* Batch size badge */}
         {editingBatch ? (
@@ -165,7 +198,37 @@ function ItemRow({
         )}
 
         <span className={`text-sm tabular-nums ${isComplete ? "font-semibold text-green-600 dark:text-green-400" : "text-zinc-500 dark:text-zinc-400"}`}>
-          {local}/{item.quantity}
+          {local}/{editingQuantity ? (
+            <input
+              type="number"
+              min={1}
+              defaultValue={item.quantity}
+              autoFocus
+              className="w-14 rounded border border-green-400 bg-white px-1 py-0 text-center text-sm font-medium text-zinc-900 focus:outline-none dark:border-green-600 dark:bg-zinc-800 dark:text-white"
+              onBlur={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (val && val >= 1 && val !== item.quantity) {
+                  onQuantityChange(item.id, val);
+                }
+                setEditingQuantity(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                  setEditingQuantity(false);
+                }
+              }}
+            />
+          ) : (
+            <span
+              className="cursor-pointer hover:text-green-600 dark:hover:text-green-400"
+              onClick={() => setEditingQuantity(true)}
+              title="Click para editar cantidad"
+            >
+              {item.quantity}
+            </span>
+          )}
         </span>
 
         {/* Notes toggle */}
@@ -337,6 +400,18 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
     });
   }
 
+  function handleNameChange(itemId: string, name: string) {
+    startTransition(async () => {
+      await updateItemName(itemId, name);
+    });
+  }
+
+  function handleQuantityChange(itemId: string, quantity: number) {
+    startTransition(async () => {
+      await updateItemQuantity(itemId, quantity);
+    });
+  }
+
   function handleDelete(itemId: string) {
     startTransition(async () => {
       await deleteItem(itemId);
@@ -422,6 +497,8 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
               onBatchChange={handleBatchChange}
               onKeywordChange={handleKeywordChange}
               onNotesChange={handleNotesChange}
+              onNameChange={handleNameChange}
+              onQuantityChange={handleQuantityChange}
               printerTypes={printerTypes}
               jobs={printJobs}
               driveFiles={driveFiles}

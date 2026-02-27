@@ -131,6 +131,59 @@ export async function updateItemNotes(itemId: string, notes: string | null) {
   revalidatePath(`/dashboard/projects/${item.project_id}`);
 }
 
+export async function updateItemName(itemId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Name cannot be empty");
+
+  const supabase = await getAuthenticatedClient();
+
+  const { data: item } = await supabase
+    .from("project_items")
+    .select("project_id")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item not found");
+
+  const { error } = await supabase
+    .from("project_items")
+    .update({ name: trimmed })
+    .eq("id", itemId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/projects/${item.project_id}`);
+}
+
+export async function updateItemQuantity(itemId: string, quantity: number) {
+  const supabase = await getAuthenticatedClient();
+
+  const { data: item } = await supabase
+    .from("project_items")
+    .select("project_id, completed")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item not found");
+
+  const newQuantity = Math.max(1, quantity);
+  const updates: { quantity: number; completed?: number } = { quantity: newQuantity };
+
+  if (item.completed > newQuantity) {
+    updates.completed = newQuantity;
+  }
+
+  const { error } = await supabase
+    .from("project_items")
+    .update(updates)
+    .eq("id", itemId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/projects/${item.project_id}`);
+  revalidatePath("/dashboard");
+}
+
 export async function deleteItem(itemId: string) {
   const supabase = await getAuthenticatedClient();
 
