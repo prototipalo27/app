@@ -5,7 +5,8 @@ import Link from "next/link";
 import SkillEditor from "./skill-editor";
 import LinkStop from "./link-stop";
 import WorkCalendar from "./work-calendar";
-import ZoneEditor, { getZoneColor, getZoneLabel } from "./zone-editor";
+import ZoneEditor from "./zone-editor";
+import { getZoneColor, getZoneLabel } from "@/lib/zones";
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin:
