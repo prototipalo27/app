@@ -151,11 +151,13 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {} }: KanbanBo
                   className="min-h-0 overflow-hidden"
                   column={column}
                   projects={getColumnProjects(column.id)}
+                  responsibles={zoneResponsibles[column.id]}
                 />
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"
                   column={stackedColumn}
                   projects={getColumnProjects(stackedColumn.id)}
+                  responsibles={zoneResponsibles[stackedColumn.id]}
                 />
               </div>
             );
@@ -166,6 +168,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {} }: KanbanBo
               key={column.id}
               column={column}
               projects={getColumnProjects(column.id)}
+              responsibles={zoneResponsibles[column.id]}
             />
           );
         })}
