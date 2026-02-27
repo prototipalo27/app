@@ -30,6 +30,32 @@ export async function removeSkillFromUser(userId: string, skillId: string) {
   revalidatePath("/dashboard/equipo");
 }
 
+export async function assignZone(userId: string, zone: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("zone_assignments")
+    .insert({ user_id: userId, zone });
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/equipo");
+}
+
+export async function removeZone(userId: string, zone: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("zone_assignments")
+    .delete()
+    .eq("user_id", userId)
+    .eq("zone", zone);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/equipo");
+}
+
 export async function createSkill(name: string) {
   await requireRole("manager");
   const supabase = await createClient();

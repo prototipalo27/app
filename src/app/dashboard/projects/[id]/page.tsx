@@ -22,7 +22,7 @@ const STATUSES = [
   { value: "pending", label: "Pending" },
   { value: "design", label: "Design" },
   { value: "printing", label: "Printing" },
-  { value: "post_processing", label: "Post-processing" },
+  { value: "post_processing", label: "Post-processing / Laser" },
   { value: "qc", label: "QC" },
   { value: "shipping", label: "Shipping" },
   { value: "delivered", label: "Delivered" },

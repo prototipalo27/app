@@ -34,7 +34,7 @@ export const COLUMNS: {
   },
   {
     id: "post_processing",
-    label: "Post-processing",
+    label: "Post-processing / Laser",
     accent: "bg-yellow-500",
     badge:
       "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",

@@ -19,7 +19,7 @@ const STATUSES = [
   { value: "pending", label: "Pendiente" },
   { value: "design", label: "Diseño" },
   { value: "printing", label: "Impresión" },
-  { value: "post_processing", label: "Post-procesado" },
+  { value: "post_processing", label: "Post-procesado / Láser" },
   { value: "qc", label: "Control de calidad" },
   { value: "shipping", label: "Envío" },
   { value: "delivered", label: "Entregado" },

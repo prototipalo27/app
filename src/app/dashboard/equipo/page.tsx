@@ -5,6 +5,7 @@ import Link from "next/link";
 import SkillEditor from "./skill-editor";
 import LinkStop from "./link-stop";
 import WorkCalendar from "./work-calendar";
+import ZoneEditor, { getZoneColor, getZoneLabel } from "./zone-editor";
 import { getHolidays, getTimeOffRequests, ensureHolidays } from "./calendar-actions";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -66,7 +67,7 @@ export default async function EquipoPage() {
 
   const currentYear = new Date().getFullYear();
 
-  const [{ data: users }, { data: skills }, { data: userSkills }, holidays, timeOffRequests] =
+  const [{ data: users }, { data: skills }, { data: userSkills }, { data: zoneAssignments }, holidays, timeOffRequests] =
     await Promise.all([
       supabase
         .from("user_profiles")
@@ -75,6 +76,7 @@ export default async function EquipoPage() {
         .order("email"),
       supabase.from("skills").select("id, name").order("name"),
       supabase.from("user_skills").select("user_id, skill_id"),
+      supabase.from("zone_assignments").select("user_id, zone"),
       getHolidays(currentYear),
       getTimeOffRequests(currentYear),
     ]);
@@ -95,6 +97,13 @@ export default async function EquipoPage() {
     userSkillMap.set(us.user_id, arr);
   }
 
+  const userZoneMap = new Map<string, string[]>();
+  for (const za of zoneAssignments ?? []) {
+    const arr = userZoneMap.get(za.user_id) ?? [];
+    arr.push(za.zone);
+    userZoneMap.set(za.user_id, arr);
+  }
+
   return (
     <div className="mx-auto max-w-6xl p-4 md:p-8">
       <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-white">
@@ -113,6 +122,7 @@ export default async function EquipoPage() {
         {(users ?? []).map((user) => {
           const displayName = user.full_name || user.email.split("@")[0];
           const skillIds = userSkillMap.get(user.id) ?? [];
+          const zoneIds = userZoneMap.get(user.id) ?? [];
           const birthdaySoon = isBirthdaySoon(user.birthday);
           const birthdayStr = formatBirthday(user.birthday);
 
@@ -156,8 +166,22 @@ export default async function EquipoPage() {
                 ))}
               </div>
 
+              {zoneIds.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {zoneIds.map((zone) => (
+                    <span
+                      key={zone}
+                      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${getZoneColor(zone)}`}
+                    >
+                      {getZoneLabel(zone)}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {isManager && (
                 <LinkStop>
+                  <ZoneEditor userId={user.id} userZones={zoneIds} />
                   <SkillEditor
                     userId={user.id}
                     allSkills={allSkills}

@@ -2357,6 +2357,35 @@ export type Database = {
           },
         ]
       }
+      zone_assignments: {
+        Row: {
+          created_at: string | null
+          id: string
+          user_id: string
+          zone: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          user_id: string
+          zone: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          user_id?: string
+          zone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zone_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
