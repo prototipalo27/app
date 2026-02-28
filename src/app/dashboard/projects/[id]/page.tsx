@@ -126,9 +126,7 @@ export default async function ProjectDetailPage({
 
   const holdedDocPromise = project.holded_invoice_id
     ? getDocument("invoice", project.holded_invoice_id).catch(() => null)
-    : project.holded_proforma_id
-      ? getDocument("proform", project.holded_proforma_id).catch(() => null)
-      : Promise.resolve(null);
+    : Promise.resolve(null);
 
   const leadPromise = project.lead_id
     ? supabase.from("leads").select("id, full_name, email").eq("id", project.lead_id).single()
@@ -337,13 +335,12 @@ export default async function ProjectDetailPage({
         {/* Details */}
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Details</h2>
-          <DetailRow label="Type" value={project.project_type === "upcoming" ? "Upcoming (proforma)" : "Confirmed (invoiced)"} />
           {holdedDoc && (
             <DetailRow
-              label={project.holded_invoice_id ? "Factura" : "Proforma"}
+              label="Factura"
               value={
                 <a
-                  href={`https://app.holded.com/invoicing/${project.holded_invoice_id ? "invoice" : "proform"}/${project.holded_invoice_id || project.holded_proforma_id}`}
+                  href={`https://app.holded.com/invoicing/invoice/${project.holded_invoice_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-brand-blue hover:underline"
