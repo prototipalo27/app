@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings, getCashFlowPipeline } from "./actions";
+import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings, getCashFlowPipeline, debugInvoiceStatuses } from "./actions";
 import { getNextTaxDeadline, getModelName } from "@/lib/finance/tax-calendar";
 import FixedExpensesSection from "./fixed-expenses-section";
 import FinancingsSection from "./financings-section";
@@ -54,6 +54,7 @@ export default async function FinanzasPage() {
     pendingInvoices,
     financings,
     cashFlowData,
+    debugData,
     { data: projects },
     { data: purchaseItems },
     { data: shipments },
@@ -64,6 +65,7 @@ export default async function FinanzasPage() {
     getPendingInvoices(),
     getFinancings(),
     getCashFlowPipeline(),
+    debugInvoiceStatuses(),
     supabase
       .from("projects")
       .select("id, name, price, invoice_date, status, project_type"),
@@ -340,6 +342,14 @@ export default async function FinanzasPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── DEBUG: Invoice statuses (temporal) ── */}
+      <div className="rounded-xl border border-dashed border-zinc-400 bg-zinc-50 p-5 dark:border-zinc-600 dark:bg-zinc-900/50">
+        <h2 className="mb-2 text-xs font-bold uppercase text-zinc-500">Debug: Holded invoice statuses</h2>
+        <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+          {JSON.stringify(debugData, null, 2)}
+        </pre>
       </div>
     </div>
   );

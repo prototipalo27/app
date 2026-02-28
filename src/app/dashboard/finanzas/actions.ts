@@ -136,10 +136,10 @@ export async function getPendingInvoices() {
   await requireRole("manager");
 
   try {
-    // Use Holded's billed=0 filter to only fetch unpaid invoices server-side
-    const invoices = await listDocuments("invoice", { billed: 0 });
-    // Exclude drafts (status 0) — keep: 1=not paid, 3=partially paid, 4=overdue
-    const pending = invoices.filter((inv) => inv.status !== 0);
+    const invoices = await listDocuments("invoice");
+    // Holded status: 0=draft, 1=not paid, 2=paid, 3=partially paid, 4=overdue
+    // Only show truly unpaid: 1 (not paid), 3 (partially paid), 4 (overdue)
+    const pending = invoices.filter((inv) => inv.status === 1 || inv.status === 3 || inv.status === 4);
     return pending.map((inv) => ({
       id: inv.id,
       contactName: inv.contactName,
@@ -151,6 +151,32 @@ export async function getPendingInvoices() {
     }));
   } catch {
     return [];
+  }
+}
+
+/** Debug: get all invoice statuses to diagnose filtering issues */
+export async function debugInvoiceStatuses() {
+  await requireRole("manager");
+
+  try {
+    const invoices = await listDocuments("invoice");
+    const statusCounts: Record<number, number> = {};
+    for (const inv of invoices) {
+      statusCounts[inv.status] = (statusCounts[inv.status] || 0) + 1;
+    }
+    // Return summary + last 10 invoices for inspection
+    return {
+      total: invoices.length,
+      statusCounts,
+      sample: invoices.slice(0, 15).map((inv) => ({
+        docNumber: inv.docNumber,
+        contactName: inv.contactName,
+        total: inv.total,
+        status: inv.status,
+      })),
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Error" };
   }
 }
 
