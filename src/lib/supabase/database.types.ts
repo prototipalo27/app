@@ -1261,6 +1261,7 @@ export type Database = {
           price: number | null
           print_time_minutes: number | null
           proforma_sent_at: string | null
+          project_manager_id: string | null
           project_type: string
           queue_priority: number
           status: string
@@ -1294,6 +1295,7 @@ export type Database = {
           price?: number | null
           print_time_minutes?: number | null
           proforma_sent_at?: string | null
+          project_manager_id?: string | null
           project_type?: string
           queue_priority?: number
           status?: string
@@ -1327,6 +1329,7 @@ export type Database = {
           price?: number | null
           print_time_minutes?: number | null
           proforma_sent_at?: string | null
+          project_manager_id?: string | null
           project_type?: string
           queue_priority?: number
           status?: string
