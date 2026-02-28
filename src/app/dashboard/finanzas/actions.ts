@@ -136,9 +136,10 @@ export async function getPendingInvoices() {
   await requireRole("manager");
 
   try {
-    const invoices = await listDocuments("invoice");
-    // Holded status: 0=draft, 1=not paid, 2=paid, 3=partially paid, 4=overdue
-    const pending = invoices.filter((inv) => inv.status === 1 || inv.status === 3);
+    // Use Holded's billed=0 filter to only fetch unpaid invoices server-side
+    const invoices = await listDocuments("invoice", { billed: 0 });
+    // Exclude drafts (status 0) — keep: 1=not paid, 3=partially paid, 4=overdue
+    const pending = invoices.filter((inv) => inv.status !== 0);
     return pending.map((inv) => ({
       id: inv.id,
       contactName: inv.contactName,
