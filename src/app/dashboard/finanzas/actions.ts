@@ -348,8 +348,9 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
     const invoice = p.holded_invoice_id ? invoiceMap.get(p.holded_invoice_id) : null;
     const holdedStatus = invoice?.status ?? null;
 
-    // Skip fully paid projects (Holded status 2)
-    if (holdedStatus === 2) continue;
+    // Holded invoice status: 0=not paid, 1=paid, 2=partially paid
+    // Skip fully paid projects
+    if (holdedStatus === 1) continue;
 
     const isDelivered = p.status === "delivered";
     const isShippingOrDelivered = p.status === "shipping" || p.status === "delivered";
@@ -362,16 +363,16 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
     } else if (p.project_type === "confirmed") {
       if (holdedStatus !== null) {
         // We have Holded data
-        if ((holdedStatus === 1 || holdedStatus === 4) && isDelivered) {
-          // Stage 5: Delivered but unpaid/overdue
+        if (holdedStatus === 0 && isDelivered) {
+          // Stage 5: Delivered but unpaid
           stageIndex = 4;
-        } else if (holdedStatus === 3 && isShippingOrDelivered) {
+        } else if (holdedStatus === 2 && isShippingOrDelivered) {
           // Stage 4: Partially paid + shipping/delivered
           stageIndex = 3;
-        } else if (holdedStatus === 3) {
+        } else if (holdedStatus === 2) {
           // Stage 3: Partially paid, still in production
           stageIndex = 2;
-        } else if (holdedStatus === 1 || holdedStatus === 4) {
+        } else if (holdedStatus === 0) {
           // Stage 2: Not paid, in production
           stageIndex = 1;
         }
