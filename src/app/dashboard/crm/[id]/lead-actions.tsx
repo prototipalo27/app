@@ -354,7 +354,7 @@ export default function LeadActions({
                 {quoteRequest.holded_proforma_id && (
                   <>
                     <a
-                      href={`https://app.holded.com/invoicing/proform/${quoteRequest.holded_proforma_id}`}
+                      href={`https://app.holded.com/sales/revenue#open:proform-${quoteRequest.holded_proforma_id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
