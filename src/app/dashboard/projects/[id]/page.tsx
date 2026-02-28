@@ -340,7 +340,7 @@ export default async function ProjectDetailPage({
               label="Factura"
               value={
                 <a
-                  href={`https://app.holded.com/sales/revenue#open:invoice-${project.holded_invoice_id}`}
+                  href={`/api/holded/document-pdf?type=invoice&id=${project.holded_invoice_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-brand-blue hover:underline"
