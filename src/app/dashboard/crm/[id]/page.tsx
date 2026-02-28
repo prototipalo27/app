@@ -150,16 +150,18 @@ export default async function LeadDetailPage({
               <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 {lead.source}
               </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
+                {lead.full_name}
+              </h1>
               {lead.project_type_tag && (
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tagClasses(lead.project_type_tag)}`}>
                   {lead.project_type_tag}
                 </span>
               )}
             </div>
-
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
-              {lead.full_name}
-            </h1>
 
             {lead.company && (
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">

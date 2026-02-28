@@ -76,9 +76,16 @@ export function CrmCard({ lead }: CrmCardProps) {
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
-          {lead.full_name}
-        </h4>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h4 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+            {lead.full_name}
+          </h4>
+          {lead.project_type_tag && (
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagClasses(lead.project_type_tag)}`}>
+              {lead.project_type_tag}
+            </span>
+          )}
+        </div>
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
           {age}
         </span>
@@ -88,12 +95,6 @@ export function CrmCard({ lead }: CrmCardProps) {
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           {lead.company}
         </p>
-      )}
-
-      {lead.project_type_tag && (
-        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${tagClasses(lead.project_type_tag)}`}>
-          {lead.project_type_tag}
-        </span>
       )}
 
       {lead.email && (
