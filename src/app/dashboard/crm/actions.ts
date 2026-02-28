@@ -41,7 +41,7 @@ export async function createLead(formData: FormData) {
     redirect("/dashboard/crm/new");
   }
 
-  const assignedTo = (formData.get("assigned_to") as string)?.trim() || null;
+  const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
 
   const { data, error } = await supabase
     .from("leads")
