@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const pdf = await getDocumentPdf(docType, docId);
-    return new NextResponse(pdf, {
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": "inline",
