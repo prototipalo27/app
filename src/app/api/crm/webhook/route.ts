@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
+import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
 function getSupabase() {
   return createClient(
@@ -199,6 +200,15 @@ export async function POST(request: NextRequest) {
       console.error("CRM webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Auto-detect project type tag
+    detectProjectTypeTag(message?.trim() || null)
+      .then(async (tag) => {
+        if (tag) {
+          await supabase.from("leads").update({ project_type_tag: tag }).eq("id", lead.id);
+        }
+      })
+      .catch((err) => console.error("Lead tagger error:", err));
 
     // Generate AI draft in background (non-blocking)
     generateAndSaveDraft(lead.id, {

@@ -728,11 +728,13 @@ export type Database = {
           email_subject_tag: string | null
           full_name: string
           id: string
+          instagram_username: string | null
           lead_number: number
           lost_reason: string | null
           message: string | null
           payment_condition: string | null
           phone: string | null
+          project_type_tag: string | null
           source: string
           status: string
           updated_at: string
@@ -748,11 +750,13 @@ export type Database = {
           email_subject_tag?: string | null
           full_name: string
           id?: string
+          instagram_username?: string | null
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
           payment_condition?: string | null
           phone?: string | null
+          project_type_tag?: string | null
           source?: string
           status?: string
           updated_at?: string
@@ -768,11 +772,13 @@ export type Database = {
           email_subject_tag?: string | null
           full_name?: string
           id?: string
+          instagram_username?: string | null
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
           payment_condition?: string | null
           phone?: string | null
+          project_type_tag?: string | null
           source?: string
           status?: string
           updated_at?: string
@@ -1343,6 +1349,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_id_fkey"
+            columns: ["project_manager_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
           {

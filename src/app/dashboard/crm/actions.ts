@@ -10,6 +10,7 @@ import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
+import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
@@ -61,8 +62,36 @@ export async function createLead(formData: FormData) {
     throw new Error(error.message);
   }
 
+  // Auto-detect project type tag from message
+  const message = (formData.get("message") as string)?.trim() || null;
+  const tag = await detectProjectTypeTag(message);
+  if (tag) {
+    await supabase.from("leads").update({ project_type_tag: tag }).eq("id", data.id);
+  }
+
   revalidatePath("/dashboard/crm");
   redirect(`/dashboard/crm/${data.id}`);
+}
+
+// ── Update Lead Tag ──────────────────────────────────────
+
+export async function updateLeadTag(
+  id: string,
+  tag: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ project_type_tag: tag || null })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
 }
 
 // ── Update Lead Status ───────────────────────────────────

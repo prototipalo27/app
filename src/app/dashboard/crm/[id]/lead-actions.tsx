@@ -10,6 +10,7 @@ import {
   blockEmailAndDeleteLead,
   sendQuoteToClient,
   updatePaymentCondition,
+  updateLeadTag,
   getProformaDetails,
   createLeadProforma,
 } from "../actions";
@@ -29,6 +30,8 @@ interface LeadActionsProps {
   assignedTo: string | null;
   quoteRequest: Tables<"quote_requests"> | null;
   paymentCondition: string | null;
+  projectTypeTag: string | null;
+  projectTemplateTags: string[];
   nextId: string | null;
 }
 
@@ -40,6 +43,8 @@ export default function LeadActions({
   assignedTo,
   quoteRequest,
   paymentCondition,
+  projectTypeTag,
+  projectTemplateTags,
   nextId,
 }: LeadActionsProps) {
   const router = useRouter();
@@ -238,6 +243,32 @@ export default function LeadActions({
           <option value="">Sin definir</option>
           <option value="50-50">50-50 (dos plazos)</option>
           <option value="100-5">100% (-5% dto)</option>
+        </select>
+      </div>
+
+      {/* Project type tag */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+          Tipo de proyecto
+        </h3>
+        <select
+          value={projectTypeTag || ""}
+          onChange={(e) => {
+            const value = e.target.value || null;
+            startTransition(async () => {
+              await updateLeadTag(leadId, value);
+              router.refresh();
+            });
+          }}
+          disabled={isPending}
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+        >
+          <option value="">Sin tipo</option>
+          {projectTemplateTags.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
         </select>
       </div>
 

@@ -22,6 +22,20 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
+/** Color map for project type tag badges */
+const TAG_COLORS: Record<string, string> = {
+  Trofeos: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  Maquetas: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  Llaveros: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+  "Letras Corporeas": "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+};
+
+const TAG_DEFAULT_COLOR = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+
+export function tagClasses(tag: string): string {
+  return TAG_COLORS[tag] || TAG_DEFAULT_COLOR;
+}
+
 /** Returns Tailwind classes for lead aging badge based on time since last update */
 export function agingClasses(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -74,6 +88,12 @@ export function CrmCard({ lead }: CrmCardProps) {
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           {lead.company}
         </p>
+      )}
+
+      {lead.project_type_tag && (
+        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${tagClasses(lead.project_type_tag)}`}>
+          {lead.project_type_tag}
+        </span>
       )}
 
       {lead.email && (

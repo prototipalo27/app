@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
+import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
 function getSupabase() {
   return createClient(
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
     // Find lead by sender email
     const { data: lead } = await supabase
       .from("leads")
-      .select("id")
+      .select("id, project_type_tag")
       .ilike("email", from)
       .limit(1)
       .single();
@@ -203,6 +204,17 @@ export async function POST(request: NextRequest) {
       }
       console.error("Email webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Auto-detect project type tag if lead doesn't have one
+    if (!lead.project_type_tag) {
+      detectProjectTypeTag(body)
+        .then(async (tag) => {
+          if (tag) {
+            await supabase.from("leads").update({ project_type_tag: tag }).eq("id", leadId);
+          }
+        })
+        .catch((err) => console.error("Lead tagger error:", err));
     }
 
     // Generate AI reply draft in background (non-blocking)

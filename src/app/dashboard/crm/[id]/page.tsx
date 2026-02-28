@@ -15,6 +15,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
+import { tagClasses } from "../crm-card";
 
 export default async function LeadDetailPage({
   params,
@@ -103,6 +104,15 @@ export default async function LeadDetailPage({
     .order("category")
     .order("sort_order", { ascending: true });
 
+  // Fetch project template names for tag selector
+  const { data: projectTemplates } = await supabase
+    .from("project_templates")
+    .select("name")
+    .eq("is_active", true)
+    .order("name");
+
+  const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
+
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
   const STATUS_COLORS: Record<string, string> = {
@@ -140,6 +150,11 @@ export default async function LeadDetailPage({
               <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 {lead.source}
               </span>
+              {lead.project_type_tag && (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tagClasses(lead.project_type_tag)}`}>
+                  {lead.project_type_tag}
+                </span>
+              )}
             </div>
 
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
@@ -382,6 +397,8 @@ export default async function LeadDetailPage({
             assignedTo={lead.assigned_to}
             quoteRequest={quoteRequest}
             paymentCondition={lead.payment_condition}
+            projectTypeTag={lead.project_type_tag}
+            projectTemplateTags={projectTemplateTags}
             nextId={nextId}
           />
         </div>

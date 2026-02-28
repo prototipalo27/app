@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
-import { CrmCard, agingClasses, type LeadWithAssignee } from "./crm-card";
+import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
 import { ContactModal } from "./contact-modal";
 
@@ -63,6 +63,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [filterManager, setFilterManager] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -200,37 +201,75 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     setDismissingId(null);
   };
 
-  const filteredLeads = filterManager === "all"
-    ? leads
-    : filterManager === "unassigned"
-      ? leads.filter((l) => !l.assigned_to)
-      : leads.filter((l) => l.assigned_to === filterManager);
+  // Compute unique tags for the filter
+  const uniqueTags = [...new Set(leads.map((l) => l.project_type_tag).filter(Boolean))] as string[];
+
+  const filteredLeads = leads.filter((l) => {
+    // Manager filter
+    if (filterManager !== "all") {
+      if (filterManager === "unassigned" && l.assigned_to) return false;
+      if (filterManager !== "unassigned" && l.assigned_to !== filterManager) return false;
+    }
+    // Type filter
+    if (filterType !== "all") {
+      if (filterType === "none" && l.project_type_tag) return false;
+      if (filterType !== "none" && l.project_type_tag !== filterType) return false;
+    }
+    return true;
+  });
 
   const newLeads = filteredLeads.filter((l) => l.status === "new");
   const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
 
   return (
     <>
-      {/* ── Commercial filter ── */}
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Comercial:</span>
-        {[
-          { id: "all", label: "Todos" },
-          ...managers.map((m) => ({ id: m.id, label: m.name })),
-          { id: "unassigned", label: "Sin asignar" },
-        ].map((opt) => (
-          <button
-            key={opt.id}
-            onClick={() => setFilterManager(opt.id)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              filterManager === opt.id
-                ? "bg-brand text-white"
-                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* ── Filters ── */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+        {/* Commercial filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Comercial:</span>
+          {[
+            { id: "all", label: "Todos" },
+            ...managers.map((m) => ({ id: m.id, label: m.name })),
+            { id: "unassigned", label: "Sin asignar" },
+          ].map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setFilterManager(opt.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                filterManager === opt.id
+                  ? "bg-brand text-white"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Type filter */}
+        {uniqueTags.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Tipo:</span>
+            {[
+              { id: "all", label: "Todos" },
+              ...uniqueTags.map((t) => ({ id: t, label: t })),
+              { id: "none", label: "Sin tipo" },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setFilterType(opt.id)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  filterType === opt.id
+                    ? "bg-brand text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── New leads strip ── */}
@@ -297,6 +336,13 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     </span>
                   )}
                 </div>
+
+                {/* Type tag */}
+                {lead.project_type_tag && (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagClasses(lead.project_type_tag)}`}>
+                    {lead.project_type_tag}
+                  </span>
+                )}
 
                 {/* Aging badge */}
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
