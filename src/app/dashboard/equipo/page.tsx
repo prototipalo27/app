@@ -39,22 +39,34 @@ function getSkillColor(index: number) {
   return SKILL_COLORS[index % SKILL_COLORS.length];
 }
 
+function parseBirthday(birthday: string | null): { month: number; day: number } | null {
+  if (!birthday) return null;
+  const parts = birthday.split("-");
+  if (parts.length !== 2) return null;
+  const month = parseInt(parts[0], 10);
+  const day = parseInt(parts[1], 10);
+  if (!month || !day) return null;
+  return { month, day };
+}
+
 function isBirthdaySoon(birthday: string | null): boolean {
-  if (!birthday) return false;
+  const bd = parseBirthday(birthday);
+  if (!bd) return false;
   const today = new Date();
-  const bd = new Date(birthday);
-  bd.setFullYear(today.getFullYear());
-  if (bd < today) {
-    bd.setFullYear(today.getFullYear() + 1);
+  today.setHours(0, 0, 0, 0);
+  const thisYear = today.getFullYear();
+  let target = new Date(thisYear, bd.month - 1, bd.day);
+  if (target < today) {
+    target = new Date(thisYear + 1, bd.month - 1, bd.day);
   }
-  const diff = bd.getTime() - today.getTime();
-  const days = diff / (1000 * 60 * 60 * 24);
-  return days >= 0 && days <= 7;
+  const diff = (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+  return diff >= 0 && diff <= 7;
 }
 
 function formatBirthday(birthday: string | null): string | null {
-  if (!birthday) return null;
-  const d = new Date(birthday + "T00:00:00");
+  const bd = parseBirthday(birthday);
+  if (!bd) return null;
+  const d = new Date(2000, bd.month - 1, bd.day);
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 

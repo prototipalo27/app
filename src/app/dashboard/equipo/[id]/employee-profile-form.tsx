@@ -19,7 +19,16 @@ export default function EmployeeProfileForm({ employee, isManager }: Props) {
   const [isPending, startTransition] = useTransition();
   const [fullName, setFullName] = useState(employee.full_name ?? "");
   const [nickname, setNickname] = useState(employee.nickname ?? "");
-  const [birthday, setBirthday] = useState(employee.birthday ?? "");
+  const [birthdayMonth, setBirthdayMonth] = useState(() => {
+    if (!employee.birthday) return "";
+    const parts = employee.birthday.split("-");
+    return parts[0] ?? "";
+  });
+  const [birthdayDay, setBirthdayDay] = useState(() => {
+    if (!employee.birthday) return "";
+    const parts = employee.birthday.split("-");
+    return parts[1] ?? "";
+  });
   const [phone, setPhone] = useState(employee.phone ?? "");
   const [hireDate, setHireDate] = useState(employee.hire_date ?? "");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -30,7 +39,7 @@ export default function EmployeeProfileForm({ employee, isManager }: Props) {
       const result = await updateEmployeeProfile(employee.id, {
         full_name: fullName || undefined,
         nickname: nickname || null,
-        birthday: birthday || null,
+        birthday: birthdayMonth && birthdayDay ? `${birthdayMonth}-${birthdayDay}` : null,
         phone: phone || null,
         hire_date: hireDate || null,
       });
@@ -106,20 +115,32 @@ export default function EmployeeProfileForm({ employee, isManager }: Props) {
           Fecha de nacimiento
         </label>
         {isManager ? (
-          <input
-            type="date"
-            value={birthday}
-            onChange={(e) => setBirthday(e.target.value)}
-            className={inputClass}
-          />
+          <div className="flex gap-2">
+            <select
+              value={birthdayDay}
+              onChange={(e) => setBirthdayDay(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Día</option>
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={String(d).padStart(2, "0")}>{d}</option>
+              ))}
+            </select>
+            <select
+              value={birthdayMonth}
+              onChange={(e) => setBirthdayMonth(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Mes</option>
+              {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"].map((label, i) => (
+                <option key={i} value={String(i + 1).padStart(2, "0")}>{label}</option>
+              ))}
+            </select>
+          </div>
         ) : (
           <div className={readOnlyClass}>
-            {birthday
-              ? new Date(birthday + "T00:00:00").toLocaleDateString("es-ES", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })
+            {birthdayMonth && birthdayDay
+              ? `${parseInt(birthdayDay)} de ${["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][parseInt(birthdayMonth) - 1]}`
               : "—"}
           </div>
         )}
