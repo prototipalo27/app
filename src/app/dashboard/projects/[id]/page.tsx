@@ -238,9 +238,24 @@ export default async function ProjectDetailPage({
       {/* Header */}
       <div className="mb-6 space-y-3">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            {project.name}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+              {project.name}
+            </h1>
+            {holdedDoc && (
+              <a
+                href={`/api/holded/document-pdf?type=invoice&id=${project.holded_invoice_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {holdedDoc.docNumber}
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
+          </div>
           <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-medium ${currentStatusColor}`}>
             {STATUSES.find((s) => s.value === project.status)?.label ?? project.status}
           </span>

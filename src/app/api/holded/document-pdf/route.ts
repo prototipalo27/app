@@ -37,43 +37,38 @@ export async function GET(req: NextRequest) {
       }, { status: 502 });
     }
 
-    const contentType = res.headers.get("content-type") || "";
-    const raw = await res.arrayBuffer();
+    const raw = await res.text();
 
-    if (debug) {
-      const snippet = Buffer.from(raw).toString("utf8").slice(0, 500);
-      return NextResponse.json({
-        contentType,
-        size: raw.byteLength,
-        startsWithPDF: snippet.startsWith("%PDF"),
-        snippet,
-      });
-    }
+    // Holded returns JSON: { status: 1, data: "<base64>" }
+    // The base64 data contains HTTP headers + PDF body separated by %PDF
+    let pdfBuffer: Buffer;
 
-    // If it's JSON with base64 data
-    if (contentType.includes("application/json")) {
-      const text = Buffer.from(raw).toString("utf8");
-      const json = JSON.parse(text);
-      const b64 = json.data || json.pdf || json.file;
-      if (typeof b64 === "string") {
-        const pdfBuf = Buffer.from(b64, "base64");
-        return new NextResponse(new Uint8Array(pdfBuf), {
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename="${docType}-${docId}.pdf"`,
-            "Content-Length": String(pdfBuf.length),
-          },
-        });
+    try {
+      const json = JSON.parse(raw);
+      if (json.data && typeof json.data === "string") {
+        const decoded = Buffer.from(json.data, "base64");
+        const decodedStr = decoded.toString("binary");
+
+        // Find %PDF marker — skip the HTTP headers Holded prepends
+        const pdfStart = decodedStr.indexOf("%PDF");
+        if (pdfStart > 0) {
+          pdfBuffer = Buffer.from(decodedStr.slice(pdfStart), "binary");
+        } else {
+          pdfBuffer = decoded;
+        }
+      } else {
+        return NextResponse.json({ error: "Unexpected response", keys: Object.keys(json) }, { status: 502 });
       }
-      return NextResponse.json({ error: "Unexpected JSON structure", keys: Object.keys(json) }, { status: 502 });
+    } catch {
+      // Not JSON — treat as raw binary
+      pdfBuffer = Buffer.from(raw, "binary");
     }
 
-    // Binary PDF
-    return new NextResponse(raw, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="${docType}-${docId}.pdf"`,
-        "Content-Length": String(raw.byteLength),
+        "Content-Length": String(pdfBuffer.length),
       },
     });
   } catch (e) {

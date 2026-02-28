@@ -13,6 +13,7 @@ const MAX_DELIVERED = 6;
 interface KanbanBoardProps {
   initialProjects: ProjectWithItems[];
   zoneResponsibles?: Record<string, string[]>;
+  invoiceDocNumbers?: Record<string, string>;
 }
 
 function DiscardZone() {
@@ -37,7 +38,7 @@ function DiscardZone() {
   );
 }
 
-export function KanbanBoard({ initialProjects, zoneResponsibles = {} }: KanbanBoardProps) {
+export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
 
@@ -152,6 +153,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {} }: KanbanBo
                   column={column}
                   projects={getColumnProjects(column.id)}
                   responsibles={zoneResponsibles[column.id]}
+                  invoiceDocNumbers={invoiceDocNumbers}
                 />
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"

@@ -6,6 +6,7 @@ import { UpcomingProjects } from "./upcoming-projects";
 import { RealtimeProjectsListener } from "./realtime-projects";
 import { SyncHoldedButton } from "./sync-holded-button";
 import { AutoSync } from "./auto-sync";
+import { listDocuments } from "@/lib/holded/api";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -52,6 +53,17 @@ export default async function DashboardPage() {
     }
   }
 
+  // Build holded invoice id → docNumber map
+  const invoiceDocNumbers: Record<string, string> = {};
+  try {
+    const invoices = await listDocuments("invoice");
+    for (const inv of invoices) {
+      invoiceDocNumbers[inv.id] = inv.docNumber;
+    }
+  } catch {
+    // Holded API error — continue without doc numbers
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
       <AutoSync lastSyncAt={syncMeta?.value ?? null} />
@@ -87,7 +99,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} />
+          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} />
         </div>
       )}
     </div>

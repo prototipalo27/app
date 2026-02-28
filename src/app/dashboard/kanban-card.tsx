@@ -13,6 +13,7 @@ export type ProjectWithItems = Tables<"projects"> & {
 
 interface KanbanCardProps {
   project: ProjectWithItems;
+  invoiceDocNumber?: string;
 }
 
 function getDeadlineInfo(deadline: string | null): { label: string; days: number | null; colorClass: string } {
@@ -32,7 +33,7 @@ function getDeadlineInfo(deadline: string | null): { label: string; days: number
   return { label, days: diff, colorClass: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
 }
 
-export function KanbanCard({ project }: KanbanCardProps) {
+export function KanbanCard({ project, invoiceDocNumber }: KanbanCardProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const { ref, isDragging } = useDraggable({
@@ -79,6 +80,11 @@ export function KanbanCard({ project }: KanbanCardProps) {
           {project.client_name && (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               {project.client_name}
+            </p>
+          )}
+          {invoiceDocNumber && (
+            <p className="mt-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
+              {invoiceDocNumber}
             </p>
           )}
 

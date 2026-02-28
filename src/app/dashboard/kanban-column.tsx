@@ -10,9 +10,10 @@ interface KanbanColumnProps {
   projects: ProjectWithItems[];
   className?: string;
   responsibles?: string[];
+  invoiceDocNumbers?: Record<string, string>;
 }
 
-export function KanbanColumn({ column, projects, className, responsibles }: KanbanColumnProps) {
+export function KanbanColumn({ column, projects, className, responsibles, invoiceDocNumbers = {} }: KanbanColumnProps) {
   const { ref, isDropTarget } = useDroppable({ id: column.id });
 
   return (
@@ -50,7 +51,7 @@ export function KanbanColumn({ column, projects, className, responsibles }: Kanb
         }`}
       >
         {projects.map((project) => (
-          <KanbanCard key={project.id} project={project} />
+          <KanbanCard key={project.id} project={project} invoiceDocNumber={project.holded_invoice_id ? invoiceDocNumbers[project.holded_invoice_id] : undefined} />
         ))}
       </div>
     </div>
