@@ -18,6 +18,7 @@ import {
 } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
+import { estimateFromMessage } from "@/lib/ai-estimate";
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
@@ -51,9 +52,20 @@ export async function createLead(formData: FormData) {
 
   const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
 
-  const estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
-  const estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
-  const estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
+  let estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
+  let estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
+  let estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
+
+  // Auto-detect project type tag from message
+  const message = (formData.get("message") as string)?.trim() || null;
+
+  // AI auto-fill estimation if no manual values provided and there's a message
+  if (!estimatedQuantity && message) {
+    const aiEstimate = await estimateFromMessage(message);
+    estimatedQuantity = aiEstimate.quantity;
+    estimatedComplexity = estimatedComplexity || aiEstimate.complexity;
+    estimatedUrgency = estimatedUrgency || aiEstimate.urgency;
+  }
 
   const { data, error } = await supabase
     .from("leads")
@@ -62,7 +74,7 @@ export async function createLead(formData: FormData) {
       company: (formData.get("company") as string)?.trim() || null,
       email: (formData.get("email") as string)?.trim() || null,
       phone: (formData.get("phone") as string)?.trim() || null,
-      message: (formData.get("message") as string)?.trim() || null,
+      message: message,
       source: "manual",
       assigned_to: assignedTo,
       estimated_quantity: estimatedQuantity,
@@ -76,14 +88,12 @@ export async function createLead(formData: FormData) {
     throw new Error(error.message);
   }
 
-  // Auto-detect project type tag from message
-  const message = (formData.get("message") as string)?.trim() || null;
   const tag = await detectProjectTypeTag(message);
   if (tag) {
     await supabase.from("leads").update({ project_type_tag: tag }).eq("id", data.id);
   }
 
-  // Recalculate estimated value if quantity was provided
+  // Recalculate estimated value if quantity was determined
   if (estimatedQuantity) {
     await recalculateEstimatedValue(data.id);
   }

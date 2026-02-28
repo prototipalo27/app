@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendPushToAll } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
+import { estimateFromMessage } from "@/lib/ai-estimate";
 
 function getSupabase() {
   return createClient(
@@ -209,6 +210,36 @@ export async function POST(request: NextRequest) {
         }
       })
       .catch((err) => console.error("Lead tagger error:", err));
+
+    // AI estimation in background (non-blocking)
+    estimateFromMessage(message?.trim() || null)
+      .then(async (est) => {
+        if (est.quantity || est.complexity || est.urgency) {
+          const updates: Record<string, string | null> = {};
+          if (est.quantity) updates.estimated_quantity = est.quantity;
+          if (est.complexity) updates.estimated_complexity = est.complexity;
+          if (est.urgency) updates.estimated_urgency = est.urgency;
+          await supabase.from("leads").update(updates).eq("id", lead.id);
+
+          // Recalculate value if we got a quantity
+          if (est.quantity) {
+            const { QUANTITY_RANGES, COMPLEXITY_OPTIONS, URGENCY_OPTIONS, BASE_PRICES, DEFAULT_BASE_PRICE } = await import("@/lib/crm-config");
+            const { data: updated } = await supabase
+              .from("leads")
+              .select("estimated_quantity, estimated_complexity, estimated_urgency, project_type_tag")
+              .eq("id", lead.id)
+              .single();
+            if (updated) {
+              const bp = updated.project_type_tag ? (BASE_PRICES[updated.project_type_tag] ?? DEFAULT_BASE_PRICE) : DEFAULT_BASE_PRICE;
+              const mid = QUANTITY_RANGES.find((r) => r.value === updated.estimated_quantity)?.midpoint ?? 5;
+              const cf = COMPLEXITY_OPTIONS.find((c) => c.value === (updated.estimated_complexity || "medium"))?.factor ?? 1.0;
+              const uf = URGENCY_OPTIONS.find((u) => u.value === (updated.estimated_urgency || "normal"))?.factor ?? 1.0;
+              await supabase.from("leads").update({ estimated_value: Math.round(bp * mid * cf * uf) }).eq("id", lead.id);
+            }
+          }
+        }
+      })
+      .catch((err) => console.error("AI estimation error:", err));
 
     // Generate AI draft in background (non-blocking)
     generateAndSaveDraft(lead.id, {

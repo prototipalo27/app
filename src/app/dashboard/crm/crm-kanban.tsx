@@ -353,6 +353,13 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   </span>
                 )}
 
+                {/* Estimated value */}
+                {lead.estimated_value != null && (
+                  <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    {lead.estimated_value.toLocaleString("es-ES")} €
+                  </span>
+                )}
+
                 {/* Aging badge */}
                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
                   {(() => {
