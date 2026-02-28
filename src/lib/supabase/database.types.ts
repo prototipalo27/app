@@ -726,6 +726,10 @@ export type Database = {
           created_at: string
           email: string | null
           email_subject_tag: string | null
+          estimated_complexity: string | null
+          estimated_quantity: string | null
+          estimated_urgency: string | null
+          estimated_value: number | null
           full_name: string
           id: string
           instagram_username: string | null
@@ -748,6 +752,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           email_subject_tag?: string | null
+          estimated_complexity?: string | null
+          estimated_quantity?: string | null
+          estimated_urgency?: string | null
+          estimated_value?: number | null
           full_name: string
           id?: string
           instagram_username?: string | null
@@ -770,6 +778,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           email_subject_tag?: string | null
+          estimated_complexity?: string | null
+          estimated_quantity?: string | null
+          estimated_urgency?: string | null
+          estimated_value?: number | null
           full_name?: string
           id?: string
           instagram_username?: string | null

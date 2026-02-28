@@ -124,6 +124,9 @@ export default async function CrmListPage({
                 <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
                   Estado
                 </th>
+                <th className="hidden px-4 py-3 text-right font-semibold text-zinc-700 md:table-cell dark:text-zinc-300">
+                  Valor est.
+                </th>
                 <th className="hidden px-4 py-3 font-semibold text-zinc-700 md:table-cell dark:text-zinc-300">
                   Asignado
                 </th>
@@ -136,7 +139,7 @@ export default async function CrmListPage({
               {(!leads || leads.length === 0) ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
                   >
                     No hay leads
@@ -175,6 +178,15 @@ export default async function CrmListPage({
                           >
                             {col.label}
                           </span>
+                        )}
+                      </td>
+                      <td className="hidden px-4 py-3 text-right text-zinc-600 md:table-cell dark:text-zinc-400">
+                        {lead.estimated_value != null ? (
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            {lead.estimated_value.toLocaleString("es-ES")} €
+                          </span>
+                        ) : (
+                          "—"
                         )}
                       </td>
                       <td className="hidden px-4 py-3 text-zinc-600 md:table-cell dark:text-zinc-400">

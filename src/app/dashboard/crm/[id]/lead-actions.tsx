@@ -11,6 +11,7 @@ import {
   sendQuoteToClient,
   updatePaymentCondition,
   updateLeadTag,
+  updateEstimationField,
   getProformaDetails,
   createLeadProforma,
 } from "../actions";
@@ -19,6 +20,9 @@ import type { HoldedDocument } from "@/lib/holded/types";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
+  QUANTITY_RANGES,
+  COMPLEXITY_OPTIONS,
+  URGENCY_OPTIONS,
   type LeadStatus,
 } from "@/lib/crm-config";
 
@@ -32,6 +36,10 @@ interface LeadActionsProps {
   paymentCondition: string | null;
   projectTypeTag: string | null;
   projectTemplateTags: string[];
+  estimatedQuantity: string | null;
+  estimatedComplexity: string | null;
+  estimatedUrgency: string | null;
+  estimatedValue: number | null;
   nextId: string | null;
 }
 
@@ -45,6 +53,10 @@ export default function LeadActions({
   paymentCondition,
   projectTypeTag,
   projectTemplateTags,
+  estimatedQuantity,
+  estimatedComplexity,
+  estimatedUrgency,
+  estimatedValue,
   nextId,
 }: LeadActionsProps) {
   const router = useRouter();
@@ -270,6 +282,77 @@ export default function LeadActions({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Estimacion de valor */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+          Estimacion de valor
+        </h3>
+        <div className="space-y-2">
+          <select
+            value={estimatedQuantity || ""}
+            onChange={(e) => {
+              const value = e.target.value || null;
+              startTransition(async () => {
+                await updateEstimationField(leadId, "estimated_quantity", value);
+                router.refresh();
+              });
+            }}
+            disabled={isPending}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          >
+            <option value="">Cantidad...</option>
+            {QUANTITY_RANGES.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={estimatedComplexity || ""}
+            onChange={(e) => {
+              const value = e.target.value || null;
+              startTransition(async () => {
+                await updateEstimationField(leadId, "estimated_complexity", value);
+                router.refresh();
+              });
+            }}
+            disabled={isPending}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          >
+            <option value="">Complejidad...</option>
+            {COMPLEXITY_OPTIONS.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={estimatedUrgency || ""}
+            onChange={(e) => {
+              const value = e.target.value || null;
+              startTransition(async () => {
+                await updateEstimationField(leadId, "estimated_urgency", value);
+                router.refresh();
+              });
+            }}
+            disabled={isPending}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          >
+            <option value="">Urgencia...</option>
+            {URGENCY_OPTIONS.map((u) => (
+              <option key={u.value} value={u.value}>{u.label}</option>
+            ))}
+          </select>
+
+          {estimatedValue != null && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                {estimatedValue.toLocaleString("es-ES")} €
+              </span>
+              <span className="text-[11px] text-zinc-400">valor estimado</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Presupuesto */}

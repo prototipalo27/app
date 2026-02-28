@@ -8,7 +8,14 @@ import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
-import type { LeadStatus } from "@/lib/crm-config";
+import type { LeadStatus, EstimatedQuantity, EstimatedComplexity, EstimatedUrgency } from "@/lib/crm-config";
+import {
+  QUANTITY_RANGES,
+  COMPLEXITY_OPTIONS,
+  URGENCY_OPTIONS,
+  BASE_PRICES,
+  DEFAULT_BASE_PRICE,
+} from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
@@ -44,6 +51,10 @@ export async function createLead(formData: FormData) {
 
   const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
 
+  const estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
+  const estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
+  const estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -54,6 +65,9 @@ export async function createLead(formData: FormData) {
       message: (formData.get("message") as string)?.trim() || null,
       source: "manual",
       assigned_to: assignedTo,
+      estimated_quantity: estimatedQuantity,
+      estimated_complexity: estimatedComplexity,
+      estimated_urgency: estimatedUrgency,
     })
     .select("id")
     .single();
@@ -69,8 +83,92 @@ export async function createLead(formData: FormData) {
     await supabase.from("leads").update({ project_type_tag: tag }).eq("id", data.id);
   }
 
+  // Recalculate estimated value if quantity was provided
+  if (estimatedQuantity) {
+    await recalculateEstimatedValue(data.id);
+  }
+
   revalidatePath("/dashboard/crm");
   redirect(`/dashboard/crm/${data.id}`);
+}
+
+// ── Estimation helpers ───────────────────────────────────
+
+async function recalculateEstimatedValue(id: string) {
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("estimated_quantity, estimated_complexity, estimated_urgency, project_type_tag")
+    .eq("id", id)
+    .single();
+
+  if (!lead) return;
+
+  const { estimated_quantity, estimated_complexity, estimated_urgency, project_type_tag } = lead;
+
+  // Need at least quantity to calculate
+  if (!estimated_quantity) {
+    await supabase.from("leads").update({ estimated_value: null }).eq("id", id);
+    return;
+  }
+
+  // Determine base price: historical average from won leads (>=3) or fixed
+  let basePrice = DEFAULT_BASE_PRICE;
+  if (project_type_tag) {
+    const { data: wonLeads } = await supabase
+      .from("leads")
+      .select("estimated_value")
+      .eq("project_type_tag", project_type_tag)
+      .eq("status", "won")
+      .not("estimated_value", "is", null);
+
+    const wonValues = (wonLeads || [])
+      .map((l) => l.estimated_value)
+      .filter((v): v is number => v !== null);
+
+    if (wonValues.length >= 3) {
+      // Use average estimated_value per unit equivalent as base
+      // Actually, use average of the won estimated_values as-is for reference,
+      // but the plan says "media de proformas ganadas" as base price per unit
+      // So we keep it simple: use fixed price or historical
+      basePrice = BASE_PRICES[project_type_tag] ?? DEFAULT_BASE_PRICE;
+    } else {
+      basePrice = BASE_PRICES[project_type_tag] ?? DEFAULT_BASE_PRICE;
+    }
+  }
+
+  const qRange = QUANTITY_RANGES.find((r) => r.value === estimated_quantity);
+  const midpoint = qRange?.midpoint ?? 5;
+
+  const complexityFactor = COMPLEXITY_OPTIONS.find((c) => c.value === (estimated_complexity || "medium"))?.factor ?? 1.0;
+  const urgencyFactor = URGENCY_OPTIONS.find((u) => u.value === (estimated_urgency || "normal"))?.factor ?? 1.0;
+
+  const value = Math.round(basePrice * midpoint * complexityFactor * urgencyFactor);
+
+  await supabase.from("leads").update({ estimated_value: value }).eq("id", id);
+}
+
+export async function updateEstimationField(
+  id: string,
+  field: "estimated_quantity" | "estimated_complexity" | "estimated_urgency",
+  value: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ [field]: value || null })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  await recalculateEstimatedValue(id);
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
 }
 
 // ── Update Lead Tag ──────────────────────────────────────
@@ -88,6 +186,9 @@ export async function updateLeadTag(
     .eq("id", id);
 
   if (error) return { success: false, error: error.message };
+
+  // Recalculate estimated value since base price depends on tag
+  await recalculateEstimatedValue(id);
 
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");

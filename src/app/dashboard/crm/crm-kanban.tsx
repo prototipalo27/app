@@ -29,6 +29,8 @@ function CrmColumn({
 }) {
   const { ref, isDropTarget } = useDroppable({ id: column.id });
 
+  const totalValue = leads.reduce((sum, l) => sum + (l.estimated_value ?? 0), 0);
+
   return (
     <div className="flex min-w-0 flex-col rounded-xl bg-zinc-100 dark:bg-zinc-900">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
@@ -42,6 +44,13 @@ function CrmColumn({
           {leads.length}
         </span>
       </div>
+      {totalValue > 0 && (
+        <div className="px-3 pb-1">
+          <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
+            {totalValue.toLocaleString("es-ES")} €
+          </span>
+        </div>
+      )}
 
       <div
         ref={ref}

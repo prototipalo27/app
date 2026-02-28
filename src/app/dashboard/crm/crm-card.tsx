@@ -92,16 +92,23 @@ export function CrmCard({ lead }: CrmCardProps) {
         </p>
       )}
 
-      {lead.assignee_email && (
-        <div className="mt-2 flex items-center gap-1">
-          <span className="h-4 w-4 rounded-full bg-zinc-200 text-center text-[10px] font-medium leading-4 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-            {lead.assignee_email[0].toUpperCase()}
+      <div className="mt-2 flex items-center gap-2">
+        {lead.assignee_email && (
+          <div className="flex items-center gap-1">
+            <span className="h-4 w-4 rounded-full bg-zinc-200 text-center text-[10px] font-medium leading-4 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+              {lead.assignee_email[0].toUpperCase()}
+            </span>
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              {lead.assignee_email.split("@")[0]}
+            </span>
+          </div>
+        )}
+        {lead.estimated_value != null && (
+          <span className="ml-auto rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+            {lead.estimated_value.toLocaleString("es-ES")} €
           </span>
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
-            {lead.assignee_email.split("@")[0]}
-          </span>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

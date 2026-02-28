@@ -3,6 +3,7 @@ import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createLead } from "../actions";
+import { QUANTITY_RANGES, COMPLEXITY_OPTIONS, URGENCY_OPTIONS } from "@/lib/crm-config";
 
 export default async function NewLeadPage() {
   const profile = await getUserProfile();
@@ -94,6 +95,51 @@ export default async function NewLeadPage() {
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
               placeholder="Descripcion del proyecto o consulta..."
             />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Cantidad estimada
+              </label>
+              <select
+                name="estimated_quantity"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+              >
+                <option value="">Sin definir</option>
+                {QUANTITY_RANGES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Complejidad
+              </label>
+              <select
+                name="estimated_complexity"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+              >
+                <option value="">Sin definir</option>
+                {COMPLEXITY_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Urgencia
+              </label>
+              <select
+                name="estimated_urgency"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+              >
+                <option value="">Sin definir</option>
+                {URGENCY_OPTIONS.map((u) => (
+                  <option key={u.value} value={u.value}>{u.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>

@@ -401,6 +401,10 @@ export default async function LeadDetailPage({
             paymentCondition={lead.payment_condition}
             projectTypeTag={lead.project_type_tag}
             projectTemplateTags={projectTemplateTags}
+            estimatedQuantity={lead.estimated_quantity}
+            estimatedComplexity={lead.estimated_complexity}
+            estimatedUrgency={lead.estimated_urgency}
+            estimatedValue={lead.estimated_value}
             nextId={nextId}
           />
         </div>
