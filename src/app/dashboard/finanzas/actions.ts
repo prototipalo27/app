@@ -333,65 +333,54 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
     // Holded API error — continue with local data only
   }
 
+  // Holded invoice status: 0=not paid, 1=paid, 2=partially paid
+
   const stages: CashFlowStage[] = [
     { key: "quoted", label: "Presupuestado", color: "zinc", total: 0, projects: [] },
     { key: "pending_first", label: "Pendiente 1er 50%", color: "amber", total: 0, projects: [] },
     { key: "collected_first", label: "Cobrado 1er 50%", color: "green", total: 0, projects: [] },
     { key: "pending_second", label: "Pendiente 2do 50%", color: "amber", total: 0, projects: [] },
-    { key: "owed_delivered", label: "Entregado, nos deben", color: "red", total: 0, projects: [] },
+    { key: "collected", label: "Cobrado", color: "green", total: 0, projects: [] },
   ];
 
   const nowTs = Math.floor(Date.now() / 1000);
 
   for (const p of projects ?? []) {
     const price = p.price ?? 0;
+    if (price === 0) continue;
+
     const invoice = p.holded_invoice_id ? invoiceMap.get(p.holded_invoice_id) : null;
     const holdedStatus = invoice?.status ?? null;
-
-    // Holded invoice status: 0=not paid, 1=paid, 2=partially paid
-    // Skip fully paid projects
-    if (holdedStatus === 1) continue;
-
-    const isDelivered = p.status === "delivered";
     const isShippingOrDelivered = p.status === "shipping" || p.status === "delivered";
 
     let stageIndex = -1;
 
-    if (p.project_type === "upcoming" && p.proforma_sent_at) {
-      // Stage 1: Presupuestado
+    if (p.project_type === "upcoming") {
+      // Presupuestado: proforma enviada, cliente aún no ha confirmado
       stageIndex = 0;
     } else if (p.project_type === "confirmed") {
-      if (holdedStatus !== null) {
-        // We have Holded data
-        if (holdedStatus === 0 && isDelivered) {
-          // Stage 5: Delivered but unpaid
-          stageIndex = 4;
-        } else if (holdedStatus === 2 && isShippingOrDelivered) {
-          // Stage 4: Partially paid + shipping/delivered
-          stageIndex = 3;
-        } else if (holdedStatus === 2) {
-          // Stage 3: Partially paid, still in production
-          stageIndex = 2;
-        } else if (holdedStatus === 0) {
-          // Stage 2: Not paid, in production
-          stageIndex = 1;
-        }
+      if (holdedStatus === 1) {
+        // Fully paid
+        stageIndex = 4;
+      } else if (holdedStatus === 2 && isShippingOrDelivered) {
+        // Partially paid + in shipping/delivered → pending second 50%
+        stageIndex = 3;
+      } else if (holdedStatus === 2) {
+        // Partially paid, still in production → first 50% collected
+        stageIndex = 2;
+      } else if (holdedStatus === 0 && isShippingOrDelivered) {
+        // Not paid but already shipping/delivered → pending second 50% (they owe everything)
+        stageIndex = 3;
       } else {
-        // No Holded data — use payment_confirmed_at as fallback
-        if (p.payment_confirmed_at && isShippingOrDelivered) {
-          stageIndex = 3;
-        } else if (p.payment_confirmed_at) {
-          stageIndex = 2;
-        } else {
-          stageIndex = 1;
-        }
+        // Not paid or no Holded data, in production → pending first 50%
+        stageIndex = 1;
       }
     }
 
     if (stageIndex === -1) continue;
 
     let daysOverdue: number | null = null;
-    if (invoice?.dueDate && invoice.dueDate < nowTs) {
+    if (invoice?.dueDate && invoice.dueDate < nowTs && holdedStatus !== 1) {
       daysOverdue = Math.floor((nowTs - invoice.dueDate) / 86400);
     }
 
@@ -406,6 +395,14 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
       days_overdue: daysOverdue,
     });
   }
+
+  // Only show recent paid projects (last 60 days) to not clutter
+  const sixtyDaysAgo = nowTs - 60 * 86400;
+  stages[4].projects = stages[4].projects.filter((p) => {
+    if (!p.holded_due_date) return true;
+    return p.holded_due_date > sixtyDaysAgo;
+  });
+  stages[4].total = stages[4].projects.reduce((s, p) => s + p.price, 0);
 
   return { stages };
 }
