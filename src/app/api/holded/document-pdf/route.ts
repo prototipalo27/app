@@ -21,13 +21,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const pdf = await getDocumentPdf(docType, docId);
+    if (!pdf || pdf.length === 0) {
+      return NextResponse.json({ error: "Empty PDF response", size: 0 }, { status: 502 });
+    }
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": "inline",
+        "Content-Disposition": `inline; filename="${docType}-${docId}.pdf"`,
+        "Content-Length": String(pdf.length),
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Error fetching PDF" }, { status: 502 });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error fetching PDF" }, { status: 502 });
   }
 }

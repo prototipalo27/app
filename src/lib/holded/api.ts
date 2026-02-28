@@ -277,6 +277,18 @@ export async function getDocumentPdf(
     throw new Error(`Holded PDF error: ${res.status} ${res.statusText}`);
   }
 
+  const contentType = res.headers.get("content-type") || "";
+
+  // Holded may return JSON with base64-encoded PDF or raw binary
+  if (contentType.includes("application/json")) {
+    const json = await res.json();
+    const b64 = json.data || json.pdf || json.file || json;
+    if (typeof b64 === "string") {
+      return Buffer.from(b64, "base64");
+    }
+    throw new Error("Unexpected JSON response from Holded PDF endpoint");
+  }
+
   const arrayBuffer = await res.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
