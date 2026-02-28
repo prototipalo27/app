@@ -137,9 +137,8 @@ export async function getPendingInvoices() {
 
   try {
     const invoices = await listDocuments("invoice");
-    // Holded status: 0=draft, 1=not paid, 2=paid, 3=partially paid, 4=overdue
-    // Only show truly unpaid: 1 (not paid), 3 (partially paid), 4 (overdue)
-    const pending = invoices.filter((inv) => inv.status === 1 || inv.status === 3 || inv.status === 4);
+    // Holded status: 0=not paid, 1=paid, 2=partially paid
+    const pending = invoices.filter((inv) => inv.status === 0 || inv.status === 2);
     return pending.map((inv) => ({
       id: inv.id,
       contactName: inv.contactName,
