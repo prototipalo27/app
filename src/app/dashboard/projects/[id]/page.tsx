@@ -7,7 +7,7 @@ import PrioritySelector from "./priority-selector";
 import PortalToggles from "./portal-toggles";
 import { DeadlinePicker } from "./deadline-picker";
 import { getUserProfile, hasRole } from "@/lib/rbac";
-import { getContact } from "@/lib/holded/api";
+import { getContact, getDocument } from "@/lib/holded/api";
 import type { HoldedContact } from "@/lib/holded/types";
 import { ProjectItems } from "./project-items";
 import { ProjectDocuments } from "./project-documents";
@@ -124,6 +124,12 @@ export default async function ProjectDetailPage({
     ? getContact(project.holded_contact_id).catch(() => null)
     : Promise.resolve(null);
 
+  const holdedDocPromise = project.holded_invoice_id
+    ? getDocument("invoice", project.holded_invoice_id).catch(() => null)
+    : project.holded_proforma_id
+      ? getDocument("proform", project.holded_proforma_id).catch(() => null)
+      : Promise.resolve(null);
+
   const leadPromise = project.lead_id
     ? supabase.from("leads").select("id, full_name, email").eq("id", project.lead_id).single()
     : Promise.resolve({ data: null });
@@ -141,10 +147,11 @@ export default async function ProjectDetailPage({
         .order("created_at", { ascending: false })
     : Promise.resolve({ data: null });
 
-  const [jobsResult, driveFilesRaw, holdedContact, leadResult, templateResult, savedAddressesResult] = await Promise.all([
+  const [jobsResult, driveFilesRaw, holdedContact, holdedDoc, leadResult, templateResult, savedAddressesResult] = await Promise.all([
     printJobsPromise,
     driveFilesPromise,
     holdedContactPromise,
+    holdedDocPromise,
     leadPromise,
     templatePromise,
     savedAddressesPromise,
@@ -331,6 +338,24 @@ export default async function ProjectDetailPage({
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Details</h2>
           <DetailRow label="Type" value={project.project_type === "upcoming" ? "Upcoming (proforma)" : "Confirmed (invoiced)"} />
+          {holdedDoc && (
+            <DetailRow
+              label={project.holded_invoice_id ? "Factura" : "Proforma"}
+              value={
+                <a
+                  href={`https://app.holded.com/invoicing/${project.holded_invoice_id ? "invoice" : "proform"}/${project.holded_invoice_id || project.holded_proforma_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-brand-blue hover:underline"
+                >
+                  {holdedDoc.docNumber}
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              }
+            />
+          )}
           {holdedContact ? (
             <>
               <DetailRow
