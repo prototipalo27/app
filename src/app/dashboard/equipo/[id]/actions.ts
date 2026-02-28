@@ -12,6 +12,7 @@ export async function updateEmployeeProfile(
   userId: string,
   data: {
     full_name?: string;
+    nickname?: string | null;
     birthday?: string | null;
     phone?: string | null;
     hire_date?: string | null;
@@ -25,6 +26,7 @@ export async function updateEmployeeProfile(
     .from("user_profiles")
     .update({
       full_name: data.full_name ?? null,
+      nickname: data.nickname ?? null,
       birthday: data.birthday ?? null,
       phone: data.phone ?? null,
       hire_date: data.hire_date ?? null,

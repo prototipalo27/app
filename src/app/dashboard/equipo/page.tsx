@@ -77,7 +77,7 @@ export default async function EquipoPage() {
   ] = await Promise.all([
     supabase
       .from("user_profiles")
-      .select("id, email, role, is_active, full_name, birthday, hire_date")
+      .select("id, email, role, is_active, full_name, nickname, birthday, hire_date")
       .eq("is_active", true)
       .order("email"),
     supabase.from("skills").select("id, name").order("name"),
@@ -99,7 +99,7 @@ export default async function EquipoPage() {
     const user = userLookup.get(r.user_id);
     return {
       ...r,
-      user: user ? { id: user.id, full_name: user.full_name, email: user.email } : null,
+      user: user ? { id: user.id, full_name: user.full_name, nickname: user.nickname, email: user.email } : null,
       approver: null as { full_name: string | null } | null,
     };
   });
@@ -138,7 +138,7 @@ export default async function EquipoPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {
-          const displayName = user.full_name || user.email.split("@")[0];
+          const displayName = user.nickname || user.full_name || user.email.split("@")[0];
           const skillIds = userSkillMap.get(user.id) ?? [];
           const zoneIds = userZoneMap.get(user.id) ?? [];
           const birthdaySoon = isBirthdaySoon(user.birthday);

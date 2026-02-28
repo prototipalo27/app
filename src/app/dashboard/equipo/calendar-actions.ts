@@ -21,7 +21,7 @@ export async function getTimeOffRequests(year: number) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("time_off_requests")
-    .select("*, user:user_profiles!user_id(id, full_name, email), approver:user_profiles!approved_by(full_name)")
+    .select("*, user:user_profiles!user_id(id, full_name, nickname, email), approver:user_profiles!approved_by(full_name)")
     .gte("start_date", `${year}-01-01`)
     .lte("end_date", `${year}-12-31`)
     .order("start_date");

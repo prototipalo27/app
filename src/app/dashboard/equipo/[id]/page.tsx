@@ -45,7 +45,7 @@ export default async function EmployeeDetailPage({
 
   const allSkills = skills ?? [];
   const userSkillIds = (userSkills ?? []).map((us) => us.skill_id);
-  const displayName = employee.full_name || employee.email.split("@")[0];
+  const displayName = employee.nickname || employee.full_name || employee.email.split("@")[0];
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-8">
@@ -77,6 +77,7 @@ export default async function EmployeeDetailPage({
             employee={{
               id: employee.id,
               full_name: employee.full_name,
+              nickname: employee.nickname,
               birthday: employee.birthday,
               phone: employee.phone,
               hire_date: employee.hire_date,

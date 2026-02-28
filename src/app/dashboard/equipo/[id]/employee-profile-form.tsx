@@ -7,6 +7,7 @@ type Props = {
   employee: {
     id: string;
     full_name: string | null;
+    nickname: string | null;
     birthday: string | null;
     phone: string | null;
     hire_date: string | null;
@@ -17,6 +18,7 @@ type Props = {
 export default function EmployeeProfileForm({ employee, isManager }: Props) {
   const [isPending, startTransition] = useTransition();
   const [fullName, setFullName] = useState(employee.full_name ?? "");
+  const [nickname, setNickname] = useState(employee.nickname ?? "");
   const [birthday, setBirthday] = useState(employee.birthday ?? "");
   const [phone, setPhone] = useState(employee.phone ?? "");
   const [hireDate, setHireDate] = useState(employee.hire_date ?? "");
@@ -27,6 +29,7 @@ export default function EmployeeProfileForm({ employee, isManager }: Props) {
     startTransition(async () => {
       const result = await updateEmployeeProfile(employee.id, {
         full_name: fullName || undefined,
+        nickname: nickname || null,
         birthday: birthday || null,
         phone: phone || null,
         hire_date: hireDate || null,
@@ -61,6 +64,23 @@ export default function EmployeeProfileForm({ employee, isManager }: Props) {
           />
         ) : (
           <div className={readOnlyClass}>{fullName || "—"}</div>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Mote
+        </label>
+        {isManager ? (
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            className={inputClass}
+            placeholder="Ej: Meri, Javi..."
+          />
+        ) : (
+          <div className={readOnlyClass}>{nickname || "—"}</div>
         )}
       </div>
 

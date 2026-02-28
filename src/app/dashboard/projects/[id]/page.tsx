@@ -106,7 +106,7 @@ export default async function ProjectDetailPage({
       .order("position", { ascending: true }),
     supabase
       .from("user_profiles")
-      .select("id, full_name, email")
+      .select("id, full_name, nickname, email")
       .eq("is_active", true),
   ]);
 
@@ -280,7 +280,7 @@ export default async function ProjectDetailPage({
             currentPmId={project.project_manager_id}
             users={(activeUsers ?? []).map((u) => ({
               id: u.id,
-              label: u.full_name || u.email.split("@")[0],
+              label: u.nickname || u.full_name || u.email.split("@")[0],
             }))}
           />
         </div>

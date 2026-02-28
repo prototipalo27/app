@@ -15,7 +15,7 @@ export default async function NewProjectPage() {
       .order("name"),
     supabase
       .from("user_profiles")
-      .select("id, full_name, email")
+      .select("id, full_name, nickname, email")
       .eq("is_active", true),
   ]);
   return (
@@ -107,7 +107,7 @@ export default async function NewProjectPage() {
             <option value="">Sin asignar</option>
             {activeUsers?.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.full_name || u.email.split("@")[0]}
+                {u.nickname || u.full_name || u.email.split("@")[0]}
               </option>
             ))}
           </select>

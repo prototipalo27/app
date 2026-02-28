@@ -18,7 +18,7 @@ interface TimeOffRequest {
   type: string | null;
   status: string | null;
   notes: string | null;
-  user: { id: string; full_name: string | null; email: string } | null;
+  user: { id: string; full_name: string | null; nickname: string | null; email: string } | null;
   approver: { full_name: string | null } | null;
 }
 
@@ -104,7 +104,7 @@ export default function WorkCalendar({
   for (const req of requests) {
     if (req.status === "rejected") continue;
     if (!employeeMap.has(req.user_id)) {
-      const name = req.user?.full_name || req.user?.email?.split("@")[0] || "?";
+      const name = req.user?.nickname || req.user?.full_name || req.user?.email?.split("@")[0] || "?";
       employeeMap.set(req.user_id, {
         name,
         color: EMPLOYEE_COLORS[colorIdx % EMPLOYEE_COLORS.length],

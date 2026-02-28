@@ -39,11 +39,11 @@ export default async function DashboardPage() {
       .eq("key", "last_holded_sync")
       .single(),
     supabase.from("zone_assignments").select("user_id, zone"),
-    supabase.from("user_profiles").select("id, full_name, email").eq("is_active", true),
+    supabase.from("user_profiles").select("id, full_name, nickname, email").eq("is_active", true),
   ]);
 
   // Build zone → responsible names map
-  const userMap = new Map((userProfiles ?? []).map((u) => [u.id, u.full_name || u.email.split("@")[0]]));
+  const userMap = new Map((userProfiles ?? []).map((u) => [u.id, u.nickname || u.full_name || u.email.split("@")[0]]));
   const zoneResponsibles: Record<string, string[]> = {};
   for (const za of zoneAssignments ?? []) {
     const name = userMap.get(za.user_id);
