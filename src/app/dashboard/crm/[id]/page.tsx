@@ -15,7 +15,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
-import { tagClasses } from "../crm-card";
+import { tagClasses } from "@/lib/tag-colors";
 
 export default async function LeadDetailPage({
   params,
