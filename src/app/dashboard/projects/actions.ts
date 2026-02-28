@@ -416,12 +416,10 @@ export async function updateProjectPriority(
   return { success: true };
 }
 
-export async function deleteProject(formData: FormData) {
+export async function deleteProject(id: string): Promise<{ success: boolean; error: string | null }> {
   await requireRole("manager");
 
   const supabase = await createClient();
-
-  const id = formData.get("id") as string;
 
   // Read the project before deleting to save Holded IDs as exclusions
   const { data: project } = await supabase
@@ -459,10 +457,8 @@ export async function deleteProject(formData: FormData) {
 
   const { error } = await supabase.from("projects").delete().eq("id", id);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard");
-  redirect("/dashboard");
+  return { success: true, error: null };
 }
