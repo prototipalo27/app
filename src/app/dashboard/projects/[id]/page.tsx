@@ -17,6 +17,7 @@ import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
 import ProjectChecklist from "./project-checklist";
+import PmSelector from "./pm-selector";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -82,6 +83,7 @@ export default async function ProjectDetailPage({
     { data: printerTypes },
     { data: shipments },
     { data: checklistItems },
+    { data: activeUsers },
   ] = await Promise.all([
     supabase
       .from("project_items")
@@ -102,6 +104,10 @@ export default async function ProjectDetailPage({
       .select("*")
       .eq("project_id", id)
       .order("position", { ascending: true }),
+    supabase
+      .from("user_profiles")
+      .select("id, full_name, email")
+      .eq("is_active", true),
   ]);
 
   // Phase 2: Parallel fetches that depend on project fields
@@ -269,6 +275,14 @@ export default async function ProjectDetailPage({
           <PrioritySelector projectId={project.id} currentPriority={project.queue_priority} />
           <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
           <CopyTrackingLink trackingToken={project.tracking_token} />
+          <PmSelector
+            projectId={project.id}
+            currentPmId={project.project_manager_id}
+            users={(activeUsers ?? []).map((u) => ({
+              id: u.id,
+              label: u.full_name || u.email.split("@")[0],
+            }))}
+          />
         </div>
       </div>
 

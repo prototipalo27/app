@@ -53,6 +53,12 @@ export default async function DashboardPage() {
     }
   }
 
+  // Build userId → name map for PM display
+  const pmNames: Record<string, string> = {};
+  for (const [id, name] of userMap) {
+    pmNames[id] = name;
+  }
+
   // Build holded invoice id → docNumber map
   const invoiceDocNumbers: Record<string, string> = {};
   try {
@@ -99,7 +105,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} />
+          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} pmNames={pmNames} />
         </div>
       )}
     </div>

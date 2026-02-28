@@ -14,6 +14,7 @@ interface KanbanBoardProps {
   initialProjects: ProjectWithItems[];
   zoneResponsibles?: Record<string, string[]>;
   invoiceDocNumbers?: Record<string, string>;
+  pmNames?: Record<string, string>;
 }
 
 function DiscardZone() {
@@ -38,7 +39,7 @@ function DiscardZone() {
   );
 }
 
-export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {} }: KanbanBoardProps) {
+export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {}, pmNames = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
 
@@ -154,12 +155,14 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
                   projects={getColumnProjects(column.id)}
                   responsibles={zoneResponsibles[column.id]}
                   invoiceDocNumbers={invoiceDocNumbers}
+                  pmNames={pmNames}
                 />
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"
                   column={stackedColumn}
                   projects={getColumnProjects(stackedColumn.id)}
                   responsibles={zoneResponsibles[stackedColumn.id]}
+                  pmNames={pmNames}
                 />
               </div>
             );
@@ -171,6 +174,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
               column={column}
               projects={getColumnProjects(column.id)}
               responsibles={zoneResponsibles[column.id]}
+              pmNames={pmNames}
             />
           );
         })}

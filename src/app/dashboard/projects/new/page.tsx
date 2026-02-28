@@ -7,11 +7,17 @@ const MATERIALS = ["PLA", "PETG", "ASA", "ABS", "TPU", "Nylon", "PC", "Resin"];
 
 export default async function NewProjectPage() {
   const supabase = await createClient();
-  const { data: templates } = await supabase
-    .from("project_templates")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
+  const [{ data: templates }, { data: activeUsers }] = await Promise.all([
+    supabase
+      .from("project_templates")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("user_profiles")
+      .select("id, full_name, email")
+      .eq("is_active", true),
+  ]);
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-6">
@@ -84,6 +90,25 @@ export default async function NewProjectPage() {
             <option value="">Sin plantilla</option>
             {templates?.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Project Manager */}
+        <div>
+          <label htmlFor="project_manager_id" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Project Manager
+          </label>
+          <select
+            id="project_manager_id"
+            name="project_manager_id"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          >
+            <option value="">Sin asignar</option>
+            {activeUsers?.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || u.email.split("@")[0]}
+              </option>
             ))}
           </select>
         </div>

@@ -24,6 +24,7 @@ export async function createProject(formData: FormData) {
   const printTime = formData.get("print_time_minutes") as string;
 
   const templateId = (formData.get("template_id") as string)?.trim() || null;
+  const projectManagerId = (formData.get("project_manager_id") as string)?.trim() || null;
 
   const { data: project, error } = await supabase
     .from("projects")
@@ -41,6 +42,7 @@ export async function createProject(formData: FormData) {
       notes: (formData.get("notes") as string)?.trim() || null,
       created_by: userData.user.id,
       template_id: templateId,
+      project_manager_id: projectManagerId,
     })
     .select("id")
     .single();
@@ -407,6 +409,29 @@ export async function updateProjectPriority(
   const { error } = await supabase
     .from("projects")
     .update({ queue_priority: priority })
+    .eq("id", projectId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function updateProjectManager(
+  projectId: string,
+  userId: string | null,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ project_manager_id: userId })
     .eq("id", projectId);
 
   if (error) return { success: false, error: error.message };
