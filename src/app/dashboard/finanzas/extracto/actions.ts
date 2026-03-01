@@ -48,14 +48,14 @@ export async function saveVendorMapping(bankVendorName: string, supplierId: stri
 }
 
 export async function saveVendorMappingsBatch(
-  mappings: { bankVendorName: string; supplierId: string; category?: string | null }[]
+  mappings: { bankVendorName: string; supplierId: string | null; category?: string | null }[]
 ) {
   await requireRole("manager");
   const supabase = await createClient();
 
   const rows = mappings.map((m) => ({
     bank_vendor_name: m.bankVendorName,
-    supplier_id: m.supplierId,
+    supplier_id: m.supplierId || null,
     category: m.category ?? null,
   }));
 

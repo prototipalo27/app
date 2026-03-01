@@ -428,10 +428,9 @@ export default function StatementProcessor({
         .filter((v) => mappings[v] || categoryMappings[v])
         .map((bankVendorName) => ({
           bankVendorName,
-          supplierId: mappings[bankVendorName] || "",
+          supplierId: mappings[bankVendorName] || null,
           category: categoryMappings[bankVendorName] || null,
-        }))
-        .filter((m) => m.supplierId); // still require supplier_id for upsert
+        }));
       if (batch.length > 0) await saveVendorMappingsBatch(batch);
       setStep("claims");
     } catch (err) {
