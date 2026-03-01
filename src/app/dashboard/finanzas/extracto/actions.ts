@@ -27,7 +27,7 @@ export async function getVendorMappings() {
 
   const { data, error } = await supabase
     .from("vendor_mappings")
-    .select("id, bank_vendor_name, supplier_id");
+    .select("id, bank_vendor_name, supplier_id, category");
 
   if (error) throw new Error(error.message);
   return data;
@@ -48,7 +48,7 @@ export async function saveVendorMapping(bankVendorName: string, supplierId: stri
 }
 
 export async function saveVendorMappingsBatch(
-  mappings: { bankVendorName: string; supplierId: string }[]
+  mappings: { bankVendorName: string; supplierId: string; category?: string | null }[]
 ) {
   await requireRole("manager");
   const supabase = await createClient();
@@ -56,6 +56,7 @@ export async function saveVendorMappingsBatch(
   const rows = mappings.map((m) => ({
     bank_vendor_name: m.bankVendorName,
     supplier_id: m.supplierId,
+    category: m.category ?? null,
   }));
 
   const { error } = await supabase

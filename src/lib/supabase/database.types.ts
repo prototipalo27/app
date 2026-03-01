@@ -2245,18 +2245,21 @@ export type Database = {
       vendor_mappings: {
         Row: {
           bank_vendor_name: string
+          category: string | null
           created_at: string | null
           id: string
           supplier_id: string | null
         }
         Insert: {
           bank_vendor_name: string
+          category?: string | null
           created_at?: string | null
           id?: string
           supplier_id?: string | null
         }
         Update: {
           bank_vendor_name?: string
+          category?: string | null
           created_at?: string | null
           id?: string
           supplier_id?: string | null

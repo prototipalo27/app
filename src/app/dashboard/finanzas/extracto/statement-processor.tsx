@@ -26,7 +26,46 @@ interface VendorMapping {
   id: string;
   bank_vendor_name: string;
   supplier_id: string | null;
+  category: string | null;
 }
+
+const CATEGORIES: { value: string; label: string }[] = [
+  { value: "payroll", label: "Nominas" },
+  { value: "rent", label: "Alquiler" },
+  { value: "utilities", label: "Suministros" },
+  { value: "insurance", label: "Seguros" },
+  { value: "software", label: "Software/SaaS" },
+  { value: "telecom", label: "Telecomunicaciones" },
+  { value: "taxes", label: "Impuestos" },
+  { value: "materials", label: "Material" },
+  { value: "shipping", label: "Envios" },
+  { value: "financing", label: "Financiaciones" },
+  { value: "marketing", label: "Marketing" },
+  { value: "professional", label: "Serv. profesionales" },
+  { value: "income", label: "Ingresos" },
+  { value: "other", label: "Otros" },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  CATEGORIES.map((c) => [c.value, c.label])
+);
+
+const CATEGORY_COLORS: Record<string, string> = {
+  payroll: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  rent: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  utilities: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  insurance: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+  software: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  telecom: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  taxes: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  materials: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  shipping: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  financing: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+  marketing: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+  professional: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+  income: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  other: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
+};
 
 interface ClaimHistoryItem {
   id: string;
@@ -86,6 +125,15 @@ export default function StatementProcessor({
     const m: Record<string, string> = {};
     vendorMappings.forEach((vm) => {
       if (vm.supplier_id) m[vm.bank_vendor_name] = vm.supplier_id;
+    });
+    return m;
+  });
+
+  // Category mapping state
+  const [categoryMappings, setCategoryMappings] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    vendorMappings.forEach((vm) => {
+      if (vm.category) m[vm.bank_vendor_name] = vm.category;
     });
     return m;
   });
@@ -290,12 +338,63 @@ export default function StatementProcessor({
     []
   );
 
+  const handleCategoryChange = useCallback(
+    (vendorName: string, category: string) => {
+      setCategoryMappings((prev) => ({ ...prev, [vendorName]: category }));
+    },
+    []
+  );
+
+  // Category summary for displayed transactions (expenses only)
+  const categorySummary = useMemo(() => {
+    const summary: Record<string, number> = {};
+    let uncategorized = 0;
+    let totalExpenses = 0;
+
+    for (const group of vendorGroups) {
+      // Only count expenses (negative amounts)
+      const expenseAmount = group.transactions
+        .filter((t) => t.amount < 0)
+        .reduce((s, t) => s + t.amount, 0);
+      if (expenseAmount >= 0) continue;
+
+      totalExpenses += expenseAmount;
+      const cat = categoryMappings[group.vendorName];
+      if (cat) {
+        summary[cat] = (summary[cat] || 0) + expenseAmount;
+      } else {
+        uncategorized += expenseAmount;
+      }
+    }
+
+    const entries = Object.entries(summary)
+      .map(([cat, amount]) => ({
+        category: cat,
+        label: CATEGORY_LABELS[cat] || cat,
+        amount,
+        pct: totalExpenses !== 0 ? (amount / totalExpenses) * 100 : 0,
+      }))
+      .sort((a, b) => a.amount - b.amount); // most negative first
+
+    return { entries, uncategorized, totalExpenses };
+  }, [vendorGroups, categoryMappings]);
+
   const handleSaveMappings = useCallback(async () => {
     setLoading(true);
     try {
-      const batch = Object.entries(mappings)
-        .filter(([, sid]) => sid)
-        .map(([bankVendorName, supplierId]) => ({ bankVendorName, supplierId }));
+      // Build batch: include all vendors that have either a supplier or a category
+      const allVendors = new Set([
+        ...Object.keys(mappings),
+        ...Object.keys(categoryMappings),
+      ]);
+      const batch = Array.from(allVendors)
+        .filter((v) => mappings[v] || categoryMappings[v])
+        .map((bankVendorName) => ({
+          bankVendorName,
+          supplierId: mappings[bankVendorName] || "",
+          category: categoryMappings[bankVendorName] || null,
+        }))
+        .filter((m) => m.supplierId); // still require supplier_id for upsert
       if (batch.length > 0) await saveVendorMappingsBatch(batch);
       setStep("claims");
     } catch (err) {
@@ -303,7 +402,7 @@ export default function StatementProcessor({
     } finally {
       setLoading(false);
     }
-  }, [mappings]);
+  }, [mappings, categoryMappings]);
 
   const setStep = useCallback((s: View) => {
     setView(s);
@@ -589,6 +688,67 @@ export default function StatementProcessor({
             </label>
           </div>
 
+          {/* Category summary */}
+          {categorySummary.totalExpenses < 0 && (
+            <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
+                Desglose por categoria
+              </h3>
+              <div className="space-y-2">
+                {categorySummary.entries.map((e) => (
+                  <div key={e.category} className="flex items-center gap-3">
+                    <span className={`inline-block w-28 rounded-full px-2.5 py-0.5 text-center text-xs font-medium ${CATEGORY_COLORS[e.category] || CATEGORY_COLORS.other}`}>
+                      {e.label}
+                    </span>
+                    <div className="flex-1">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div
+                          className="h-full rounded-full bg-zinc-500 dark:bg-zinc-400"
+                          style={{ width: `${Math.abs(e.pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="w-20 text-right text-sm font-medium text-zinc-900 dark:text-white">
+                      {Math.abs(e.amount).toFixed(0)}€
+                    </span>
+                    <span className="w-12 text-right text-xs text-zinc-500">
+                      {Math.abs(e.pct).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+                {categorySummary.uncategorized < 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="inline-block w-28 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-center text-xs font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                      Sin categorizar
+                    </span>
+                    <div className="flex-1">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div
+                          className="h-full rounded-full bg-amber-400 dark:bg-amber-500"
+                          style={{ width: `${Math.abs((categorySummary.uncategorized / categorySummary.totalExpenses) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="w-20 text-right text-sm font-medium text-amber-600 dark:text-amber-400">
+                      {Math.abs(categorySummary.uncategorized).toFixed(0)}€
+                    </span>
+                    <span className="w-12 text-right text-xs text-amber-500">
+                      {Math.abs((categorySummary.uncategorized / categorySummary.totalExpenses) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Total gastos</span>
+                  <span className="font-bold text-zinc-900 dark:text-white">
+                    {Math.abs(categorySummary.totalExpenses).toFixed(2)}€
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Vendor groups */}
           <div className="space-y-4">
             {vendorGroups.map((group) => (
@@ -597,7 +757,9 @@ export default function StatementProcessor({
                 group={group}
                 suppliers={suppliers}
                 currentMapping={mappings[group.vendorName] || ""}
+                currentCategory={categoryMappings[group.vendorName] || ""}
                 onMappingChange={(sid) => handleMappingChange(group.vendorName, sid)}
+                onCategoryChange={(cat) => handleCategoryChange(group.vendorName, cat)}
               />
             ))}
           </div>
@@ -819,12 +981,16 @@ function VendorGroupCard({
   group,
   suppliers,
   currentMapping,
+  currentCategory,
   onMappingChange,
+  onCategoryChange,
 }: {
   group: VendorGroup;
   suppliers: { id: string; name: string; email: string | null }[];
   currentMapping: string;
+  currentCategory: string;
   onMappingChange: (supplierId: string) => void;
+  onCategoryChange: (category: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -853,10 +1019,22 @@ function VendorGroupCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-zinc-900 dark:text-white">
             {group.totalAmount.toFixed(2)}€
           </span>
+          <select
+            value={currentCategory}
+            onChange={(e) => onCategoryChange(e.target.value)}
+            className="w-36 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          >
+            <option value="">— Categoria —</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
           <select
             value={currentMapping}
             onChange={(e) => onMappingChange(e.target.value)}

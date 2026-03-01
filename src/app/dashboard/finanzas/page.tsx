@@ -58,6 +58,7 @@ export default async function FinanzasPage() {
     { data: purchaseItems },
     { data: shipments },
     { data: bankStatements },
+    { data: vendorMappingsData },
   ] = await Promise.all([
     getFixedExpenses(),
     getTaxPayments(),
@@ -70,6 +71,7 @@ export default async function FinanzasPage() {
     supabase.from("purchase_items").select("id, status, actual_price, estimated_price, created_at"),
     supabase.from("shipping_info").select("id, price, created_at"),
     supabase.from("bank_statements").select("month, year, transactions").order("year").order("month"),
+    supabase.from("vendor_mappings").select("bank_vendor_name, category"),
   ]);
 
   const allProjects = projects ?? [];
@@ -78,6 +80,39 @@ export default async function FinanzasPage() {
   const allPurchases = purchaseItems ?? [];
   const allShipments = shipments ?? [];
   const allBankStatements = bankStatements ?? [];
+
+  // ── Vendor category map ──
+  const vendorCategoryMap = new Map<string, string>();
+  for (const vm of vendorMappingsData ?? []) {
+    if (vm.category) {
+      vendorCategoryMap.set(vm.bank_vendor_name.toLowerCase(), vm.category);
+    }
+  }
+
+  // Helper: compute categorized expenses from a bank statement's transactions
+  type BankTx = { vendorName?: string; amount: number };
+  function getCategorizedExpenses(txs: BankTx[]) {
+    const byCategory: Record<string, number> = {};
+    let uncategorized = 0;
+    for (const t of txs) {
+      if (t.amount >= 0) continue; // skip income
+      const cat = t.vendorName ? vendorCategoryMap.get(t.vendorName.toLowerCase()) : undefined;
+      if (cat) {
+        byCategory[cat] = (byCategory[cat] || 0) + Math.abs(t.amount);
+      } else {
+        uncategorized += Math.abs(t.amount);
+      }
+    }
+    return { byCategory, uncategorized, total: Object.values(byCategory).reduce((s, v) => s + v, 0) + uncategorized };
+  }
+
+  // Build month key → categorized expenses map
+  const bankExpensesByMonth = new Map<string, ReturnType<typeof getCategorizedExpenses>>();
+  for (const stmt of allBankStatements) {
+    const key = `${stmt.year}-${String(stmt.month).padStart(2, "0")}`;
+    const txs = (stmt.transactions as unknown as BankTx[]) || [];
+    bankExpensesByMonth.set(key, getCategorizedExpenses(txs));
+  }
 
   // ── KPIs ──
   // Ofertado: upcoming projects (proformas) by invoice_date
@@ -131,6 +166,14 @@ export default async function FinanzasPage() {
     months6.push({ key, label });
   }
 
+  const CATEGORY_LABELS: Record<string, string> = {
+    payroll: "Nominas", rent: "Alquiler", utilities: "Suministros",
+    insurance: "Seguros", software: "Software/SaaS", telecom: "Telecomunicaciones",
+    taxes: "Impuestos", materials: "Material", shipping: "Envios",
+    financing: "Financiaciones", marketing: "Marketing",
+    professional: "Serv. profesionales", income: "Ingresos", other: "Otros",
+  };
+
   const monthlyData = months6.map(({ key, label }) => {
     const offered = upcomingProjects
       .filter((p) => p.invoice_date && getMonthKey(p.invoice_date) === key)
@@ -148,9 +191,25 @@ export default async function FinanzasPage() {
       allShipments
         .filter((s) => s.created_at && getMonthKey(s.created_at) === key)
         .reduce((s, sh) => s + (sh.price ?? 0), 0);
-    const balance = invoiced - monthlyFixedExpenses - varExpenses - monthlyFinancingPayments;
 
-    return { label, offered, invoiced, delivered, fixedExpenses: monthlyFixedExpenses, varExpenses, financingPayments: monthlyFinancingPayments, balance };
+    // Use real bank expenses if available for this month
+    const bankData = bankExpensesByMonth.get(key);
+    const realBankExpenses = bankData ? bankData.total : 0;
+    const hasBankData = !!bankData;
+
+    // If we have bank data, use real total; otherwise fallback to estimated
+    const totalExpenses = hasBankData
+      ? realBankExpenses
+      : monthlyFixedExpenses + varExpenses + monthlyFinancingPayments;
+    const balance = invoiced - totalExpenses;
+
+    return {
+      label, offered, invoiced, delivered,
+      fixedExpenses: monthlyFixedExpenses, varExpenses, financingPayments: monthlyFinancingPayments,
+      balance, hasBankData, realBankExpenses,
+      bankCategories: bankData?.byCategory ?? {},
+      bankUncategorized: bankData?.uncategorized ?? 0,
+    };
   });
 
   // ── Bank statement matching for fixed expenses ──
@@ -260,6 +319,7 @@ export default async function FinanzasPage() {
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Fijos</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">G. Var.</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Financ.</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-blue-500">Banco real</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Balance</th>
               </tr>
             </thead>
@@ -273,6 +333,9 @@ export default async function FinanzasPage() {
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.fixedExpenses)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.varExpenses)}</td>
                   <td className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">{formatEur(m.financingPayments)}</td>
+                  <td className="px-3 py-2 text-right text-blue-600 dark:text-blue-400">
+                    {m.hasBankData ? formatEur(m.realBankExpenses) : <span className="text-zinc-400">—</span>}
+                  </td>
                   <td className={`px-3 py-2 text-right font-medium ${m.balance >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
                     {formatEur(m.balance)}
                   </td>
@@ -282,6 +345,65 @@ export default async function FinanzasPage() {
           </table>
         </div>
       </div>
+
+      {/* ── B2. Desglose gastos banco por categoria ── */}
+      {monthlyData.some((m) => m.hasBankData) && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Gastos banco por categoria (6 meses)</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Categoria</th>
+                  {monthlyData.map((m) => (
+                    <th key={m.label} className="px-3 py-2 text-right text-xs font-medium text-zinc-500 capitalize">{m.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {(() => {
+                  // Collect all categories that appear
+                  const allCats = new Set<string>();
+                  for (const m of monthlyData) {
+                    for (const cat of Object.keys(m.bankCategories)) allCats.add(cat);
+                    if (m.bankUncategorized > 0) allCats.add("_uncategorized");
+                  }
+                  const catList = Array.from(allCats).sort();
+                  return catList.map((cat) => (
+                    <tr key={cat}>
+                      <td className="px-3 py-2 text-zinc-900 dark:text-white">
+                        {cat === "_uncategorized" ? (
+                          <span className="text-amber-600 dark:text-amber-400">Sin categorizar</span>
+                        ) : (
+                          CATEGORY_LABELS[cat] || cat
+                        )}
+                      </td>
+                      {monthlyData.map((m) => {
+                        const val = cat === "_uncategorized"
+                          ? m.bankUncategorized
+                          : (m.bankCategories[cat] || 0);
+                        return (
+                          <td key={m.label} className="px-3 py-2 text-right text-zinc-700 dark:text-zinc-300">
+                            {val > 0 ? formatEur(val) : <span className="text-zinc-300 dark:text-zinc-700">—</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ));
+                })()}
+                <tr className="border-t-2 border-zinc-300 dark:border-zinc-700">
+                  <td className="px-3 py-2 font-semibold text-zinc-900 dark:text-white">Total</td>
+                  {monthlyData.map((m) => (
+                    <td key={m.label} className="px-3 py-2 text-right font-semibold text-zinc-900 dark:text-white">
+                      {m.hasBankData ? formatEur(m.realBankExpenses) : "—"}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Calendario de pagos ── */}
       <PaymentCalendarSection
