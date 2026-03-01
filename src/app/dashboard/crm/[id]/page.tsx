@@ -288,6 +288,7 @@ export default async function LeadDetailPage({
             estimatedQuantity={lead.estimated_quantity}
             estimatedComplexity={lead.estimated_complexity}
             estimatedUrgency={lead.estimated_urgency}
+            estimatedExactQuantity={lead.estimated_exact_quantity}
           />
 
           {/* Email panel (threads + compose + inline snippets) */}

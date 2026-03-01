@@ -33,6 +33,7 @@ function estimatedLine(
   quantity: EstimatedQuantity,
   complexity: EstimatedComplexity,
   urgency: EstimatedUrgency,
+  exactQuantity: number | null,
 ): ProformaLineItem {
   const basePrice = BASE_PRICES[projectTypeTag || ""] ?? DEFAULT_BASE_PRICE;
   const complexityFactor = COMPLEXITY_OPTIONS.find((o) => o.value === complexity)?.factor ?? 1;
@@ -42,7 +43,7 @@ function estimatedLine(
   return {
     concept: projectTypeTag || "Impresión 3D",
     price: Math.round(basePrice * complexityFactor * urgencyFactor * 100) / 100,
-    units: midpoint,
+    units: exactQuantity && exactQuantity > 0 ? exactQuantity : midpoint,
     tax: 21,
   };
 }
@@ -56,6 +57,7 @@ interface ProformaEditorProps {
   estimatedQuantity?: string | null;
   estimatedComplexity?: string | null;
   estimatedUrgency?: string | null;
+  estimatedExactQuantity?: number | null;
 }
 
 export default function ProformaEditor({
@@ -67,6 +69,7 @@ export default function ProformaEditor({
   estimatedQuantity,
   estimatedComplexity,
   estimatedUrgency,
+  estimatedExactQuantity,
 }: ProformaEditorProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -78,6 +81,7 @@ export default function ProformaEditor({
         estimatedQuantity as EstimatedQuantity,
         estimatedComplexity as EstimatedComplexity,
         estimatedUrgency as EstimatedUrgency,
+        estimatedExactQuantity ?? null,
       )];
     }
     return [emptyLine()];
