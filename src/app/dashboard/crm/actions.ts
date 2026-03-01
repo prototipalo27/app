@@ -77,6 +77,7 @@ export async function createLead(formData: FormData) {
   }
 
   const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
+  const ownedBy = (formData.get("owned_by") as string)?.trim() || null;
 
   const estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
   const estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
@@ -97,6 +98,7 @@ export async function createLead(formData: FormData) {
       message: message,
       source: "manual",
       assigned_to: assignedTo,
+      owned_by: ownedBy,
       estimated_quantity: estimatedQuantity,
       estimated_complexity: estimatedComplexity,
       estimated_urgency: estimatedUrgency,
@@ -245,6 +247,84 @@ export async function assignLead(id: string, userId: string | null): Promise<{ s
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
   return { success: true };
+}
+
+// ── Update Lead Owner (commercial) ───────────────────────
+
+export async function updateLeadOwner(
+  id: string,
+  userId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ owned_by: userId })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
+// ── Commission Summary ───────────────────────────────────
+
+export async function getCommissionSummary(leadId: string): Promise<{
+  isReturning: boolean;
+  rate: number;
+  quoteTotal: number;
+  commission: number;
+} | null> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get lead info
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, email, status, created_at")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead) return null;
+
+  // Commission only applies to won leads
+  if (lead.status !== "won") return null;
+
+  // Get quote total from items
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("items")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const items = (qr?.items || []) as unknown as ProformaLineItem[];
+  const quoteTotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
+
+  if (quoteTotal === 0) return null;
+
+  // Check if returning client: other won leads with the same email created before this one
+  let isReturning = false;
+  if (lead.email) {
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .ilike("email", lead.email)
+      .eq("status", "won")
+      .neq("id", lead.id)
+      .lt("created_at", lead.created_at);
+
+    isReturning = (count ?? 0) > 0;
+  }
+
+  const rate = isReturning ? 0.075 : 0.15;
+  const commission = quoteTotal * rate;
+
+  return { isReturning, rate, quoteTotal, commission };
 }
 
 // ── Add Note ─────────────────────────────────────────────

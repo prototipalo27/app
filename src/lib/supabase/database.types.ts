@@ -755,6 +755,7 @@ export type Database = {
           lead_number: number
           lost_reason: string | null
           message: string | null
+          owned_by: string | null
           payment_condition: string | null
           phone: string | null
           project_type_tag: string | null
@@ -782,6 +783,7 @@ export type Database = {
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          owned_by?: string | null
           payment_condition?: string | null
           phone?: string | null
           project_type_tag?: string | null
@@ -809,6 +811,7 @@ export type Database = {
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          owned_by?: string | null
           payment_condition?: string | null
           phone?: string | null
           project_type_tag?: string | null
@@ -821,6 +824,13 @@ export type Database = {
           {
             foreignKeyName: "leads_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_owned_by_fkey"
+            columns: ["owned_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
@@ -2600,4 +2610,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

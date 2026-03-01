@@ -9,6 +9,7 @@ export { tagClasses };
 
 export type LeadWithAssignee = Tables<"leads"> & {
   assignee_email?: string | null;
+  owner_email?: string | null;
 };
 
 interface CrmCardProps {
@@ -100,6 +101,13 @@ export function CrmCard({ lead }: CrmCardProps) {
             </span>
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
               {lead.assignee_email.split("@")[0]}
+            </span>
+          </div>
+        )}
+        {lead.owner_email && (
+          <div className="flex items-center gap-1" title={`Captado por ${lead.owner_email.split("@")[0]}`}>
+            <span className="h-4 w-4 rounded-full bg-amber-200 text-center text-[10px] font-medium leading-4 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+              {lead.owner_email[0].toUpperCase()}
             </span>
           </div>
         )}

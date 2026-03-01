@@ -33,23 +33,27 @@ export default async function CrmPage() {
     name: m.email.split("@")[0],
   }));
 
-  // Fetch assignee emails
-  const assigneeIds = [
-    ...new Set((leads || []).map((l) => l.assigned_to).filter(Boolean)),
+  // Fetch assignee + owner emails
+  const userIds = [
+    ...new Set([
+      ...(leads || []).map((l) => l.assigned_to),
+      ...(leads || []).map((l) => l.owned_by),
+    ].filter(Boolean)),
   ] as string[];
 
-  let assigneeMap = new Map<string, string>();
-  if (assigneeIds.length > 0) {
+  let userEmailMap = new Map<string, string>();
+  if (userIds.length > 0) {
     const { data: users } = await supabase
       .from("user_profiles")
       .select("id, email")
-      .in("id", assigneeIds);
-    assigneeMap = new Map(users?.map((u) => [u.id, u.email]) || []);
+      .in("id", userIds);
+    userEmailMap = new Map(users?.map((u) => [u.id, u.email]) || []);
   }
 
   const leadsWithAssignee: LeadWithAssignee[] = (leads || []).map((l) => ({
     ...l,
-    assignee_email: l.assigned_to ? assigneeMap.get(l.assigned_to) || null : null,
+    assignee_email: l.assigned_to ? userEmailMap.get(l.assigned_to) || null : null,
+    owner_email: l.owned_by ? userEmailMap.get(l.owned_by) || null : null,
   }));
 
   return (
@@ -59,6 +63,12 @@ export default async function CrmPage() {
           CRM — Leads
         </h1>
         <div className="flex gap-2">
+          <Link
+            href="/dashboard/crm/comisiones"
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Comisiones
+          </Link>
           <Link
             href="/dashboard/crm/list"
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"

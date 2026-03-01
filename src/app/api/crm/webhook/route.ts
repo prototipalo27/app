@@ -6,6 +6,9 @@ import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 // AI estimation is now handled by Postgres trigger auto_estimate_lead
 
+// Gonzalo (gonzalo@prototipalo.com) — commercial owner for Webflow leads
+const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -178,6 +181,7 @@ export async function POST(request: NextRequest) {
         email_subject_tag: emailSubjectTag?.trim() || null,
         source: "webflow",
         status: "new",
+        owned_by: GONZALO_USER_ID,
         webflow_submission_id: submissionId || null,
       })
       .select("id")

@@ -14,6 +14,7 @@ import {
   updateEstimationField,
   getProformaDetails,
   createLeadProforma,
+  updateLeadOwner,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { HoldedDocument } from "@/lib/holded/types";
@@ -41,6 +42,13 @@ interface LeadActionsProps {
   estimatedUrgency: string | null;
   estimatedValue: number | null;
   nextId: string | null;
+  ownedBy: string | null;
+  commission: {
+    isReturning: boolean;
+    rate: number;
+    quoteTotal: number;
+    commission: number;
+  } | null;
 }
 
 export default function LeadActions({
@@ -58,6 +66,8 @@ export default function LeadActions({
   estimatedUrgency,
   estimatedValue,
   nextId,
+  ownedBy,
+  commission,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -233,6 +243,50 @@ export default function LeadActions({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Owner (captado por) */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+          Captado por
+        </h3>
+        <select
+          value={ownedBy || ""}
+          onChange={(e) => {
+            const value = e.target.value || null;
+            startTransition(async () => {
+              await updateLeadOwner(leadId, value);
+              router.refresh();
+            });
+          }}
+          disabled={isPending}
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+        >
+          <option value="">Sin asignar</option>
+          {managers.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.email.split("@")[0]}
+            </option>
+          ))}
+        </select>
+
+        {commission && (
+          <div className="mt-2 space-y-1">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                commission.isReturning
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+              }`}
+            >
+              {commission.isReturning ? "Recurrente 7.5%" : "Nuevo 15%"}
+            </span>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Comision: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{commission.commission.toFixed(2)} €</span>
+              <span className="ml-1 text-zinc-400">(sobre {commission.quoteTotal.toFixed(2)} €)</span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Payment condition */}

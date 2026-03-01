@@ -15,7 +15,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
-import { getBasePrices } from "../actions";
+import { getBasePrices, getCommissionSummary } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 
 export default async function LeadDetailPage({
@@ -72,10 +72,14 @@ export default async function LeadDetailPage({
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  // Fetch user names for activities & assignee
+  // Fetch commission summary (only for won leads)
+  const commission = await getCommissionSummary(id);
+
+  // Fetch user names for activities & assignee & owner
   const userIds = [
     ...new Set([
       lead.assigned_to,
+      lead.owned_by,
       ...(activities || []).map((a) => a.created_by),
     ].filter(Boolean)),
   ] as string[];
@@ -206,6 +210,16 @@ export default async function LeadDetailPage({
                   </svg>
                   <span className="text-zinc-700 dark:text-zinc-300">
                     {userMap.get(lead.assigned_to) || "—"}
+                  </span>
+                </div>
+              )}
+              {lead.owned_by && (
+                <div className="flex items-center gap-2 text-sm">
+                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <span className="text-zinc-700 dark:text-zinc-300">
+                    Captado por {userMap.get(lead.owned_by) || "—"}
                   </span>
                 </div>
               )}
@@ -415,6 +429,8 @@ export default async function LeadDetailPage({
             estimatedUrgency={lead.estimated_urgency}
             estimatedValue={lead.estimated_value}
             nextId={nextId}
+            ownedBy={lead.owned_by}
+            commission={commission}
           />
         </div>
       </div>

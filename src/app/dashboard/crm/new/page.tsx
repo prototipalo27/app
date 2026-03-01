@@ -142,21 +142,39 @@ export default async function NewLeadPage() {
             </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Asignar a
-            </label>
-            <select
-              name="assigned_to"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-            >
-              <option value="">Sin asignar</option>
-              {(managers || []).map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.email.split("@")[0]}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Asignar a
+              </label>
+              <select
+                name="assigned_to"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+              >
+                <option value="">Sin asignar</option>
+                {(managers || []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.email.split("@")[0]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Captado por
+              </label>
+              <select
+                name="owned_by"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+              >
+                <option value="">Sin asignar</option>
+                {(managers || []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.email.split("@")[0]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
