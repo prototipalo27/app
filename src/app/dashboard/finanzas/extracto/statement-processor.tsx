@@ -14,6 +14,7 @@ import {
   getStatement,
   deleteStatement,
   getOrCreateMonthFolder,
+  toggleCheckedVendor,
 } from "./actions";
 
 interface Supplier {
@@ -137,6 +138,9 @@ export default function StatementProcessor({
     });
     return m;
   });
+
+  // Checked vendors (invoice filed in Drive)
+  const [checkedVendors, setCheckedVendors] = useState<Set<string>>(new Set());
 
   // Claims state
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
@@ -282,6 +286,7 @@ export default function StatementProcessor({
         setTransactions(stmt.transactions as unknown as BankTransaction[]);
         setActiveMonth(month);
         setActiveFileName(stmt.file_name);
+        setCheckedVendors(new Set((stmt.checked_vendors as string[]) || []));
         setView("review");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al cargar extracto");
@@ -343,6 +348,32 @@ export default function StatementProcessor({
       setCategoryMappings((prev) => ({ ...prev, [vendorName]: category }));
     },
     []
+  );
+
+  const handleToggleChecked = useCallback(
+    async (vendorName: string) => {
+      if (!activeMonth) return;
+      const newChecked = !checkedVendors.has(vendorName);
+      // Optimistic update
+      setCheckedVendors((prev) => {
+        const next = new Set(prev);
+        if (newChecked) next.add(vendorName);
+        else next.delete(vendorName);
+        return next;
+      });
+      try {
+        await toggleCheckedVendor(activeMonth, selectedYear, vendorName, newChecked);
+      } catch {
+        // Rollback on error
+        setCheckedVendors((prev) => {
+          const next = new Set(prev);
+          if (newChecked) next.delete(vendorName);
+          else next.add(vendorName);
+          return next;
+        });
+      }
+    },
+    [activeMonth, selectedYear, checkedVendors]
   );
 
   // Category summary for displayed transactions (expenses only)
@@ -669,10 +700,16 @@ export default function StatementProcessor({
           </div>
 
           {/* Summary */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <StatCard label="Movimientos totales" value={totalTransactions} />
             <StatCard label="Pendientes" value={pendingCount} accent />
             <StatCard label="Proveedores" value={vendorGroups.length} />
+            <StatCard
+              label="Facturas archivadas"
+              value={checkedVendors.size}
+              total={vendorGroups.length}
+              success={checkedVendors.size === vendorGroups.length && vendorGroups.length > 0}
+            />
           </div>
 
           {/* Filter toggle */}
@@ -758,8 +795,10 @@ export default function StatementProcessor({
                 suppliers={suppliers}
                 currentMapping={mappings[group.vendorName] || ""}
                 currentCategory={categoryMappings[group.vendorName] || ""}
+                isChecked={checkedVendors.has(group.vendorName)}
                 onMappingChange={(sid) => handleMappingChange(group.vendorName, sid)}
                 onCategoryChange={(cat) => handleCategoryChange(group.vendorName, cat)}
+                onToggleChecked={() => handleToggleChecked(group.vendorName)}
               />
             ))}
           </div>
@@ -956,22 +995,28 @@ function StatCard({
   label,
   value,
   accent,
+  total,
+  success,
 }: {
   label: string;
   value: number;
   accent?: boolean;
+  total?: number;
+  success?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
       <p
         className={`mt-1 text-2xl font-bold ${
-          accent
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-zinc-900 dark:text-white"
+          success
+            ? "text-green-600 dark:text-green-400"
+            : accent
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-zinc-900 dark:text-white"
         }`}
       >
-        {value}
+        {value}{total != null && <span className="text-base font-normal text-zinc-400">/{total}</span>}
       </p>
     </div>
   );
@@ -982,22 +1027,39 @@ function VendorGroupCard({
   suppliers,
   currentMapping,
   currentCategory,
+  isChecked,
   onMappingChange,
   onCategoryChange,
+  onToggleChecked,
 }: {
   group: VendorGroup;
   suppliers: { id: string; name: string; email: string | null }[];
   currentMapping: string;
   currentCategory: string;
+  isChecked: boolean;
   onMappingChange: (supplierId: string) => void;
   onCategoryChange: (category: string) => void;
+  onToggleChecked: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <div className={`rounded-xl border bg-white dark:bg-zinc-900 ${isChecked ? "border-green-300 dark:border-green-800/60" : "border-zinc-200 dark:border-zinc-800"}`}>
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
+          <button
+            onClick={onToggleChecked}
+            title={isChecked ? "Factura archivada" : "Marcar factura como archivada"}
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+              isChecked
+                ? "border-green-500 bg-green-500 text-white dark:border-green-600 dark:bg-green-600"
+                : "border-zinc-300 text-transparent hover:border-green-400 dark:border-zinc-600"
+            }`}
+          >
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
           <button
             onClick={() => setExpanded(!expanded)}
             className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
@@ -1012,7 +1074,7 @@ function VendorGroupCard({
             </svg>
           </button>
           <div>
-            <p className="font-medium text-zinc-900 dark:text-white">{group.vendorName}</p>
+            <p className={`font-medium ${isChecked ? "text-green-700 dark:text-green-400" : "text-zinc-900 dark:text-white"}`}>{group.vendorName}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {group.transactions.length} movimiento(s)
             </p>

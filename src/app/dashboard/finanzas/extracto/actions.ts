@@ -271,3 +271,35 @@ export async function getClaimHistory() {
   if (error) throw new Error(error.message);
   return data;
 }
+
+export async function toggleCheckedVendor(
+  month: number,
+  year: number,
+  vendorName: string,
+  checked: boolean
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: stmt, error: fetchError } = await supabase
+    .from("bank_statements")
+    .select("checked_vendors")
+    .eq("month", month)
+    .eq("year", year)
+    .single();
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const current = (stmt?.checked_vendors as string[]) || [];
+  const updated = checked
+    ? [...new Set([...current, vendorName])]
+    : current.filter((v: string) => v !== vendorName);
+
+  const { error } = await supabase
+    .from("bank_statements")
+    .update({ checked_vendors: JSON.parse(JSON.stringify(updated)) })
+    .eq("month", month)
+    .eq("year", year);
+
+  if (error) throw new Error(error.message);
+}

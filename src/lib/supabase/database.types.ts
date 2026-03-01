@@ -34,6 +34,7 @@ export type Database = {
       }
       bank_statements: {
         Row: {
+          checked_vendors: Json
           created_at: string | null
           drive_folder_id: string | null
           file_name: string | null
@@ -46,6 +47,7 @@ export type Database = {
           year: number
         }
         Insert: {
+          checked_vendors?: Json
           created_at?: string | null
           drive_folder_id?: string | null
           file_name?: string | null
@@ -58,6 +60,7 @@ export type Database = {
           year: number
         }
         Update: {
+          checked_vendors?: Json
           created_at?: string | null
           drive_folder_id?: string | null
           file_name?: string | null
