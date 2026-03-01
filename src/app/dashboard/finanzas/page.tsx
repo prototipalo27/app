@@ -169,7 +169,7 @@ export default async function FinanzasPage() {
   const CATEGORY_LABELS: Record<string, string> = {
     payroll: "Nominas", rent: "Alquiler", utilities: "Suministros",
     insurance: "Seguros", software: "Software/SaaS", telecom: "Telecomunicaciones",
-    taxes: "Impuestos", materials: "Material", meals: "Comidas", fuel: "Gasolinas", shipping: "Envios",
+    taxes: "Impuestos", materials: "Material", travel: "Viajes", meals: "Comidas", fuel: "Gasolinas", shipping: "Envios",
     financing: "Financiaciones", marketing: "Marketing",
     professional: "Serv. profesionales", income: "Ingresos", other: "Otros",
   };
