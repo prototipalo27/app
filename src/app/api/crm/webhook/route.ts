@@ -110,6 +110,9 @@ export async function POST(request: NextRequest) {
     const emailSubjectTag = findField(data, [
       "email_subject_tag", "emailSubjectTag",
     ]);
+    const VALID_SOURCES = ["webflow", "email", "whatsapp", "manual", "other"] as const;
+    const rawSource = findField(data, ["source"]);
+    const source = VALID_SOURCES.includes(rawSource as any) ? rawSource! : "webflow";
     const submissionId =
       payload?.payload?.id || payload?._id || payload?.submissionId || data?._id || null;
 
@@ -179,7 +182,7 @@ export async function POST(request: NextRequest) {
         message: message?.trim() || null,
         attachments: attachments?.trim() || null,
         email_subject_tag: emailSubjectTag?.trim() || null,
-        source: "webflow",
+        source,
         status: "new",
         owned_by: GONZALO_USER_ID,
         webflow_submission_id: submissionId || null,
