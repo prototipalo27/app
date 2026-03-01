@@ -727,6 +727,7 @@ export type Database = {
           email: string | null
           email_subject_tag: string | null
           estimated_complexity: string | null
+          estimated_exact_quantity: number | null
           estimated_quantity: string | null
           estimated_urgency: string | null
           estimated_value: number | null
@@ -753,6 +754,7 @@ export type Database = {
           email?: string | null
           email_subject_tag?: string | null
           estimated_complexity?: string | null
+          estimated_exact_quantity?: number | null
           estimated_quantity?: string | null
           estimated_urgency?: string | null
           estimated_value?: number | null
@@ -779,6 +781,7 @@ export type Database = {
           email?: string | null
           email_subject_tag?: string | null
           estimated_complexity?: string | null
+          estimated_exact_quantity?: number | null
           estimated_quantity?: string | null
           estimated_urgency?: string | null
           estimated_value?: number | null
