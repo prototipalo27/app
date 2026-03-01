@@ -64,6 +64,7 @@ export async function saveVendorMappingsBatch(
     .upsert(rows, { onConflict: "bank_vendor_name" });
 
   if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/finanzas/extracto");
 }
 
 interface ClaimTransaction {
