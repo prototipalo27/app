@@ -26,10 +26,11 @@ export function parseBBVAStatement(data: ArrayBuffer): BankTransaction[] {
   const sheet = workbook.Sheets[sheetName];
 
   // Convert to array of arrays for flexible parsing
+  // Use raw: true to get native numbers from Excel cells instead of formatted strings
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: "",
-    raw: false,
+    raw: true,
   });
 
   // Find the header row (look for "Fecha" or "F. Valor")
@@ -71,8 +72,7 @@ export function parseBBVAStatement(data: ArrayBuffer): BankTransaction[] {
     const dateStr = String(row[dateCol] ?? "").trim();
     if (!dateStr || dateStr.toLowerCase().includes("total")) continue;
 
-    const rawAmount = String(row[amountCol] ?? "0");
-    const amount = parseAmount(rawAmount);
+    const amount = parseAmount(row[amountCol]);
     const description = String(row[descCol >= 0 ? descCol : 2] ?? "").trim();
     const status = statusCol >= 0 ? String(row[statusCol] ?? "").trim() : "";
 
@@ -81,7 +81,7 @@ export function parseBBVAStatement(data: ArrayBuffer): BankTransaction[] {
       valueDate: valueDateCol >= 0 ? String(row[valueDateCol] ?? "").trim() : dateStr,
       description,
       amount,
-      balance: balanceCol >= 0 ? parseAmount(String(row[balanceCol] ?? "0")) : 0,
+      balance: balanceCol >= 0 ? parseAmount(row[balanceCol]) : 0,
       status,
       vendorName: extractVendorName(description),
     });
@@ -91,14 +91,33 @@ export function parseBBVAStatement(data: ArrayBuffer): BankTransaction[] {
 }
 
 /**
- * Parse a Spanish-format number: "1.234,56" → 1234.56
+ * Parse an amount value from an Excel cell.
+ * With raw: true, XLSX returns native JS numbers for numeric cells.
+ * Falls back to Spanish-format text parsing: "1.234,56" → 1234.56
  */
-function parseAmount(raw: string): number {
-  const cleaned = raw
-    .replace(/[€\s]/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-  return parseFloat(cleaned) || 0;
+function parseAmount(raw: unknown): number {
+  if (typeof raw === "number") return raw;
+
+  const str = String(raw ?? "0").trim();
+  if (str === "") return 0;
+
+  // Remove currency symbols and whitespace
+  const stripped = str.replace(/[€\s]/g, "");
+
+  // Detect format: if both dot and comma exist, the last one is the decimal separator
+  const lastDot = stripped.lastIndexOf(".");
+  const lastComma = stripped.lastIndexOf(",");
+
+  if (lastComma > lastDot) {
+    // Spanish format: 1.234,56 → remove dots (thousands), replace comma with dot (decimal)
+    return parseFloat(stripped.replace(/\./g, "").replace(",", ".")) || 0;
+  } else if (lastDot > lastComma) {
+    // English format: 1,234.56 → remove commas (thousands)
+    return parseFloat(stripped.replace(/,/g, "")) || 0;
+  } else {
+    // Only one or neither — try as-is
+    return parseFloat(stripped.replace(",", ".")) || 0;
+  }
 }
 
 /**
