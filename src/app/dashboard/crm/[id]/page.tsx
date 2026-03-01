@@ -15,6 +15,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
+import { getBasePrices } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 
 export default async function LeadDetailPage({
@@ -112,6 +113,8 @@ export default async function LeadDetailPage({
     .order("name");
 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
+
+  const basePrices = await getBasePrices();
 
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
@@ -289,6 +292,7 @@ export default async function LeadDetailPage({
             estimatedComplexity={lead.estimated_complexity}
             estimatedUrgency={lead.estimated_urgency}
             estimatedExactQuantity={lead.estimated_exact_quantity}
+            basePrices={basePrices}
           />
 
           {/* Email panel (threads + compose + inline snippets) */}

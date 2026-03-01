@@ -7,8 +7,6 @@ import {
   type ProformaLineItem,
 } from "../actions";
 import {
-  BASE_PRICES,
-  DEFAULT_BASE_PRICE,
   QUANTITY_RANGES,
   COMPLEXITY_OPTIONS,
   URGENCY_OPTIONS,
@@ -28,14 +26,17 @@ function emptyLine(): ProformaLineItem {
   return { concept: "", price: 0, units: 1, tax: 21 };
 }
 
+const DEFAULT_BASE_PRICE = 40;
+
 function estimatedLine(
   projectTypeTag: string | null,
   quantity: EstimatedQuantity,
   complexity: EstimatedComplexity,
   urgency: EstimatedUrgency,
   exactQuantity: number | null,
+  basePrices: Record<string, number>,
 ): ProformaLineItem {
-  const basePrice = BASE_PRICES[projectTypeTag || ""] ?? DEFAULT_BASE_PRICE;
+  const basePrice = basePrices[projectTypeTag || ""] ?? DEFAULT_BASE_PRICE;
   const complexityFactor = COMPLEXITY_OPTIONS.find((o) => o.value === complexity)?.factor ?? 1;
   const urgencyFactor = URGENCY_OPTIONS.find((o) => o.value === urgency)?.factor ?? 1;
   const midpoint = QUANTITY_RANGES.find((r) => r.value === quantity)?.midpoint ?? 1;
@@ -58,6 +59,7 @@ interface ProformaEditorProps {
   estimatedComplexity?: string | null;
   estimatedUrgency?: string | null;
   estimatedExactQuantity?: number | null;
+  basePrices: Record<string, number>;
 }
 
 export default function ProformaEditor({
@@ -70,6 +72,7 @@ export default function ProformaEditor({
   estimatedComplexity,
   estimatedUrgency,
   estimatedExactQuantity,
+  basePrices,
 }: ProformaEditorProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -82,6 +85,7 @@ export default function ProformaEditor({
         estimatedComplexity as EstimatedComplexity,
         estimatedUrgency as EstimatedUrgency,
         estimatedExactQuantity ?? null,
+        basePrices,
       )];
     }
     return [emptyLine()];

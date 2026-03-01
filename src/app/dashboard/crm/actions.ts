@@ -13,6 +13,39 @@ import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 // AI estimation is now handled by Postgres trigger auto_estimate_lead
 
+// ── Base Prices ──────────────────────────────────────────
+
+export async function getBasePrices(): Promise<Record<string, number>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("base_prices")
+    .select("category, price_per_unit")
+    .order("category");
+
+  const map: Record<string, number> = {};
+  for (const row of data || []) {
+    map[row.category] = Number(row.price_per_unit);
+  }
+  return map;
+}
+
+export async function updateBasePrice(
+  category: string,
+  price: number
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("base_prices")
+    .upsert({ category, price_per_unit: price }, { onConflict: "category" });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
 /** Fetch per-user SMTP config or return undefined for global fallback */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
   const supabase = await createClient();

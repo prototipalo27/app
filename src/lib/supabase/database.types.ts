@@ -71,6 +71,24 @@ export type Database = {
         }
         Relationships: []
       }
+      base_prices: {
+        Row: {
+          category: string
+          price_per_unit: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          price_per_unit?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          price_per_unit?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       blocked_emails: {
         Row: {
           created_at: string
@@ -2431,6 +2449,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_base_price: { Args: { tag: string }; Returns: number }
+      get_quantity_midpoint: { Args: { q: string }; Returns: number }
       get_user_role: { Args: never; Returns: string }
       increment_printing_seconds: {
         Args: { p_date: string; p_printer_id: string; p_seconds: number }
@@ -2438,6 +2458,7 @@ export type Database = {
       }
       increment_unread: { Args: { conv_id: string }; Returns: undefined }
       is_user_active: { Args: never; Returns: boolean }
+      parse_quantity_range: { Args: { msg: string }; Returns: string }
       upsert_lead_by_email: {
         Args: {
           p_email: string
@@ -2579,3 +2600,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

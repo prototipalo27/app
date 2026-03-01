@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { CrmKanban } from "./crm-kanban";
 import type { LeadWithAssignee } from "./crm-card";
+import PricingConfig from "./pricing-config";
+import { getBasePrices } from "./actions";
 
 export default async function CrmPage() {
   const profile = await getUserProfile();
@@ -23,6 +25,8 @@ export default async function CrmPage() {
     .select("id, email")
     .in("role", ["manager", "super_admin"])
     .eq("is_active", true);
+
+  const basePrices = await getBasePrices();
 
   const managers = (allManagers || []).map((m) => ({
     id: m.id,
@@ -74,6 +78,8 @@ export default async function CrmPage() {
       </div>
 
       <CrmKanban initialLeads={leadsWithAssignee} managers={managers} />
+
+      <PricingConfig basePrices={basePrices} />
     </div>
   );
 }

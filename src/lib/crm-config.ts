@@ -94,17 +94,3 @@ export const URGENCY_OPTIONS: { value: EstimatedUrgency; label: string; factor: 
   { value: "urgent", label: "Urgente", factor: 1.25 },
 ];
 
-/** Fixed base prices per unit by project type (fallback when no historical data) */
-export const BASE_PRICES: Record<string, number> = {
-  "Trofeos": 25,
-  "Maquetas": 150,
-  "Prototipos": 80,
-  "Figuras": 35,
-  "Piezas industriales": 60,
-  "Merchandising": 15,
-  "Arquitectura": 200,
-  "Educacion": 20,
-  "Otro": 40,
-};
-
-export const DEFAULT_BASE_PRICE = 40;
