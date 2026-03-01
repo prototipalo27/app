@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import {
   parseBBVAStatement,
   groupByVendor,
@@ -418,6 +418,100 @@ export default function StatementProcessor({
     return { entries, uncategorized, totalExpenses };
   }, [vendorGroups, categoryMappings]);
 
+  // Drive file upload (drag & drop)
+  type DriveUpload = { name: string; status: "uploading" | "done" | "error"; error?: string };
+  const [isDragging, setIsDragging] = useState(false);
+  const [driveUploads, setDriveUploads] = useState<DriveUpload[]>([]);
+  const dragCounter = useRef(0);
+  const driveFileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFilesToDrive = useCallback(
+    async (files: File[]) => {
+      if (!activeMonth || files.length === 0) return;
+
+      // Get or create Drive folder
+      const folderResult = await getOrCreateMonthFolder(activeMonth, selectedYear);
+      if (!folderResult.success) {
+        setError(folderResult.error);
+        return;
+      }
+      const folderId = folderResult.folderId;
+
+      // Update local cache
+      setStatements((prev) =>
+        prev.map((s) =>
+          s.month === activeMonth && s.year === selectedYear
+            ? { ...s, drive_folder_id: folderId }
+            : s
+        )
+      );
+
+      const newUploads: DriveUpload[] = files.map((f) => ({ name: f.name, status: "uploading" as const }));
+      setDriveUploads(newUploads);
+
+      const results = await Promise.allSettled(
+        files.map(async (file, i) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("folderId", folderId);
+
+          const res = await fetch("/api/drive/upload", { method: "POST", body: formData });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error ?? "Error al subir");
+          }
+          setDriveUploads((prev) =>
+            prev.map((u, idx) => (idx === i ? { ...u, status: "done" } : u))
+          );
+        })
+      );
+
+      setDriveUploads((prev) =>
+        prev.map((u, i) => {
+          if (results[i].status === "rejected") {
+            const reason = results[i] as PromiseRejectedResult;
+            return { ...u, status: "error", error: reason.reason?.message ?? "Error" };
+          }
+          return u;
+        })
+      );
+
+      // Clear successful uploads after 3s
+      setTimeout(() => {
+        setDriveUploads((prev) => prev.filter((u) => u.status === "error"));
+      }, 3000);
+    },
+    [activeMonth, selectedYear]
+  );
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      dragCounter.current = 0;
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      if (droppedFiles.length > 0) uploadFilesToDrive(droppedFiles);
+    },
+    [uploadFilesToDrive]
+  );
+
   const handleSaveMappings = useCallback(async () => {
     setLoading(true);
     try {
@@ -660,7 +754,57 @@ export default function StatementProcessor({
 
       {/* === REVIEW VIEW === */}
       {view === "review" && (
-        <>
+        <div
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className="relative space-y-6"
+        >
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-xl border-2 border-dashed border-blue-400 bg-blue-50/80 dark:border-blue-500 dark:bg-blue-900/30">
+              <div className="text-center">
+                <svg className="mx-auto h-12 w-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400">Soltar para subir a Drive</p>
+              </div>
+            </div>
+          )}
+
+          {/* Upload status */}
+          {driveUploads.length > 0 && (
+            <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="space-y-1.5">
+                {driveUploads.map((u, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    {u.status === "uploading" && (
+                      <svg className="h-3.5 w-3.5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    )}
+                    {u.status === "done" && (
+                      <svg className="h-3.5 w-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {u.status === "error" && (
+                      <svg className="h-3.5 w-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                    <span className={`truncate ${u.status === "error" ? "text-red-500" : "text-zinc-700 dark:text-zinc-300"}`}>
+                      {u.name}
+                    </span>
+                    {u.error && <span className="text-red-400">— {u.error}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Header with back button */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -811,7 +955,27 @@ export default function StatementProcessor({
           </div>
 
           {/* Save & continue */}
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-between">
+            <button
+              onClick={() => driveFileInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Subir facturas a Drive
+              <input
+                ref={driveFileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length > 0) uploadFilesToDrive(files);
+                  e.target.value = "";
+                }}
+              />
+            </button>
             <button
               onClick={handleSaveMappings}
               disabled={loading}
@@ -820,7 +984,7 @@ export default function StatementProcessor({
               {loading ? "Guardando..." : "Guardar mapeos y continuar"}
             </button>
           </div>
-        </>
+        </div>
       )}
 
       {/* === CLAIMS VIEW === */}
