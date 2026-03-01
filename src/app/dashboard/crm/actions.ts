@@ -8,17 +8,10 @@ import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
-import type { LeadStatus, EstimatedQuantity, EstimatedComplexity, EstimatedUrgency } from "@/lib/crm-config";
-import {
-  QUANTITY_RANGES,
-  COMPLEXITY_OPTIONS,
-  URGENCY_OPTIONS,
-  BASE_PRICES,
-  DEFAULT_BASE_PRICE,
-} from "@/lib/crm-config";
+import type { LeadStatus } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
-import { estimateFromMessage } from "@/lib/ai-estimate";
+// AI estimation is now handled by Postgres trigger auto_estimate_lead
 
 /** Fetch per-user SMTP config or return undefined for global fallback */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
@@ -52,21 +45,15 @@ export async function createLead(formData: FormData) {
 
   const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
 
-  let estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
-  let estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
-  let estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
-
-  // Auto-detect project type tag from message
+  const estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
+  const estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;
+  const estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
   const message = (formData.get("message") as string)?.trim() || null;
 
-  // AI auto-fill estimation if no manual values provided and there's a message
-  if (!estimatedQuantity && message) {
-    const aiEstimate = await estimateFromMessage(message);
-    estimatedQuantity = aiEstimate.quantity;
-    estimatedComplexity = estimatedComplexity || aiEstimate.complexity;
-    estimatedUrgency = estimatedUrgency || aiEstimate.urgency;
-  }
-
+  // DB trigger auto_estimate_lead handles:
+  // - auto-fill quantity from message if not provided
+  // - default complexity/urgency
+  // - estimated_value calculation
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -88,14 +75,11 @@ export async function createLead(formData: FormData) {
     throw new Error(error.message);
   }
 
+  // Auto-detect project type tag from message
   const tag = await detectProjectTypeTag(message);
   if (tag) {
+    // This UPDATE also fires the trigger, recalculating estimated_value with the new tag
     await supabase.from("leads").update({ project_type_tag: tag }).eq("id", data.id);
-  }
-
-  // Recalculate estimated value if quantity was determined
-  if (estimatedQuantity) {
-    await recalculateEstimatedValue(data.id);
   }
 
   revalidatePath("/dashboard/crm");
@@ -104,59 +88,22 @@ export async function createLead(formData: FormData) {
 
 // ── Estimation helpers ───────────────────────────────────
 
+/** Trigger a recalculation of estimated_value via the DB trigger.
+ *  The Postgres trigger `auto_estimate_lead` handles the formula. We just
+ *  need to touch one of the watched columns to fire it. */
 async function recalculateEstimatedValue(id: string) {
   const supabase = await createClient();
-
   const { data: lead } = await supabase
     .from("leads")
-    .select("estimated_quantity, estimated_complexity, estimated_urgency, project_type_tag")
+    .select("estimated_quantity")
     .eq("id", id)
     .single();
-
   if (!lead) return;
-
-  const { estimated_quantity, estimated_complexity, estimated_urgency, project_type_tag } = lead;
-
-  // Need at least quantity to calculate
-  if (!estimated_quantity) {
-    await supabase.from("leads").update({ estimated_value: null }).eq("id", id);
-    return;
-  }
-
-  // Determine base price: historical average from won leads (>=3) or fixed
-  let basePrice = DEFAULT_BASE_PRICE;
-  if (project_type_tag) {
-    const { data: wonLeads } = await supabase
-      .from("leads")
-      .select("estimated_value")
-      .eq("project_type_tag", project_type_tag)
-      .eq("status", "won")
-      .not("estimated_value", "is", null);
-
-    const wonValues = (wonLeads || [])
-      .map((l) => l.estimated_value)
-      .filter((v): v is number => v !== null);
-
-    if (wonValues.length >= 3) {
-      // Use average estimated_value per unit equivalent as base
-      // Actually, use average of the won estimated_values as-is for reference,
-      // but the plan says "media de proformas ganadas" as base price per unit
-      // So we keep it simple: use fixed price or historical
-      basePrice = BASE_PRICES[project_type_tag] ?? DEFAULT_BASE_PRICE;
-    } else {
-      basePrice = BASE_PRICES[project_type_tag] ?? DEFAULT_BASE_PRICE;
-    }
-  }
-
-  const qRange = QUANTITY_RANGES.find((r) => r.value === estimated_quantity);
-  const midpoint = qRange?.midpoint ?? 5;
-
-  const complexityFactor = COMPLEXITY_OPTIONS.find((c) => c.value === (estimated_complexity || "medium"))?.factor ?? 1.0;
-  const urgencyFactor = URGENCY_OPTIONS.find((u) => u.value === (estimated_urgency || "normal"))?.factor ?? 1.0;
-
-  const value = Math.round(basePrice * midpoint * complexityFactor * urgencyFactor);
-
-  await supabase.from("leads").update({ estimated_value: value }).eq("id", id);
+  // Re-set the same quantity to trigger the BEFORE UPDATE
+  await supabase
+    .from("leads")
+    .update({ estimated_quantity: lead.estimated_quantity })
+    .eq("id", id);
 }
 
 export async function updateEstimationField(
