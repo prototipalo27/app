@@ -170,7 +170,7 @@ export default async function FinanzasPage() {
     payroll: "Nominas", rent: "Alquiler", utilities: "Suministros",
     insurance: "Seguros", software: "Software/SaaS", telecom: "Telecomunicaciones",
     taxes: "Impuestos", materials: "Material", travel: "Viajes", meals: "Comidas", fuel: "Gasolinas", shipping: "Envios",
-    financing: "Financiaciones", marketing: "Marketing",
+    banking: "Bancos", financing: "Financiaciones", marketing: "Marketing",
     professional: "Serv. profesionales", income: "Ingresos", other: "Otros",
   };
 
