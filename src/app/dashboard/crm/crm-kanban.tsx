@@ -361,9 +361,9 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 )}
 
                 {/* Aging badge */}
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.created_at)}`}>
                   {(() => {
-                    const diff = Date.now() - new Date(lead.updated_at).getTime();
+                    const diff = Date.now() - new Date(lead.created_at).getTime();
                     const mins = Math.floor(diff / 60000);
                     if (mins < 60) return `${mins}m`;
                     const hours = Math.floor(mins / 60);

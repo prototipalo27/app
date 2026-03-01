@@ -53,7 +53,7 @@ export function CrmCard({ lead }: CrmCardProps) {
     day: "numeric",
     month: "short",
   });
-  const age = timeAgo(lead.updated_at);
+  const age = timeAgo(lead.created_at);
 
   return (
     <div
@@ -76,7 +76,7 @@ export function CrmCard({ lead }: CrmCardProps) {
             </span>
           )}
         </div>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.updated_at)}`}>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.created_at)}`}>
           {age}
         </span>
       </div>
