@@ -31,20 +31,20 @@ interface VendorMapping {
 }
 
 const CATEGORIES: { value: string; label: string }[] = [
+  { value: "materials", label: "Material" },
+  { value: "shipping", label: "Envios" },
+  { value: "software", label: "Software/SaaS" },
   { value: "payroll", label: "Nominas" },
+  { value: "financing", label: "Financiaciones" },
+  { value: "banking", label: "Bancos" },
+  { value: "taxes", label: "Impuestos" },
   { value: "rent", label: "Alquiler" },
   { value: "utilities", label: "Suministros" },
-  { value: "insurance", label: "Seguros" },
-  { value: "software", label: "Software/SaaS" },
   { value: "telecom", label: "Telecomunicaciones" },
-  { value: "taxes", label: "Impuestos" },
-  { value: "materials", label: "Material" },
-  { value: "travel", label: "Viajes" },
-  { value: "meals", label: "Comidas" },
+  { value: "insurance", label: "Seguros" },
   { value: "fuel", label: "Gasolinas" },
-  { value: "shipping", label: "Envios" },
-  { value: "banking", label: "Bancos" },
-  { value: "financing", label: "Financiaciones" },
+  { value: "meals", label: "Comidas" },
+  { value: "travel", label: "Viajes" },
   { value: "marketing", label: "Marketing" },
   { value: "professional", label: "Serv. profesionales" },
   { value: "income", label: "Ingresos" },
@@ -326,20 +326,20 @@ export default function StatementProcessor({
   const handleOpenDriveFolder = useCallback(
     async (month: number) => {
       setError(null);
-      try {
-        const folderId = await getOrCreateMonthFolder(month, selectedYear);
-        // Update local cache
-        setStatements((prev) =>
-          prev.map((s) =>
-            s.month === month && s.year === selectedYear
-              ? { ...s, drive_folder_id: folderId }
-              : s
-          )
-        );
-        window.open(`https://drive.google.com/drive/folders/${folderId}`, "_blank");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al abrir carpeta Drive");
+      const result = await getOrCreateMonthFolder(month, selectedYear);
+      if (!result.success) {
+        setError(result.error);
+        return;
       }
+      // Update local cache
+      setStatements((prev) =>
+        prev.map((s) =>
+          s.month === month && s.year === selectedYear
+            ? { ...s, drive_folder_id: result.folderId }
+            : s
+        )
+      );
+      window.open(`https://drive.google.com/drive/folders/${result.folderId}`, "_blank");
     },
     [selectedYear]
   );

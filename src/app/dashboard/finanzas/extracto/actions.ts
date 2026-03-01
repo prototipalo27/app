@@ -228,35 +228,39 @@ const MONTH_NAMES_ES = [
   "09 - Septiembre", "10 - Octubre", "11 - Noviembre", "12 - Diciembre",
 ];
 
-export async function getOrCreateMonthFolder(month: number, year: number) {
-  await requireRole("manager");
-  const supabase = await createClient();
+export async function getOrCreateMonthFolder(month: number, year: number): Promise<{ success: true; folderId: string } | { success: false; error: string }> {
+  try {
+    await requireRole("manager");
+    const supabase = await createClient();
 
-  // Check if we already have it cached
-  const { data: existing } = await supabase
-    .from("bank_statements")
-    .select("drive_folder_id")
-    .eq("month", month)
-    .eq("year", year)
-    .single();
+    // Check if we already have it cached
+    const { data: existing } = await supabase
+      .from("bank_statements")
+      .select("drive_folder_id")
+      .eq("month", month)
+      .eq("year", year)
+      .single();
 
-  if (existing?.drive_folder_id) {
-    return existing.drive_folder_id;
+    if (existing?.drive_folder_id) {
+      return { success: true, folderId: existing.drive_folder_id };
+    }
+
+    // Create year folder, then month subfolder
+    const yearFolderId = await getOrCreateSubfolder(INVOICES_DRIVE_PARENT, String(year));
+    const monthFolderName = MONTH_NAMES_ES[month - 1];
+    const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
+
+    // Cache the folder ID
+    await supabase
+      .from("bank_statements")
+      .update({ drive_folder_id: monthFolderId })
+      .eq("month", month)
+      .eq("year", year);
+
+    return { success: true, folderId: monthFolderId };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Error al acceder a Drive" };
   }
-
-  // Create year folder, then month subfolder
-  const yearFolderId = await getOrCreateSubfolder(INVOICES_DRIVE_PARENT, String(year));
-  const monthFolderName = MONTH_NAMES_ES[month - 1];
-  const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
-
-  // Cache the folder ID
-  await supabase
-    .from("bank_statements")
-    .update({ drive_folder_id: monthFolderId })
-    .eq("month", month)
-    .eq("year", year);
-
-  return monthFolderId;
 }
 
 export async function getClaimHistory() {
