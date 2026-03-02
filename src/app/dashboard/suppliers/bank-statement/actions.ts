@@ -105,6 +105,10 @@ export async function sendClaimEmail(
     "Por favor, enviadnos las facturas correspondientes a la mayor brevedad."
   );
   lines.push("");
+  lines.push("Nuestros datos de facturación:");
+  lines.push("Prototipalo SL — CIF: B72410665");
+  lines.push("Calle Viriato 27 — 28010 — Madrid");
+  lines.push("");
   lines.push("Gracias,");
   lines.push("Prototipalo");
 
