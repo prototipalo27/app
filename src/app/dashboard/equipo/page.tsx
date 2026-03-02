@@ -6,6 +6,7 @@ import SkillEditor from "./skill-editor";
 import LinkStop from "./link-stop";
 import WorkCalendar from "./work-calendar";
 import ZoneEditor from "./zone-editor";
+import OvertimeSection from "./overtime-section";
 import { getZoneColor, getZoneLabel } from "@/lib/zones";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -146,6 +147,17 @@ export default async function EquipoPage() {
         isManager={isManager}
         currentUserId={profile.id}
         year={currentYear}
+      />
+
+      <OvertimeSection
+        isManager={isManager}
+        currentUserId={profile.id}
+        users={allUsers.map((u) => ({
+          id: u.id,
+          full_name: u.full_name,
+          nickname: u.nickname,
+          email: u.email,
+        }))}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -34,7 +34,7 @@ export type Database = {
       }
       bank_statements: {
         Row: {
-          checked_vendors: Json
+          checked_vendors: Json | null
           created_at: string | null
           drive_folder_id: string | null
           file_name: string | null
@@ -47,7 +47,7 @@ export type Database = {
           year: number
         }
         Insert: {
-          checked_vendors?: Json
+          checked_vendors?: Json | null
           created_at?: string | null
           drive_folder_id?: string | null
           file_name?: string | null
@@ -60,7 +60,7 @@ export type Database = {
           year: number
         }
         Update: {
-          checked_vendors?: Json
+          checked_vendors?: Json | null
           created_at?: string | null
           drive_folder_id?: string | null
           file_name?: string | null
@@ -839,6 +839,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      overtime_entries: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          minutes: number
+          reason: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          minutes: number
+          reason: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          minutes?: number
+          reason?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       print_jobs: {
         Row: {
