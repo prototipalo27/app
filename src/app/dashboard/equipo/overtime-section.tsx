@@ -42,10 +42,12 @@ function canDelete(createdAt: string | null): boolean {
 
 export default function OvertimeSection({
   isManager,
+  isImpersonating,
   currentUserId,
   users,
 }: {
   isManager: boolean;
+  isImpersonating: boolean;
   currentUserId: string;
   users: User[];
 }) {
@@ -61,6 +63,7 @@ export default function OvertimeSection({
   const [formType, setFormType] = useState<"earned" | "used">("earned");
 
   const isViewingOther = isManager && selectedUserId !== null && selectedUserId !== currentUserId;
+  const canEdit = !isImpersonating && !isViewingOther;
   const targetUserId = isManager && selectedUserId ? selectedUserId : undefined;
 
   const loadData = useCallback(async () => {
@@ -174,7 +177,7 @@ export default function OvertimeSection({
       )}
 
       {/* Form — only for own entries */}
-      {!isViewingOther && (
+      {canEdit && (
         <div className="mb-4 space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <div className="flex flex-wrap gap-2">
             <div className="flex-1 min-w-[120px]">

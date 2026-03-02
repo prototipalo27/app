@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUserProfile, hasRole } from "@/lib/rbac";
+import { getUserProfile, getRealProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import SkillEditor from "./skill-editor";
@@ -75,6 +75,8 @@ export default async function EquipoPage() {
   const profile = await getUserProfile();
   if (!profile || !profile.is_active) redirect("/login");
 
+  const realProfile = await getRealProfile();
+  const isImpersonating = realProfile != null && realProfile.id !== profile.id;
   const isManager = hasRole(profile.role, "manager");
   const supabase = await createClient();
 
@@ -151,6 +153,7 @@ export default async function EquipoPage() {
 
       <OvertimeSection
         isManager={isManager}
+        isImpersonating={isImpersonating}
         currentUserId={profile.id}
         users={allUsers.map((u) => ({
           id: u.id,
