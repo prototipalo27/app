@@ -89,6 +89,7 @@ export default async function EquipoPage() {
     { data: zoneAssignments },
     { data: holidays },
     { data: timeOffRequests },
+    { data: overtimeEntries },
   ] = await Promise.all([
     supabase
       .from("user_profiles")
@@ -105,7 +106,22 @@ export default async function EquipoPage() {
       .gte("start_date", `${currentYear}-01-01`)
       .lte("end_date", `${currentYear}-12-31`)
       .order("start_date"),
+    isManager
+      ? supabase.from("overtime_entries").select("user_id, minutes, type")
+      : Promise.resolve({ data: null }),
   ]);
+
+  // Build overtime balance map (manager only)
+  const overtimeBalances = new Map<string, number>();
+  if (isManager && overtimeEntries) {
+    for (const entry of overtimeEntries) {
+      const current = overtimeBalances.get(entry.user_id) ?? 0;
+      overtimeBalances.set(
+        entry.user_id,
+        current + (entry.type === "earned" ? entry.minutes : -entry.minutes)
+      );
+    }
+  }
 
   // Enrich time off requests with user info
   const allUsers = users ?? [];
@@ -168,6 +184,7 @@ export default async function EquipoPage() {
           const displayName = user.nickname || user.full_name || user.email.split("@")[0];
           const skillIds = userSkillMap.get(user.id) ?? [];
           const zoneIds = userZoneMap.get(user.id) ?? [];
+          const overtimeMinutes = overtimeBalances.get(user.id) ?? 0;
           const birthdaySoon = isBirthdaySoon(user.birthday);
           const birthdayStr = formatBirthday(user.birthday);
 
@@ -221,6 +238,17 @@ export default async function EquipoPage() {
                       {getZoneLabel(zone)}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {isManager && overtimeMinutes !== 0 && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <svg className="h-3 w-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className={`text-xs font-medium ${overtimeMinutes > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                    {overtimeMinutes > 0 ? "+" : ""}{Math.floor(Math.abs(overtimeMinutes) / 60) > 0 ? `${Math.floor(Math.abs(overtimeMinutes) / 60)}h` : ""}{Math.abs(overtimeMinutes) % 60 > 0 ? ` ${Math.abs(overtimeMinutes) % 60}min` : ""}
+                  </span>
                 </div>
               )}
 
