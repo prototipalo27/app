@@ -170,6 +170,7 @@ export default function StatementProcessor({
   // Sort state for vendor groups
   const [sortBy, setSortBy] = useState<"amount" | "name" | "category">("amount");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [hideChecked, setHideChecked] = useState(false);
 
   // Checked vendors (invoice filed in Drive)
   const [checkedVendors, setCheckedVendors] = useState<Set<string>>(new Set());
@@ -994,7 +995,8 @@ export default function StatementProcessor({
             </div>
           )}
 
-          {/* Sort controls */}
+          {/* Sort controls & hide toggle */}
+          <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-zinc-400 dark:text-zinc-500">Ordenar:</span>
             {([
@@ -1027,10 +1029,30 @@ export default function StatementProcessor({
               </button>
             ))}
           </div>
+          {checkedVendors.size > 0 && (
+            <button
+              onClick={() => setHideChecked((h) => !h)}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                hideChecked
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+              }`}
+            >
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                {hideChecked ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878l4.242 4.242M21 21l-4.878-4.878" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                )}
+              </svg>
+              {hideChecked ? `Ocultas (${checkedVendors.size})` : `Ocultar archivadas (${checkedVendors.size})`}
+            </button>
+          )}
+          </div>
 
           {/* Vendor groups */}
           <div className="space-y-4">
-            {vendorGroups.map((group) => (
+            {vendorGroups.filter((g) => !hideChecked || !checkedVendors.has(g.vendorName)).map((group) => (
               <VendorGroupCard
                 key={group.vendorName}
                 group={group}
