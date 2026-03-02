@@ -882,8 +882,8 @@ export default function StatementProcessor({
             />
           </div>
 
-          {/* Filter & sort controls */}
-          <div className="flex items-center justify-between">
+          {/* Filter toggle */}
+          <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
@@ -893,38 +893,6 @@ export default function StatementProcessor({
               />
               Solo movimientos pendientes
             </label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">Ordenar:</span>
-              {([
-                { key: "amount" as const, label: "Importe" },
-                { key: "name" as const, label: "Nombre" },
-                { key: "category" as const, label: "Categoria" },
-              ]).map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => {
-                    if (sortBy === opt.key) {
-                      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-                    } else {
-                      setSortBy(opt.key);
-                      setSortDir("asc");
-                    }
-                  }}
-                  className={`flex items-center gap-0.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                    sortBy === opt.key
-                      ? "bg-brand text-white"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  {opt.label}
-                  {sortBy === opt.key && (
-                    <svg className={`h-3 w-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Category summary */}
@@ -987,6 +955,40 @@ export default function StatementProcessor({
               </div>
             </div>
           )}
+
+          {/* Sort controls */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">Ordenar:</span>
+            {([
+              { key: "amount" as const, label: "Importe" },
+              { key: "name" as const, label: "Nombre" },
+              { key: "category" as const, label: "Categoria" },
+            ]).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => {
+                  if (sortBy === opt.key) {
+                    setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                  } else {
+                    setSortBy(opt.key);
+                    setSortDir("asc");
+                  }
+                }}
+                className={`flex items-center gap-0.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  sortBy === opt.key
+                    ? "bg-brand text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {opt.label}
+                {sortBy === opt.key && (
+                  <svg className={`h-3 w-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
 
           {/* Vendor groups */}
           <div className="space-y-4">
