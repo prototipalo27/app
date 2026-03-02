@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getUserProfile, hasRole } from "@/lib/rbac";
+import { getUserProfile, getRealProfile, hasRole } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 
 export async function getOvertimeBalance(userId?: string) {
@@ -46,7 +46,8 @@ export async function addOvertimeEntry(data: {
   reason: string;
   type: "earned" | "used";
 }) {
-  const profile = await getUserProfile();
+  // Use real profile (not impersonated) so auth.uid() matches user_id for RLS
+  const profile = await getRealProfile();
   if (!profile) return { success: false, error: "No autenticado" };
 
   if (!data.reason.trim()) {
@@ -79,7 +80,8 @@ export async function addOvertimeEntry(data: {
 }
 
 export async function deleteOvertimeEntry(id: string) {
-  const profile = await getUserProfile();
+  // Use real profile (not impersonated) so auth.uid() matches for RLS
+  const profile = await getRealProfile();
   if (!profile) return { success: false, error: "No autenticado" };
 
   const supabase = await createClient();

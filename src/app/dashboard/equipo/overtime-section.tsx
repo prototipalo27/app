@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getOvertimeBalance,
   getOvertimeEntries,
@@ -51,7 +51,7 @@ export default function OvertimeSection({
 }) {
   const [balance, setBalance] = useState(0);
   const [entries, setEntries] = useState<OvertimeEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -60,21 +60,26 @@ export default function OvertimeSection({
   const [formReason, setFormReason] = useState("");
   const [formType, setFormType] = useState<"earned" | "used">("earned");
 
-  const viewingUserId = isManager && selectedUserId ? selectedUserId : undefined;
-  const isViewingOther = isManager && selectedUserId && selectedUserId !== currentUserId;
+  const isViewingOther = isManager && selectedUserId !== null && selectedUserId !== currentUserId;
+  const targetUserId = isManager && selectedUserId ? selectedUserId : undefined;
 
-  async function loadData() {
-    const [b, e] = await Promise.all([
-      getOvertimeBalance(viewingUserId),
-      getOvertimeEntries(viewingUserId),
-    ]);
-    setBalance(b);
-    setEntries(e);
-  }
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [b, e] = await Promise.all([
+        getOvertimeBalance(targetUserId),
+        getOvertimeEntries(targetUserId),
+      ]);
+      setBalance(b);
+      setEntries(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [targetUserId]);
 
   useEffect(() => {
     loadData();
-  }, [selectedUserId]);
+  }, [loadData]);
 
   async function handleSubmit() {
     if (!formReason.trim()) {
@@ -136,11 +141,13 @@ export default function OvertimeSection({
             className="rounded-lg border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           >
             <option value="">Mis horas</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nickname || u.full_name || u.email.split("@")[0]}
-              </option>
-            ))}
+            {users
+              .filter((u) => u.id !== currentUserId)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nickname || u.full_name || u.email.split("@")[0]}
+                </option>
+              ))}
           </select>
         )}
       </div>
@@ -148,7 +155,7 @@ export default function OvertimeSection({
       {/* Balance */}
       <div className="mb-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
         <p className="text-xs text-zinc-500 dark:text-zinc-400">Saldo disponible</p>
-        <p className="mt-0.5 text-lg font-bold text-zinc-900 dark:text-white">
+        <p className={`mt-0.5 text-lg font-bold ${loading ? "animate-pulse text-zinc-400" : "text-zinc-900 dark:text-white"}`}>
           {formatMinutes(balance)}
         </p>
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -158,6 +165,13 @@ export default function OvertimeSection({
           />
         </div>
       </div>
+
+      {/* Error — visible from any action */}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20">
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Form — only for own entries */}
       {!isViewingOther && (
@@ -217,15 +231,14 @@ export default function OvertimeSection({
             <input
               type="text"
               value={formReason}
-              onChange={(e) => setFormReason(e.target.value)}
+              onChange={(e) => {
+                setFormReason(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="ej: llaveros interfarmacia"
               className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
             />
           </div>
-
-          {error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-          )}
 
           <button
             onClick={handleSubmit}
@@ -242,7 +255,7 @@ export default function OvertimeSection({
         <h3 className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
           Historial
         </h3>
-        {entries.length === 0 ? (
+        {!loading && entries.length === 0 ? (
           <p className="text-xs text-zinc-400">Sin registros</p>
         ) : (
           <div className="space-y-1.5">
@@ -254,7 +267,7 @@ export default function OvertimeSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-xs font-semibold ${
+                      className={`shrink-0 text-xs font-semibold ${
                         entry.type === "earned"
                           ? "text-green-600 dark:text-green-400"
                           : "text-amber-600 dark:text-amber-400"
@@ -281,7 +294,7 @@ export default function OvertimeSection({
                   <button
                     onClick={() => handleDelete(entry.id)}
                     disabled={loading}
-                    className="ml-2 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    className="ml-2 shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                     title="Borrar"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
