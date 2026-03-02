@@ -126,6 +126,7 @@ export default function StatementProcessor({
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [filterPending, setFilterPending] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [statements, setStatements] = useState<StatementSummary[]>(initialStatements);
@@ -208,6 +209,19 @@ export default function StatementProcessor({
     });
     return sorted;
   }, [displayedTransactions, sortBy, sortDir, categoryMappings]);
+
+  const filteredVendorGroups = useMemo(() => {
+    if (!searchQuery.trim()) return vendorGroups;
+    const q = searchQuery.toLowerCase();
+    return vendorGroups.filter((g) => {
+      if (g.vendorName.toLowerCase().includes(q)) return true;
+      const cat = categoryMappings[g.vendorName];
+      if (cat && (CATEGORY_LABELS[cat] || cat).toLowerCase().includes(q)) return true;
+      const supplier = suppliers.find((s) => s.id === mappings[g.vendorName]);
+      if (supplier?.name.toLowerCase().includes(q)) return true;
+      return g.transactions.some((t) => t.description.toLowerCase().includes(q));
+    });
+  }, [vendorGroups, searchQuery, categoryMappings, mappings, suppliers]);
 
   const totalTransactions = transactions.length;
   const pendingCount = transactions.filter(
@@ -921,8 +935,30 @@ export default function StatementProcessor({
             />
           </div>
 
-          {/* Filter toggle */}
+          {/* Search + filter */}
           <div className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar proveedor, categoria..."
+                className="w-full rounded-lg border border-zinc-300 py-1.5 pl-8 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
             <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
@@ -930,7 +966,7 @@ export default function StatementProcessor({
                 onChange={(e) => setFilterPending(e.target.checked)}
                 className="rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600"
               />
-              Solo movimientos pendientes
+              Solo pendientes
             </label>
           </div>
 
@@ -1052,7 +1088,12 @@ export default function StatementProcessor({
 
           {/* Vendor groups */}
           <div className="space-y-4">
-            {vendorGroups.filter((g) => !hideChecked || !checkedVendors.has(g.vendorName)).map((group) => (
+            {searchQuery && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {filteredVendorGroups.length} de {vendorGroups.length} proveedores
+              </p>
+            )}
+            {filteredVendorGroups.filter((g) => !hideChecked || !checkedVendors.has(g.vendorName)).map((group) => (
               <VendorGroupCard
                 key={group.vendorName}
                 group={group}

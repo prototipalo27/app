@@ -145,6 +145,16 @@ export function extractVendorName(description: string): string {
     return "Amazon Marketplace";
   }
 
+  // Group all Cabify variants (e.g., "Cabify ES 2606cXw4b1vE", "Cabify ES 2608f62h80lt")
+  if (/cabify/i.test(name)) {
+    return "Cabify";
+  }
+
+  // Group all Glovo variants (e.g., "Glovo 16FEB MQLX18YJ")
+  if (/glovo/i.test(name)) {
+    return "Glovo";
+  }
+
   // Remove trailing payment method phrases
   const suffixPatterns = [
     /\s+PAGO CON TARJETA.*$/i,
