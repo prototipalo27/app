@@ -28,6 +28,8 @@ interface VendorMapping {
   bank_vendor_name: string;
   supplier_id: string | null;
   category: string | null;
+  notes: string | null;
+  url: string | null;
 }
 
 const CATEGORIES: { value: string; label: string }[] = [
@@ -143,6 +145,24 @@ export default function StatementProcessor({
     const m: Record<string, string> = {};
     vendorMappings.forEach((vm) => {
       if (vm.category) m[vm.bank_vendor_name] = vm.category;
+    });
+    return m;
+  });
+
+  // Notes state
+  const [notesMappings, setNotesMappings] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    vendorMappings.forEach((vm) => {
+      if (vm.notes) m[vm.bank_vendor_name] = vm.notes;
+    });
+    return m;
+  });
+
+  // URL state
+  const [urlMappings, setUrlMappings] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    vendorMappings.forEach((vm) => {
+      if (vm.url) m[vm.bank_vendor_name] = vm.url;
     });
     return m;
   });
@@ -377,6 +397,20 @@ export default function StatementProcessor({
     []
   );
 
+  const handleNotesChange = useCallback(
+    (vendorName: string, notes: string) => {
+      setNotesMappings((prev) => ({ ...prev, [vendorName]: notes }));
+    },
+    []
+  );
+
+  const handleUrlChange = useCallback(
+    (vendorName: string, url: string) => {
+      setUrlMappings((prev) => ({ ...prev, [vendorName]: url }));
+    },
+    []
+  );
+
   const handleToggleChecked = useCallback(
     async (vendorName: string) => {
       if (!activeMonth) return;
@@ -538,13 +572,17 @@ export default function StatementProcessor({
       const allVendors = new Set([
         ...Object.keys(mappings),
         ...Object.keys(categoryMappings),
+        ...Object.keys(notesMappings),
+        ...Object.keys(urlMappings),
       ]);
       const batch = Array.from(allVendors)
-        .filter((v) => mappings[v] || categoryMappings[v])
+        .filter((v) => mappings[v] || categoryMappings[v] || notesMappings[v] || urlMappings[v])
         .map((bankVendorName) => ({
           bankVendorName,
           supplierId: mappings[bankVendorName] || null,
           category: categoryMappings[bankVendorName] || null,
+          notes: notesMappings[bankVendorName] || null,
+          url: urlMappings[bankVendorName] || null,
         }));
       if (batch.length > 0) await saveVendorMappingsBatch(batch);
       setStep("claims");
@@ -553,7 +591,7 @@ export default function StatementProcessor({
     } finally {
       setLoading(false);
     }
-  }, [mappings, categoryMappings]);
+  }, [mappings, categoryMappings, notesMappings, urlMappings]);
 
   const setStep = useCallback((s: View) => {
     setView(s);
@@ -999,9 +1037,13 @@ export default function StatementProcessor({
                 suppliers={suppliers}
                 currentMapping={mappings[group.vendorName] || ""}
                 currentCategory={categoryMappings[group.vendorName] || ""}
+                currentNotes={notesMappings[group.vendorName] || ""}
+                currentUrl={urlMappings[group.vendorName] || ""}
                 isChecked={checkedVendors.has(group.vendorName)}
                 onMappingChange={(sid) => handleMappingChange(group.vendorName, sid)}
                 onCategoryChange={(cat) => handleCategoryChange(group.vendorName, cat)}
+                onNotesChange={(notes) => handleNotesChange(group.vendorName, notes)}
+                onUrlChange={(url) => handleUrlChange(group.vendorName, url)}
                 onToggleChecked={() => handleToggleChecked(group.vendorName)}
               />
             ))}
@@ -1251,18 +1293,26 @@ function VendorGroupCard({
   suppliers,
   currentMapping,
   currentCategory,
+  currentNotes,
+  currentUrl,
   isChecked,
   onMappingChange,
   onCategoryChange,
+  onNotesChange,
+  onUrlChange,
   onToggleChecked,
 }: {
   group: VendorGroup;
   suppliers: { id: string; name: string; email: string | null }[];
   currentMapping: string;
   currentCategory: string;
+  currentNotes: string;
+  currentUrl: string;
   isChecked: boolean;
   onMappingChange: (supplierId: string) => void;
   onCategoryChange: (category: string) => void;
+  onNotesChange: (notes: string) => void;
+  onUrlChange: (url: string) => void;
   onToggleChecked: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -1298,10 +1348,31 @@ function VendorGroupCard({
             </svg>
           </button>
           <div>
-            <p className={`font-medium ${isChecked ? "text-green-700 dark:text-green-400" : "text-zinc-900 dark:text-white"}`}>{group.vendorName}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {group.transactions.length} movimiento(s)
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className={`font-medium ${isChecked ? "text-green-700 dark:text-green-400" : "text-zinc-900 dark:text-white"}`}>{group.vendorName}</p>
+              {currentUrl && (
+                <a
+                  href={currentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Abrir portal de facturas"
+                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </a>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {group.transactions.length} movimiento(s)
+              </p>
+              {currentNotes && !expanded && (
+                <span className="truncate max-w-48 text-xs text-amber-600 dark:text-amber-400">— {currentNotes}</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1360,6 +1431,27 @@ function VendorGroupCard({
               ))}
             </tbody>
           </table>
+          <div className="border-t border-zinc-100 px-4 py-2 dark:border-zinc-800 space-y-1">
+            <input
+              type="text"
+              value={currentNotes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              placeholder="Notas (ej: reclamada, pendiente de recibir...)"
+              className="w-full rounded border-0 bg-transparent px-0 py-1 text-xs text-zinc-700 placeholder-zinc-400 focus:ring-0 dark:text-zinc-300 dark:placeholder-zinc-600"
+            />
+            <div className="flex items-center gap-1.5">
+              <svg className="h-3 w-3 shrink-0 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <input
+                type="url"
+                value={currentUrl}
+                onChange={(e) => onUrlChange(e.target.value)}
+                placeholder="URL portal de facturas (ej: https://factura.proveedor.com)"
+                className="w-full rounded border-0 bg-transparent px-0 py-1 text-xs text-zinc-700 placeholder-zinc-400 focus:ring-0 dark:text-zinc-300 dark:placeholder-zinc-600"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

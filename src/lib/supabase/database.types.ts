@@ -2251,21 +2251,27 @@ export type Database = {
           category: string | null
           created_at: string | null
           id: string
+          notes: string | null
           supplier_id: string | null
+          url: string | null
         }
         Insert: {
           bank_vendor_name: string
           category?: string | null
           created_at?: string | null
           id?: string
+          notes?: string | null
           supplier_id?: string | null
+          url?: string | null
         }
         Update: {
           bank_vendor_name?: string
           category?: string | null
           created_at?: string | null
           id?: string
+          notes?: string | null
           supplier_id?: string | null
+          url?: string | null
         }
         Relationships: [
           {
