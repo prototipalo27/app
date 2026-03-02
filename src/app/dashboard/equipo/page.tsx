@@ -159,26 +159,6 @@ export default async function EquipoPage() {
         Equipo
       </h1>
 
-      <WorkCalendar
-        holidays={holidays ?? []}
-        timeOffRequests={enrichedTimeOff}
-        isManager={isManager}
-        currentUserId={profile.id}
-        year={currentYear}
-      />
-
-      <OvertimeSection
-        isManager={isManager}
-        isImpersonating={isImpersonating}
-        currentUserId={profile.id}
-        users={allUsers.map((u) => ({
-          id: u.id,
-          full_name: u.full_name,
-          nickname: u.nickname,
-          email: u.email,
-        }))}
-      />
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {
           const displayName = user.nickname || user.full_name || user.email.split("@")[0];
@@ -266,6 +246,26 @@ export default async function EquipoPage() {
           );
         })}
       </div>
+
+      <WorkCalendar
+        holidays={holidays ?? []}
+        timeOffRequests={enrichedTimeOff}
+        isManager={isManager}
+        currentUserId={profile.id}
+        year={currentYear}
+      />
+
+      <OvertimeSection
+        isManager={isManager}
+        isImpersonating={isImpersonating}
+        currentUserId={profile.id}
+        users={allUsers.map((u) => ({
+          id: u.id,
+          full_name: u.full_name,
+          nickname: u.nickname,
+          email: u.email,
+        }))}
+      />
     </div>
   );
 }
