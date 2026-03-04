@@ -2162,6 +2162,53 @@ export type Database = {
           },
         ]
       }
+      tools_resources: {
+        Row: {
+          category: string | null
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          position: number | null
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          position?: number | null
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          position?: number | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_resources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           birthday: string | null
