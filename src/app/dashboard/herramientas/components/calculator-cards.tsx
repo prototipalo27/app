@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SheetCalculator from "./calculators/sheet-calculator";
 import MaterialCalculator from "./calculators/material-calculator";
+import MrwCalculator from "./calculators/mrw-calculator";
 
 const CALCULATORS = [
   {
@@ -26,6 +27,17 @@ const CALCULATORS = [
       </svg>
     ),
     component: MaterialCalculator,
+  },
+  {
+    id: "mrw",
+    title: "Envíos MRW",
+    description: "Tarifa GO 200 — calcula coste de envío por peso y zona",
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+      </svg>
+    ),
+    component: MrwCalculator,
   },
 ];
 
@@ -61,8 +73,8 @@ export default function CalculatorCards() {
         const calc = CALCULATORS.find((c) => c.id === openId)!;
         const Component = calc.component;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+            <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
                   {calc.title}
