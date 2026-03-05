@@ -244,7 +244,7 @@ export function ContactModal({
                   onChange={(e) => setAttachProforma(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
                 />
-                Adjuntar proforma
+                Adjuntar presupuesto PDF
               </label>
             )}
           </div>

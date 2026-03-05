@@ -518,7 +518,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                   onChange={(e) => setAttachProforma(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
                 />
-                Adjuntar proforma PDF
+                Adjuntar presupuesto PDF
               </label>
             ) : (
               <div />

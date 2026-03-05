@@ -403,7 +403,7 @@ export async function sendLeadEmail(
     if (qr?.holded_proforma_id) {
       try {
         const pdf = await getDocumentPdf("proform", qr.holded_proforma_id);
-        attachments = [{ filename: "proforma.pdf", content: pdf, contentType: "application/pdf" }];
+        attachments = [{ filename: "Presupuesto-Prototipalo.pdf", content: pdf, contentType: "application/pdf" }];
       } catch {
         // Non-fatal: send without attachment if PDF download fails
       }
