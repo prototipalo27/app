@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     weight: weight || 1,
     reference,
     observations,
-    service: (service as MrwShipmentParams["service"]) || "0000",
+    service: service || "0200",
   };
 
   try {

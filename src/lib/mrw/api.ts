@@ -1,3 +1,4 @@
+import https from "node:https";
 import type { MrwShipmentParams, MrwShipmentResult, MrwTrackingEvent } from "./types";
 import { MRW_SENDER } from "./sender";
 
@@ -53,29 +54,48 @@ function buildSagecEnvelope(soapAction: string, bodyContent: string): string {
 }
 
 /**
+ * Makes an HTTPS POST request (node:https). Node.js fetch/undici causes 500
+ * on this legacy ASMX endpoint, so we use the native https module.
+ */
+function httpsPost(url: string, headers: Record<string, string>, body: Buffer): Promise<{ status: number; body: string }> {
+  const parsed = new URL(url);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        path: parsed.pathname + parsed.search,
+        method: "POST",
+        headers: { ...headers, "Content-Length": String(body.byteLength) },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk: Buffer) => (data += chunk.toString()));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
+      },
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
  * Sends a SOAP 1.1 request to MRW SAGEC endpoint.
  */
 async function sagecRequest(soapAction: string, bodyContent: string): Promise<string> {
   const envelope = buildSagecEnvelope(soapAction, bodyContent);
-  const body = Buffer.from(envelope, "utf-8");
+  const buf = Buffer.from(envelope, "utf-8");
 
-  const res = await fetch(MRW_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      "Content-Length": String(body.byteLength),
-      SOAPAction: `"http://www.mrw.es/${soapAction}"`,
-    },
-    body,
-    cache: "no-store",
-  });
+  const res = await httpsPost(MRW_API_URL, {
+    "Content-Type": "text/xml; charset=utf-8",
+    SOAPAction: `"http://www.mrw.es/${soapAction}"`,
+  }, buf);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`MRW SOAP error ${res.status}: ${text.slice(0, 500)}`);
+  if (res.status !== 200) {
+    throw new Error(`MRW SOAP error ${res.status}: ${res.body.slice(0, 500)}`);
   }
 
-  return res.text();
+  return res.body;
 }
 
 function extractTag(xml: string, tag: string): string {
@@ -213,22 +233,17 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const res = await fetch(MRW_TRACKING_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: '"http://tempuri.org/ITrackingServiceContract/GetEnvios"',
-    },
-    body: envelope,
-    cache: "no-store",
-  });
+  const buf = Buffer.from(envelope, "utf-8");
+  const res = await httpsPost(MRW_TRACKING_URL, {
+    "Content-Type": "text/xml; charset=utf-8",
+    SOAPAction: '"http://tempuri.org/ITrackingServiceContract/GetEnvios"',
+  }, buf);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`MRW tracking error ${res.status}: ${text.slice(0, 500)}`);
+  if (res.status !== 200) {
+    throw new Error(`MRW tracking error ${res.status}: ${res.body.slice(0, 500)}`);
   }
 
-  const xml = await res.text();
+  const xml = res.body;
 
   const events: MrwTrackingEvent[] = [];
 
