@@ -26,34 +26,38 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function authInfoXml(): string {
+function authHeaderXml(): string {
   const creds = getCredentials();
   return `
-    <mrw:AuthInfo>
-      <mrw:CodigoFranquicia>${escapeXml(creds.franquicia)}</mrw:CodigoFranquicia>
-      <mrw:CodigoAbonado>${escapeXml(creds.abonado)}</mrw:CodigoAbonado>
-      <mrw:CodigoDepartamento></mrw:CodigoDepartamento>
-      <mrw:UserName>${escapeXml(creds.username)}</mrw:UserName>
-      <mrw:Password>${escapeXml(creds.password)}</mrw:Password>
-    </mrw:AuthInfo>`;
+  <soap:Header>
+    <tns:AuthInfo>
+      <tns:CodigoFranquicia>${escapeXml(creds.franquicia)}</tns:CodigoFranquicia>
+      <tns:CodigoAbonado>${escapeXml(creds.abonado)}</tns:CodigoAbonado>
+      <tns:CodigoDepartamento></tns:CodigoDepartamento>
+      <tns:UserName>${escapeXml(creds.username)}</tns:UserName>
+      <tns:Password>${escapeXml(creds.password)}</tns:Password>
+    </tns:AuthInfo>
+  </soap:Header>`;
 }
 
-function wrapSoapEnvelope(body: string): string {
+function wrapSoapEnvelope(header: string, body: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope" xmlns:mrw="http://www.mrw.es/">
-  <soap12:Body>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://www.mrw.es/">
+  ${header}
+  <soap:Body>
     ${body}
-  </soap12:Body>
-</soap12:Envelope>`;
+  </soap:Body>
+</soap:Envelope>`;
 }
 
 async function soapRequest(action: string, body: string): Promise<string> {
-  const envelope = wrapSoapEnvelope(body);
+  const envelope = wrapSoapEnvelope(authHeaderXml(), body);
 
   const res = await fetch(MRW_API_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/soap+xml; charset=utf-8; action=\"http://www.mrw.es/${action}\"",
+      "Content-Type": "text/xml; charset=utf-8",
+      SOAPAction: `http://www.mrw.es/${action}`,
     },
     body: envelope,
     cache: "no-store",
@@ -84,46 +88,42 @@ export async function createShipment(
   const fecha = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
 
   const body = `
-    <mrw:TransmEnvio>
-      ${authInfoXml()}
-      <mrw:TransmEnvioRequest>
-        <mrw:DatosEntrega>
-          <mrw:Direccion>
-            <mrw:Via>${escapeXml(params.recipientAddress)}</mrw:Via>
-            <mrw:CodigoPostal>${escapeXml(params.recipientPostalCode)}</mrw:CodigoPostal>
-            <mrw:Poblacion>${escapeXml(params.recipientCity)}</mrw:Poblacion>
-          </mrw:Direccion>
-          <mrw:Nif></mrw:Nif>
-          <mrw:Nombre>${escapeXml(params.recipientName)}</mrw:Nombre>
-          <mrw:Telefono>${escapeXml(params.recipientPhone || "")}</mrw:Telefono>
-          <mrw:Observaciones>${escapeXml(params.observations || "")}</mrw:Observaciones>
-        </mrw:DatosEntrega>
-        <mrw:DatosRecogida>
-          <mrw:Direccion>
-            <mrw:Via>${escapeXml(MRW_SENDER.address)}</mrw:Via>
-            <mrw:CodigoPostal>${escapeXml(MRW_SENDER.postalCode)}</mrw:CodigoPostal>
-            <mrw:Poblacion>${escapeXml(MRW_SENDER.city)}</mrw:Poblacion>
-          </mrw:Direccion>
-          <mrw:Nif>${escapeXml(MRW_SENDER.nif)}</mrw:Nif>
-          <mrw:Nombre>${escapeXml(MRW_SENDER.name)}</mrw:Nombre>
-          <mrw:Telefono>${escapeXml(MRW_SENDER.phone)}</mrw:Telefono>
-        </mrw:DatosRecogida>
-        <mrw:DatosServicio>
-          <mrw:Fecha>${fecha}</mrw:Fecha>
-          <mrw:Referencia>${escapeXml(params.reference || "")}</mrw:Referencia>
-          <mrw:CodigoServicio>${params.service}</mrw:CodigoServicio>
-          <mrw:NumeroBultos>${params.packages}</mrw:NumeroBultos>
-          <mrw:Peso>${(params.weight * 1000).toFixed(0)}</mrw:Peso>
-          <mrw:EntregaSabado>N</mrw:EntregaSabado>
-          <mrw:Retorno>N</mrw:Retorno>
-          <mrw:ConfirmacionInmediata>N</mrw:ConfirmacionInmediata>
-          <mrw:Reembolso>N</mrw:Reembolso>
-          <mrw:NotificacionSMS>N</mrw:NotificacionSMS>
-          <mrw:NotificacionEmail>${params.recipientEmail ? "S" : "N"}</mrw:NotificacionEmail>
-          ${params.recipientEmail ? `<mrw:MailDestino>${escapeXml(params.recipientEmail)}</mrw:MailDestino>` : ""}
-        </mrw:DatosServicio>
-      </mrw:TransmEnvioRequest>
-    </mrw:TransmEnvio>`;
+    <tns:TransmEnvio>
+      <tns:request>
+        <tns:DatosRecogida>
+          <tns:Direccion>
+            <tns:Via>${escapeXml(MRW_SENDER.address)}</tns:Via>
+            <tns:CodigoPostal>${escapeXml(MRW_SENDER.postalCode)}</tns:CodigoPostal>
+            <tns:Poblacion>${escapeXml(MRW_SENDER.city)}</tns:Poblacion>
+          </tns:Direccion>
+          <tns:Nif>${escapeXml(MRW_SENDER.nif)}</tns:Nif>
+          <tns:Nombre>${escapeXml(MRW_SENDER.name)}</tns:Nombre>
+          <tns:Telefono>${escapeXml(MRW_SENDER.phone)}</tns:Telefono>
+        </tns:DatosRecogida>
+        <tns:DatosEntrega>
+          <tns:Direccion>
+            <tns:Via>${escapeXml(params.recipientAddress)}</tns:Via>
+            <tns:CodigoPostal>${escapeXml(params.recipientPostalCode)}</tns:CodigoPostal>
+            <tns:Poblacion>${escapeXml(params.recipientCity)}</tns:Poblacion>
+          </tns:Direccion>
+          <tns:Nif></tns:Nif>
+          <tns:Nombre>${escapeXml(params.recipientName)}</tns:Nombre>
+          <tns:Telefono>${escapeXml(params.recipientPhone || "")}</tns:Telefono>
+          <tns:Observaciones>${escapeXml(params.observations || "")}</tns:Observaciones>
+        </tns:DatosEntrega>
+        <tns:DatosServicio>
+          <tns:Fecha>${fecha}</tns:Fecha>
+          <tns:Referencia>${escapeXml(params.reference || "")}</tns:Referencia>
+          <tns:CodigoServicio>${params.service}</tns:CodigoServicio>
+          <tns:NumeroBultos>${params.packages}</tns:NumeroBultos>
+          <tns:Peso>${(params.weight * 1000).toFixed(0)}</tns:Peso>
+          <tns:EntregaSabado>N</tns:EntregaSabado>
+          <tns:Retorno>N</tns:Retorno>
+          <tns:ConfirmacionInmediata>N</tns:ConfirmacionInmediata>
+          <tns:Reembolso>N</tns:Reembolso>
+        </tns:DatosServicio>
+      </tns:request>
+    </tns:TransmEnvio>`;
 
   const xml = await soapRequest("TransmEnvio", body);
 
@@ -156,18 +156,17 @@ export async function createShipment(
  */
 export async function getLabel(albaran: string): Promise<string> {
   const body = `
-    <mrw:GetEtiquetaEnvio>
-      ${authInfoXml()}
-      <mrw:EtiquetaEnvioRequest>
-        <mrw:NumeroEnvio>${escapeXml(albaran)}</mrw:NumeroEnvio>
-        <mrw:SeparadorNumerosEnvio>,</mrw:SeparadorNumerosEnvio>
-        <mrw:FechaInicioEnvio></mrw:FechaInicioEnvio>
-        <mrw:FechaFinEnvio></mrw:FechaFinEnvio>
-        <mrw:TipoEtiquetaEnvio>0</mrw:TipoEtiquetaEnvio>
-        <mrw:ReportTopMargin>1100</mrw:ReportTopMargin>
-        <mrw:ReportLeftMargin>650</mrw:ReportLeftMargin>
-      </mrw:EtiquetaEnvioRequest>
-    </mrw:GetEtiquetaEnvio>`;
+    <tns:GetEtiquetaEnvio>
+      <tns:request>
+        <tns:NumeroEnvio>${escapeXml(albaran)}</tns:NumeroEnvio>
+        <tns:SeparadorNumerosEnvio>,</tns:SeparadorNumerosEnvio>
+        <tns:FechaInicioEnvio></tns:FechaInicioEnvio>
+        <tns:FechaFinEnvio></tns:FechaFinEnvio>
+        <tns:TipoEtiquetaEnvio>0</tns:TipoEtiquetaEnvio>
+        <tns:ReportTopMargin>1100</tns:ReportTopMargin>
+        <tns:ReportLeftMargin>650</tns:ReportLeftMargin>
+      </tns:request>
+    </tns:GetEtiquetaEnvio>`;
 
   const xml = await soapRequest("GetEtiquetaEnvio", body);
 
@@ -190,17 +189,15 @@ export async function getLabel(albaran: string): Promise<string> {
  */
 export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> {
   const body = `
-    <mrw:GetEnvios>
-      ${authInfoXml()}
-      <mrw:GetEnviosRequest>
-        <mrw:NumeroEnvio>${escapeXml(albaran)}</mrw:NumeroEnvio>
-      </mrw:GetEnviosRequest>
-    </mrw:GetEnvios>`;
+    <tns:GetEnvios>
+      <tns:request>
+        <tns:NumeroEnvio>${escapeXml(albaran)}</tns:NumeroEnvio>
+      </tns:request>
+    </tns:GetEnvios>`;
 
   const xml = await soapRequest("GetEnvios", body);
 
   const events: MrwTrackingEvent[] = [];
-  // Parse SeguimientoEnvio entries
   const segRegex = /<SeguimientoEnvioItem>([\s\S]*?)<\/SeguimientoEnvioItem>/g;
   let match;
   while ((match = segRegex.exec(xml)) !== null) {
@@ -220,12 +217,11 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
  */
 export async function cancelShipment(albaran: string): Promise<boolean> {
   const body = `
-    <mrw:CancelarEnvio>
-      ${authInfoXml()}
-      <mrw:CancelarEnvioRequest>
-        <mrw:NumeroEnvio>${escapeXml(albaran)}</mrw:NumeroEnvio>
-      </mrw:CancelarEnvioRequest>
-    </mrw:CancelarEnvio>`;
+    <tns:CancelarEnvio>
+      <tns:request>
+        <tns:NumeroEnvio>${escapeXml(albaran)}</tns:NumeroEnvio>
+      </tns:request>
+    </tns:CancelarEnvio>`;
 
   const xml = await soapRequest("CancelarEnvio", body);
   const estado = extractTag(xml, "Estado");
