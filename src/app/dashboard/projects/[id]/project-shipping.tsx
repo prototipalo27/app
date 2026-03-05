@@ -372,13 +372,13 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
     finally { setLoading(false); }
   }
 
-  async function createGlsShipment() {
+  async function createMrwShipment() {
     setLoading(true); setError(null);
     try {
       const totalWeight = packages.reduce((sum, p) => sum + Number(p.weight), 0);
       const firstPkg = packages[0];
       const addrId = selectedAddressId !== "new" ? selectedAddressId : undefined;
-      const res = await fetch("/api/gls/shipments", {
+      const res = await fetch("/api/mrw/shipments", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
@@ -388,14 +388,14 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
           recipientPhone: recipientPhone || undefined, recipientEmail: recipientEmail || undefined,
           packages: packages.length, weight: totalWeight,
           packageWidth: Number(firstPkg.width), packageHeight: Number(firstPkg.height), packageLength: Number(firstPkg.length),
-          horario: glsPrices[glsServiceId]?.horario || undefined,
+          service: mrwServiceId,
           addressId: addrId,
         }),
       });
-      if (!res.ok) { const data = await res.json(); throw new Error(data.error || "Failed to create GLS shipment"); }
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error || "Failed to create MRW shipment"); }
       await maybeSaveAddress();
       window.location.reload();
-    } catch (err) { setError(err instanceof Error ? err.message : "Error creating GLS shipment"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Error creating MRW shipment"); }
     finally { setLoading(false); }
   }
 
@@ -510,7 +510,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
             <div>
               <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Carrier</p>
               <div className="flex gap-2">
-                {(["gls", "packlink", "cabify"] as const).map((c) => (
+                {(["mrw", "packlink", "cabify"] as const).map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -521,7 +521,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
                         : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
                     }`}
                   >
-                    {c === "gls" ? "GLS" : c === "packlink" ? "Packlink" : "Cabify"}
+                    {c === "mrw" ? "MRW" : c === "packlink" ? "Packlink" : "Cabify"}
                   </button>
                 ))}
               </div>
@@ -545,39 +545,29 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
               </div>
             )}
 
-            {/* GLS service selector */}
-            {carrier === "gls" && (
+            {/* MRW service selector */}
+            {carrier === "mrw" && (
               <div>
-                <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">GLS Service</p>
+                <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">MRW Service</p>
                 <div className="space-y-2">
-                  {GLS_SERVICES.map((svc) => {
-                    const price = glsPrices[svc.id];
-                    return (
-                      <button
-                        key={svc.id}
-                        type="button"
-                        onClick={() => setGlsServiceId(svc.id)}
-                        className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
-                          glsServiceId === svc.id
-                            ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
-                            : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
-                        }`}
-                      >
-                        <div>
-                          <span className="font-medium">{svc.name}</span>
-                          <br />
-                          <span className="text-xs opacity-70">{svc.delivery}</span>
-                        </div>
-                        {price && (
-                          <span className={`text-sm font-semibold tabular-nums ${
-                            glsServiceId === svc.id ? "text-cyan-700 dark:text-cyan-300" : "text-zinc-900 dark:text-white"
-                          }`}>
-                            {price.price.toFixed(2)} €
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                  {MRW_SERVICES.map((svc) => (
+                    <button
+                      key={svc.id}
+                      type="button"
+                      onClick={() => setMrwServiceId(svc.id)}
+                      className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                        mrwServiceId === svc.id
+                          ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                          : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium">{svc.name}</span>
+                        <br />
+                        <span className="text-xs opacity-70">{svc.delivery}</span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -642,13 +632,13 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
               Cancelar
             </button>
             <button
-              onClick={carrier === "cabify" ? createCabifyShipment : carrier === "gls" ? createGlsShipment : searchServices}
+              onClick={carrier === "cabify" ? createCabifyShipment : carrier === "mrw" ? createMrwShipment : searchServices}
               disabled={loading || !postalCode || !country || (carrier !== "cabify" && packages.some((p) => !p.width || !p.height || !p.length || !p.weight))}
               className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-zinc-900"
             >
               {loading
-                ? carrier === "cabify" ? "Creando…" : carrier === "gls" ? "Creando…" : "Buscando…"
-                : carrier === "cabify" ? "Crear envio Cabify" : carrier === "gls" ? "Crear envio GLS" : "Buscar transportistas"}
+                ? carrier === "cabify" || carrier === "mrw" ? "Creando…" : "Buscando…"
+                : carrier === "cabify" ? "Crear envio Cabify" : carrier === "mrw" ? "Crear envio MRW" : "Buscar transportistas"}
             </button>
           </div>
         </div>
