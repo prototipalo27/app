@@ -157,11 +157,21 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     resizeTextarea();
   }, [emailBody, resizeTextarea]);
 
-  // Listen for "send-proforma" event from lead-actions
+  // Listen for "send-proforma" event from lead-actions / proforma-editor
   useEffect(() => {
-    const handler = () => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { body?: string; subject?: string } | undefined;
+      if (detail?.body) setEmailBody(detail.body);
+      if (detail?.subject) setEmailSubject(detail.subject);
       setAttachProforma(true);
-      document.getElementById("email-compose")?.scrollIntoView({ behavior: "smooth" });
+      // Clear any reply state so it sends as a new email
+      setReplyToMessageId(null);
+      setReplyThreadId(null);
+      setReplyBanner(null);
+      setTimeout(() => {
+        document.getElementById("email-compose")?.scrollIntoView({ behavior: "smooth" });
+        textareaRef.current?.focus();
+      }, 100);
     };
     window.addEventListener("send-proforma", handler);
     return () => window.removeEventListener("send-proforma", handler);
