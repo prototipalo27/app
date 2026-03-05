@@ -7,6 +7,7 @@ import FinancingsSection from "./financings-section";
 import TaxCalendarSection from "./tax-calendar-section";
 import CashFlowPipeline from "./cash-flow-pipeline";
 import PaymentCalendarSection from "./payment-calendar-section";
+import ReportDownloadButton from "./report-download-button";
 
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -236,7 +237,10 @@ export default async function FinanzasPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
+        <ReportDownloadButton />
+      </div>
 
       {/* ── A. KPIs ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
