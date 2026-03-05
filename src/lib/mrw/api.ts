@@ -3,11 +3,11 @@ import type { MrwShipmentParams, MrwShipmentResult, MrwTrackingEvent } from "./t
 import { MRW_SENDER } from "./sender";
 
 const MRW_API_URL =
-  process.env.MRW_API_URL || "https://sagec.mrw.es/MRWEnvio.asmx";
+  process.env.MRW_API_URL || "https://sagec-test.mrw.es/MRWEnvio.asmx";
 
 const MRW_TRACKING_URL =
   process.env.MRW_TRACKING_URL ||
-  "https://trackingservice.mrw.es/TrackingService.svc";
+  "https://trackingservice-test.mrw.es/TrackingService.svc";
 
 function getCredentials() {
   const franquicia = process.env.MRW_FRANQUICIA?.trim();
