@@ -12,7 +12,7 @@ interface QuoteItem {
 
 export default function QuoteForm({
   token,
-  items,
+  items: initialItems,
   notes,
 }: {
   token: string;
@@ -23,6 +23,13 @@ export default function QuoteForm({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsShipping, setNeedsShipping] = useState(false);
+  const [items, setItems] = useState<QuoteItem[]>(initialItems);
+
+  const updateUnits = (index: number, value: string) => {
+    const parsed = parseInt(value);
+    const units = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, units } : item)));
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,6 +53,7 @@ export default function QuoteForm({
         shipping_city: needsShipping ? (fd.get("shipping_city") as string) || null : null,
         shipping_province: needsShipping ? (fd.get("shipping_province") as string) || null : null,
         shipping_country: needsShipping ? ((fd.get("shipping_country") as string) || "España") : null,
+        items,
       });
 
       if (result.success) {
@@ -95,6 +103,9 @@ export default function QuoteForm({
           <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">
             Detalle del presupuesto
           </h2>
+          <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+            Puedes ajustar las unidades de cada línea si lo necesitas.
+          </p>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -110,7 +121,15 @@ export default function QuoteForm({
                 {items.map((item, i) => (
                   <tr key={i} className="border-b border-zinc-100 dark:border-zinc-800">
                     <td className="py-2.5 pr-4 text-zinc-900 dark:text-white">{item.concept}</td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{item.units}</td>
+                    <td className="py-2.5 pr-4 text-right">
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.units}
+                        onChange={(e) => updateUnits(i, e.target.value)}
+                        className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-right text-sm tabular-nums text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                      />
+                    </td>
                     <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{item.price.toFixed(2)} €</td>
                     <td className="py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{(item.price * item.units).toFixed(2)} €</td>
                   </tr>

@@ -19,6 +19,7 @@ interface BillingData {
   shipping_city: string | null;
   shipping_province: string | null;
   shipping_country: string | null;
+  items?: QuoteItem[];
 }
 
 interface QuoteItem {
@@ -56,6 +57,17 @@ export async function submitBillingData(
     billing_province: data.billing_province.trim(),
     billing_country: data.billing_country.trim(),
   };
+
+  // Save updated items (client may have changed units)
+  if (data.items && data.items.length > 0) {
+    // Keep original prices/concepts, only allow units changes
+    const originalItems = (qr.items || []) as unknown as QuoteItem[];
+    const safeItems = originalItems.map((orig, i) => ({
+      ...orig,
+      units: data.items![i] ? Math.max(1, data.items![i].units) : orig.units,
+    }));
+    updatePayload.items = safeItems as unknown as Record<string, unknown>;
+  }
 
   if (data.needs_shipping) {
     updatePayload.shipping_recipient_name = data.shipping_recipient_name?.trim() || null;
@@ -126,9 +138,15 @@ export async function submitBillingData(
       holdedContactId = newContact.id;
     }
 
-    // 4. Create proforma in Holded with the saved quote items
+    // 4. Create proforma in Holded with the (potentially updated) items
     let holdedProformaId: string | null = null;
-    const items = (qr.items || []) as unknown as QuoteItem[];
+    const originalItems = (qr.items || []) as unknown as QuoteItem[];
+    const items = data.items && data.items.length > 0
+      ? originalItems.map((orig, i) => ({
+          ...orig,
+          units: data.items![i] ? Math.max(1, data.items![i].units) : orig.units,
+        }))
+      : originalItems;
 
     if (holdedContactId && items.length > 0) {
       const proforma = await createProforma(holdedContactId, {
