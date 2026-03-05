@@ -40,6 +40,37 @@ export async function getOvertimeEntries(userId?: string) {
   return data;
 }
 
+export async function getAllOvertimeEntries() {
+  const profile = await getUserProfile();
+  if (!profile || !hasRole(profile.role, "manager")) return [];
+
+  const supabase = await createClient();
+
+  const { data: entries, error } = await supabase
+    .from("overtime_entries")
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(200);
+
+  if (error || !entries) return [];
+
+  // Get unique user IDs and fetch profiles
+  const userIds = [...new Set(entries.map((e) => e.user_id))];
+  const { data: profiles } = await supabase
+    .from("user_profiles")
+    .select("id, full_name, nickname, email")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p) => [p.id, p])
+  );
+
+  return entries.map((e) => ({
+    ...e,
+    user_profiles: profileMap.get(e.user_id) || null,
+  }));
+}
+
 export async function addOvertimeEntry(data: {
   date: string;
   minutes: number;

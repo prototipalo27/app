@@ -6,6 +6,7 @@ import {
   getOvertimeEntries,
   addOvertimeEntry,
   deleteOvertimeEntry,
+  getAllOvertimeEntries,
 } from "./overtime-actions";
 
 interface OvertimeEntry {
@@ -16,6 +17,10 @@ interface OvertimeEntry {
   reason: string;
   type: string;
   created_at: string | null;
+}
+
+interface GlobalOvertimeEntry extends OvertimeEntry {
+  user_profiles: { full_name: string | null; nickname: string | null; email: string } | null;
 }
 
 interface User {
@@ -56,6 +61,9 @@ export default function OvertimeSection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [globalView, setGlobalView] = useState(false);
+  const [globalEntries, setGlobalEntries] = useState<GlobalOvertimeEntry[]>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
   const [formMinutes, setFormMinutes] = useState(60);
@@ -83,6 +91,16 @@ export default function OvertimeSection({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (globalView && globalEntries.length === 0) {
+      setLoading(true);
+      getAllOvertimeEntries().then((data) => {
+        setGlobalEntries(data as GlobalOvertimeEntry[]);
+        setLoading(false);
+      });
+    }
+  }, [globalView, globalEntries.length]);
 
   async function handleSubmit() {
     if (!formReason.trim()) {
@@ -133,27 +151,136 @@ export default function OvertimeSection({
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
           Horas extra
         </h2>
         {isManager && (
-          <select
-            value={selectedUserId ?? ""}
-            onChange={(e) => setSelectedUserId(e.target.value || null)}
-            className="rounded-lg border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-          >
-            <option value="">Mis horas</option>
-            {users
-              .filter((u) => u.id !== currentUserId)
-              .map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.nickname || u.full_name || u.email.split("@")[0]}
-                </option>
-              ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGlobalView(!globalView)}
+              className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                globalView
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Vista global
+            </button>
+            {!globalView && (
+              <select
+                value={selectedUserId ?? ""}
+                onChange={(e) => setSelectedUserId(e.target.value || null)}
+                className="rounded-lg border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              >
+                <option value="">Mis horas</option>
+                {users
+                  .filter((u) => u.id !== currentUserId)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nickname || u.full_name || u.email.split("@")[0]}
+                    </option>
+                  ))}
+              </select>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Global view for managers */}
+      {isManager && globalView ? (
+        <div>
+          {/* Search */}
+          <input
+            type="text"
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            placeholder="Buscar por persona o motivo..."
+            className="mb-3 w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          />
+
+          {/* Summary per user */}
+          {(() => {
+            const byUser = new Map<string, { name: string; earned: number; used: number }>();
+            for (const e of globalEntries) {
+              const name = e.user_profiles?.nickname || e.user_profiles?.full_name || e.user_profiles?.email.split("@")[0] || "?";
+              const prev = byUser.get(e.user_id) || { name, earned: 0, used: 0 };
+              if (e.type === "earned") prev.earned += e.minutes;
+              else prev.used += e.minutes;
+              byUser.set(e.user_id, prev);
+            }
+            const summaries = [...byUser.entries()].sort((a, b) => (b[1].earned - b[1].used) - (a[1].earned - a[1].used));
+
+            return summaries.length > 0 ? (
+              <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {summaries.map(([uid, s]) => (
+                  <div key={uid} className="rounded-lg border border-zinc-100 p-2 dark:border-zinc-800">
+                    <p className="truncate text-xs font-medium text-zinc-900 dark:text-white">{s.name}</p>
+                    <p className={`text-sm font-bold ${s.earned - s.used > 0 ? "text-green-600 dark:text-green-400" : "text-zinc-500"}`}>
+                      {formatMinutes(s.earned - s.used)}
+                    </p>
+                    <p className="text-[10px] text-zinc-400">
+                      +{formatMinutes(s.earned)} / -{formatMinutes(s.used)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
+
+          {/* All entries */}
+          {loading ? (
+            <p className="py-4 text-center text-xs text-zinc-400 animate-pulse">Cargando...</p>
+          ) : (
+            <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+              {globalEntries
+                .filter((e) => {
+                  if (!globalFilter) return true;
+                  const q = globalFilter.toLowerCase();
+                  const name = (e.user_profiles?.nickname || e.user_profiles?.full_name || e.user_profiles?.email || "").toLowerCase();
+                  return name.includes(q) || e.reason.toLowerCase().includes(q);
+                })
+                .map((entry) => {
+                  const name = entry.user_profiles?.nickname || entry.user_profiles?.full_name || entry.user_profiles?.email.split("@")[0] || "?";
+                  return (
+                    <div
+                      key={entry.id}
+                      className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-800"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                            {name}
+                          </span>
+                          <span
+                            className={`shrink-0 text-xs font-semibold ${
+                              entry.type === "earned"
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-amber-600 dark:text-amber-400"
+                            }`}
+                          >
+                            {entry.type === "earned" ? "+" : "-"}{formatMinutes(entry.minutes)}
+                          </span>
+                          <span className="truncate text-xs text-zinc-700 dark:text-zinc-300">
+                            {entry.reason}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] text-zinc-400">
+                          {new Date(entry.date).toLocaleDateString("es-ES", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
 
       {/* Balance */}
       <div className="mb-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
@@ -310,6 +437,8 @@ export default function OvertimeSection({
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
