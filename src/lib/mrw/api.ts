@@ -31,14 +31,13 @@ function escapeXml(str: string): string {
 }
 
 /**
- * Builds a SOAP 1.2 envelope matching MRW SAGEC official documentation.
- * Uses xmlns:mrw="http://www.mrw.es/" prefix on all elements.
+ * Builds a SOAP 1.1 envelope with mrw: prefix (matches EtiquetaEnvio PDF example).
  */
-function buildSagecEnvelope(bodyContent: string): string {
+function buildSagecEnvelope(soapAction: string, bodyContent: string): string {
   const creds = getCredentials();
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:mrw="http://www.mrw.es/">
-  <soap:Header>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:mrw="http://www.mrw.es/">
+  <soapenv:Header>
     <mrw:AuthInfo>
       <mrw:CodigoFranquicia>${escapeXml(creds.franquicia)}</mrw:CodigoFranquicia>
       <mrw:CodigoAbonado>${escapeXml(creds.abonado)}</mrw:CodigoAbonado>
@@ -46,23 +45,24 @@ function buildSagecEnvelope(bodyContent: string): string {
       <mrw:UserName>${escapeXml(creds.username)}</mrw:UserName>
       <mrw:Password>${escapeXml(creds.password)}</mrw:Password>
     </mrw:AuthInfo>
-  </soap:Header>
-  <soap:Body>
+  </soapenv:Header>
+  <soapenv:Body>
     ${bodyContent}
-  </soap:Body>
-</soap:Envelope>`;
+  </soapenv:Body>
+</soapenv:Envelope>`;
 }
 
 /**
- * Sends a SOAP 1.2 request to MRW SAGEC endpoint.
+ * Sends a SOAP 1.1 request to MRW SAGEC endpoint.
  */
-async function sagecRequest(bodyContent: string): Promise<string> {
-  const envelope = buildSagecEnvelope(bodyContent);
+async function sagecRequest(soapAction: string, bodyContent: string): Promise<string> {
+  const envelope = buildSagecEnvelope(soapAction, bodyContent);
 
   const res = await fetch(MRW_API_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/soap+xml; charset=utf-8",
+      "Content-Type": "text/xml; charset=utf-8",
+      SOAPAction: `"http://www.mrw.es/${soapAction}"`,
     },
     body: envelope,
     cache: "no-store",
@@ -83,7 +83,7 @@ function extractTag(xml: string, tag: string): string {
 }
 
 /**
- * Creates a shipment via MRW TransmEnvio (SOAP 1.2).
+ * Creates a shipment via MRW TransmEnvio.
  */
 export async function createShipment(
   params: MrwShipmentParams,
@@ -129,7 +129,7 @@ export async function createShipment(
       </mrw:request>
     </mrw:TransmEnvio>`;
 
-  const xml = await sagecRequest(bodyContent);
+  const xml = await sagecRequest("TransmEnvio", bodyContent);
 
   // Check for errors — Estado: 0=Error, 1=OK
   const estado = extractTag(xml, "Estado");
@@ -170,7 +170,7 @@ export async function getLabel(albaran: string): Promise<string> {
       </mrw:request>
     </mrw:GetEtiquetaEnvio>`;
 
-  const xml = await sagecRequest(bodyContent);
+  const xml = await sagecRequest("GetEtiquetaEnvio", bodyContent);
 
   const estado = extractTag(xml, "Estado");
   if (estado === "0" || (estado && estado !== "1")) {
@@ -282,7 +282,7 @@ export async function cancelShipment(albaran: string): Promise<boolean> {
       </mrw:request>
     </mrw:CancelarEnvio>`;
 
-  const xml = await sagecRequest(bodyContent);
+  const xml = await sagecRequest("CancelarEnvio", bodyContent);
   const estado = extractTag(xml, "Estado");
   return estado === "1";
 }
