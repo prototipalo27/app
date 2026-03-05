@@ -12,18 +12,16 @@ interface GlsTrackingEvent {
 }
 
 type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
-type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null; cabify_parcel_id?: string | null };
+type ShipmentRow = Tables<"shipping_info">;
 type ClientAddress = Tables<"client_addresses">;
 
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
-const GLS_SERVICES = [
-  { id: "business24", name: "BusinessParcel 24H", delivery: "24h" },
-  { id: "express14", name: "Express14", delivery: "Antes de las 14:00" },
-  { id: "express1030", name: "Express 10:30", delivery: "Antes de las 10:30" },
-  { id: "express830", name: "Express 8:30", delivery: "Antes de las 8:30" },
-  { id: "economy", name: "EconomyParcel 48-72H", delivery: "48-72h" },
+const MRW_SERVICES = [
+  { id: "0000", name: "MRW Urgente 19h", delivery: "Entrega antes de las 19:00", code: "0000" },
+  { id: "0005", name: "MRW Urgente 14h", delivery: "Entrega antes de las 14:00", code: "0005" },
+  { id: "0010", name: "MRW Urgente 10h", delivery: "Entrega antes de las 10:00", code: "0010" },
 ] as const;
 
 interface HoldedContactAddress {
@@ -63,13 +61,17 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   const [open, setOpen] = useState(false);
   const [tracking, setTracking] = useState<TrackingEvent[]>([]);
 
+  const isMrw = shipment.carrier === "MRW";
   const isGls = shipment.carrier === "GLS";
   const isCabify = shipment.carrier === "Cabify";
-  const ref = isGls ? shipment.gls_barcode : isCabify ? shipment.cabify_parcel_id : shipment.packlink_shipment_ref;
+  const ref = isMrw ? shipment.mrw_albaran : isGls ? shipment.gls_barcode : isCabify ? shipment.cabify_parcel_id : shipment.packlink_shipment_ref;
 
   async function fetchTracking() {
     try {
-      if (isGls && shipment.gls_barcode) {
+      if (isMrw && shipment.mrw_albaran) {
+        const res = await fetch(`/api/mrw/shipments/${shipment.mrw_albaran}/tracking`);
+        if (res.ok) setTracking((await res.json()).events ?? []);
+      } else if (isGls && shipment.gls_barcode) {
         const res = await fetch(`/api/gls/shipments/${shipment.gls_barcode}/tracking`);
         if (res.ok) setTracking((await res.json()).events ?? []);
       } else if (isCabify && shipment.cabify_parcel_id) {
@@ -90,7 +92,9 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   }, [open]);
 
   function downloadLabel() {
-    if (isCabify && shipment.tracking_number) {
+    if (isMrw && shipment.mrw_albaran) {
+      window.open(`/api/mrw/shipments/${shipment.mrw_albaran}/label`, "_blank");
+    } else if (isCabify && shipment.tracking_number) {
       window.open(shipment.tracking_number, "_blank");
     } else if (isGls && shipment.gls_barcode) {
       window.open(`/api/gls/shipments/${shipment.gls_barcode}/label`, "_blank");
@@ -116,11 +120,12 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
       >
         <div className="flex min-w-0 items-center gap-2">
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-            isGls ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+            isMrw ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            : isGls ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
             : isCabify ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
             : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
           }`}>
-            {isGls ? "GLS" : isCabify ? "Cabify" : "Packlink"}
+            {isMrw ? "MRW" : isGls ? "GLS" : isCabify ? "Cabify" : "Packlink"}
           </span>
           <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">{dest || "—"}</span>
         </div>
@@ -139,7 +144,7 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
           <div className="space-y-1.5">
             {ref && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : isCabify ? "Parcel ID" : "Reference"}</span>
+                <span className="text-zinc-500 dark:text-zinc-400">{isMrw ? "MRW Albaran" : isGls ? "GLS Barcode" : isCabify ? "Parcel ID" : "Reference"}</span>
                 <span className="font-mono font-medium text-zinc-900 dark:text-white">{ref}</span>
               </div>
             )}
@@ -232,15 +237,13 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
   const [showForm, setShowForm] = useState(false);
 
   // Form state
-  const [carrier, setCarrier] = useState<"packlink" | "gls" | "cabify">("gls");
+  const [carrier, setCarrier] = useState<"packlink" | "mrw" | "cabify">("mrw");
   const [services, setServices] = useState<PacklinkService[]>([]);
   const [selectedService, setSelectedService] = useState<PacklinkService | null>(null);
   const [formStep, setFormStep] = useState<"form" | "selecting">("form");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [glsServiceId, setGlsServiceId] = useState("business24");
-  const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
-  const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [mrwServiceId, setMrwServiceId] = useState("0000");
   const [cabifyEstimate, setCabifyEstimate] = useState<{ amount: number; currency: string } | null>(null);
   const cabifyEstimateRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -308,26 +311,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
     }, 500);
   }, [carrier, street, city, postalCode]);
 
-  // Estimate GLS prices
-  useEffect(() => {
-    if (carrier !== "gls" || !postalCode || !country) { setGlsPrices({}); return; }
-    const totalWeight = packages.reduce((sum, p) => sum + (Number(p.weight) || 0), 0);
-    if (!totalWeight) { setGlsPrices({}); return; }
-    if (glsPriceRef.current) clearTimeout(glsPriceRef.current);
-    glsPriceRef.current = setTimeout(async () => {
-      try {
-        const firstPkg = packages[0];
-        const params = new URLSearchParams({
-          weight: String(totalWeight), postalCode, country, all: "true",
-          ...(firstPkg.width ? { width: firstPkg.width } : {}),
-          ...(firstPkg.height ? { height: firstPkg.height } : {}),
-          ...(firstPkg.length ? { length: firstPkg.length } : {}),
-        });
-        const res = await fetch(`/api/gls/price?${params}`);
-        if (res.ok) setGlsPrices(await res.json()); else setGlsPrices({});
-      } catch { setGlsPrices({}); }
-    }, 300);
-  }, [carrier, postalCode, country, packages]);
+  // (GLS price estimation removed — MRW is now the default carrier)
 
   // Save address if checkbox ticked
   async function maybeSaveAddress() {
