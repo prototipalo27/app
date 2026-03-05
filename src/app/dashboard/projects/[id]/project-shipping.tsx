@@ -19,9 +19,9 @@ import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/compo
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
 
 const MRW_SERVICES = [
-  { id: "0000", name: "MRW Urgente 19h", delivery: "Entrega antes de las 19:00", code: "0000" },
-  { id: "0005", name: "MRW Urgente 14h", delivery: "Entrega antes de las 14:00", code: "0005" },
-  { id: "0010", name: "MRW Urgente 10h", delivery: "Entrega antes de las 10:00", code: "0010" },
+  { id: "0200", name: "MRW Urgente 19", delivery: "Entrega antes de las 19:00", code: "0200" },
+  { id: "0300", name: "MRW Económico", delivery: "Entrega en 24-48h", code: "0300" },
+  { id: "0800", name: "MRW Ecommerce", delivery: "Servicio ecommerce", code: "0800" },
 ] as const;
 
 interface HoldedContactAddress {
@@ -243,7 +243,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
   const [formStep, setFormStep] = useState<"form" | "selecting">("form");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mrwServiceId, setMrwServiceId] = useState("0000");
+  const [mrwServiceId, setMrwServiceId] = useState("0200");
   const [cabifyEstimate, setCabifyEstimate] = useState<{ amount: number; currency: string } | null>(null);
   const cabifyEstimateRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 

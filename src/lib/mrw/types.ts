@@ -7,14 +7,14 @@ export interface MrwShipmentParams {
   recipientPhone?: string;
   recipientEmail?: string;
   packages: number;
-  weight: number; // kg
+  weight: number; // kg (integers recommended)
   reference?: string;
   observations?: string;
-  service: "0000" | "0005" | "0010"; // 0000=19h, 0005=14h, 0010=10h
+  service: string; // MRW service code: 0200=Urg19, 0300=Economico, 0800=Ecommerce, etc.
 }
 
 export interface MrwShipmentResult {
-  albaran: string; // NumeroEnvio / albaran number
+  albaran: string; // NumeroEnvio / albaran number (12 chars)
   labelPdf: string; // base64-encoded PDF
 }
 

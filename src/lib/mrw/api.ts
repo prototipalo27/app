@@ -4,6 +4,10 @@ import { MRW_SENDER } from "./sender";
 const MRW_API_URL =
   process.env.MRW_API_URL || "https://sagec-test.mrw.es/MRWEnvio.asmx";
 
+const MRW_TRACKING_URL =
+  process.env.MRW_TRACKING_URL ||
+  "https://trackingservice-test.mrw.es/TrackingService.svc";
+
 function getCredentials() {
   const franquicia = process.env.MRW_FRANQUICIA?.trim();
   const abonado = process.env.MRW_ABONADO?.trim();
@@ -26,35 +30,39 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function buildEnvelope(soapAction: string, bodyContent: string): string {
+/**
+ * Builds a SOAP 1.2 envelope matching MRW SAGEC official documentation.
+ * Uses xmlns:mrw="http://www.mrw.es/" prefix on all elements.
+ */
+function buildSagecEnvelope(bodyContent: string): string {
   const creds = getCredentials();
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:mrw="http://www.mrw.es/">
   <soap:Header>
-    <AuthInfo xmlns="http://www.mrw.es/">
-      <CodigoFranquicia>${escapeXml(creds.franquicia)}</CodigoFranquicia>
-      <CodigoAbonado>${escapeXml(creds.abonado)}</CodigoAbonado>
-      <CodigoDepartamento></CodigoDepartamento>
-      <UserName>${escapeXml(creds.username)}</UserName>
-      <Password>${escapeXml(creds.password)}</Password>
-    </AuthInfo>
+    <mrw:AuthInfo>
+      <mrw:CodigoFranquicia>${escapeXml(creds.franquicia)}</mrw:CodigoFranquicia>
+      <mrw:CodigoAbonado>${escapeXml(creds.abonado)}</mrw:CodigoAbonado>
+      <mrw:CodigoDepartamento></mrw:CodigoDepartamento>
+      <mrw:UserName>${escapeXml(creds.username)}</mrw:UserName>
+      <mrw:Password>${escapeXml(creds.password)}</mrw:Password>
+    </mrw:AuthInfo>
   </soap:Header>
   <soap:Body>
-    <${soapAction} xmlns="http://www.mrw.es/">
-      ${bodyContent}
-    </${soapAction}>
+    ${bodyContent}
   </soap:Body>
 </soap:Envelope>`;
 }
 
-async function soapRequest(action: string, bodyContent: string): Promise<string> {
-  const envelope = buildEnvelope(action, bodyContent);
+/**
+ * Sends a SOAP 1.2 request to MRW SAGEC endpoint.
+ */
+async function sagecRequest(bodyContent: string): Promise<string> {
+  const envelope = buildSagecEnvelope(bodyContent);
 
   const res = await fetch(MRW_API_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: `"http://www.mrw.es/${action}"`,
+      "Content-Type": "application/soap+xml; charset=utf-8",
     },
     body: envelope,
     cache: "no-store",
@@ -75,7 +83,7 @@ function extractTag(xml: string, tag: string): string {
 }
 
 /**
- * Creates a shipment via MRW TransmEnvio.
+ * Creates a shipment via MRW TransmEnvio (SOAP 1.2).
  */
 export async function createShipment(
   params: MrwShipmentParams,
@@ -83,47 +91,49 @@ export async function createShipment(
   const today = new Date();
   const fecha = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
 
-  const bodyContent = `
-      <request>
-        <DatosRecogida>
-          <Direccion>
-            <Via>${escapeXml(MRW_SENDER.address)}</Via>
-            <CodigoPostal>${escapeXml(MRW_SENDER.postalCode)}</CodigoPostal>
-            <Poblacion>${escapeXml(MRW_SENDER.city)}</Poblacion>
-          </Direccion>
-          <Nif>${escapeXml(MRW_SENDER.nif)}</Nif>
-          <Nombre>${escapeXml(MRW_SENDER.name)}</Nombre>
-          <Telefono>${escapeXml(MRW_SENDER.phone)}</Telefono>
-        </DatosRecogida>
-        <DatosEntrega>
-          <Direccion>
-            <Via>${escapeXml(params.recipientAddress)}</Via>
-            <CodigoPostal>${escapeXml(params.recipientPostalCode)}</CodigoPostal>
-            <Poblacion>${escapeXml(params.recipientCity)}</Poblacion>
-          </Direccion>
-          <Nif></Nif>
-          <Nombre>${escapeXml(params.recipientName)}</Nombre>
-          <Telefono>${escapeXml(params.recipientPhone || "")}</Telefono>
-          <Observaciones>${escapeXml(params.observations || "")}</Observaciones>
-        </DatosEntrega>
-        <DatosServicio>
-          <Fecha>${fecha}</Fecha>
-          <Referencia>${escapeXml(params.reference || "")}</Referencia>
-          <CodigoServicio>${params.service}</CodigoServicio>
-          <NumeroBultos>${params.packages}</NumeroBultos>
-          <Peso>${(params.weight * 1000).toFixed(0)}</Peso>
-          <EntregaSabado>N</EntregaSabado>
-          <Retorno>N</Retorno>
-          <ConfirmacionInmediata>N</ConfirmacionInmediata>
-          <Reembolso>N</Reembolso>
-        </DatosServicio>
-      </request>`;
+  const bodyContent = `<mrw:TransmEnvio>
+      <mrw:request>
+        <mrw:DatosRecogida>
+          <mrw:Direccion>
+            <mrw:Via>${escapeXml(MRW_SENDER.address)}</mrw:Via>
+            <mrw:CodigoPostal>${escapeXml(MRW_SENDER.postalCode)}</mrw:CodigoPostal>
+            <mrw:Poblacion>${escapeXml(MRW_SENDER.city)}</mrw:Poblacion>
+          </mrw:Direccion>
+          <mrw:Nif>${escapeXml(MRW_SENDER.nif)}</mrw:Nif>
+          <mrw:Nombre>${escapeXml(MRW_SENDER.name)}</mrw:Nombre>
+          <mrw:Telefono>${escapeXml(MRW_SENDER.phone)}</mrw:Telefono>
+        </mrw:DatosRecogida>
+        <mrw:DatosEntrega>
+          <mrw:Direccion>
+            <mrw:Via>${escapeXml(params.recipientAddress)}</mrw:Via>
+            <mrw:CodigoPostal>${escapeXml(params.recipientPostalCode)}</mrw:CodigoPostal>
+            <mrw:Poblacion>${escapeXml(params.recipientCity)}</mrw:Poblacion>
+          </mrw:Direccion>
+          <mrw:Nif></mrw:Nif>
+          <mrw:Nombre>${escapeXml(params.recipientName)}</mrw:Nombre>
+          <mrw:Telefono>${escapeXml(params.recipientPhone || "")}</mrw:Telefono>
+          <mrw:Observaciones>${escapeXml(params.observations || "")}</mrw:Observaciones>
+        </mrw:DatosEntrega>
+        <mrw:DatosServicio>
+          <mrw:Fecha>${fecha}</mrw:Fecha>
+          <mrw:Referencia>${escapeXml(params.reference || "")}</mrw:Referencia>
+          <mrw:CodigoServicio>${escapeXml(params.service)}</mrw:CodigoServicio>
+          <mrw:NumeroBultos>${params.packages}</mrw:NumeroBultos>
+          <mrw:Peso>${Math.ceil(params.weight)}</mrw:Peso>
+          <mrw:EntregaSabado>N</mrw:EntregaSabado>
+          <mrw:Retorno>N</mrw:Retorno>
+          <mrw:ConfirmacionInmediata>N</mrw:ConfirmacionInmediata>
+          <mrw:Reembolso>N</mrw:Reembolso>
+          <mrw:PortesDebidos>N</mrw:PortesDebidos>
+        </mrw:DatosServicio>
+      </mrw:request>
+    </mrw:TransmEnvio>`;
 
-  const xml = await soapRequest("TransmEnvio", bodyContent);
+  const xml = await sagecRequest(bodyContent);
 
-  // Check for errors
+  // Check for errors — Estado: 0=Error, 1=OK
   const estado = extractTag(xml, "Estado");
-  if (estado && estado !== "1") {
+  if (estado === "0" || (estado && estado !== "1")) {
     const mensaje = extractTag(xml, "Mensaje") || "Error desconocido de MRW";
     throw new Error(`MRW error: ${mensaje}`);
   }
@@ -145,24 +155,25 @@ export async function createShipment(
 }
 
 /**
- * Gets a PDF label for an albaran number.
+ * Gets a PDF label for an albaran number via GetEtiquetaEnvio.
  */
 export async function getLabel(albaran: string): Promise<string> {
-  const bodyContent = `
-      <request>
-        <NumeroEnvio>${escapeXml(albaran)}</NumeroEnvio>
-        <SeparadorNumerosEnvio>,</SeparadorNumerosEnvio>
-        <FechaInicioEnvio></FechaInicioEnvio>
-        <FechaFinEnvio></FechaFinEnvio>
-        <TipoEtiquetaEnvio>0</TipoEtiquetaEnvio>
-        <ReportTopMargin>1100</ReportTopMargin>
-        <ReportLeftMargin>650</ReportLeftMargin>
-      </request>`;
+  const bodyContent = `<mrw:GetEtiquetaEnvio>
+      <mrw:request>
+        <mrw:NumeroEnvio>${escapeXml(albaran)}</mrw:NumeroEnvio>
+        <mrw:SeparadorNumerosEnvio>,</mrw:SeparadorNumerosEnvio>
+        <mrw:FechaInicioEnvio></mrw:FechaInicioEnvio>
+        <mrw:FechaFinEnvio></mrw:FechaFinEnvio>
+        <mrw:TipoEtiquetaEnvio>0</mrw:TipoEtiquetaEnvio>
+        <mrw:ReportTopMargin>1100</mrw:ReportTopMargin>
+        <mrw:ReportLeftMargin>650</mrw:ReportLeftMargin>
+      </mrw:request>
+    </mrw:GetEtiquetaEnvio>`;
 
-  const xml = await soapRequest("GetEtiquetaEnvio", bodyContent);
+  const xml = await sagecRequest(bodyContent);
 
   const estado = extractTag(xml, "Estado");
-  if (estado && estado !== "1") {
+  if (estado === "0" || (estado && estado !== "1")) {
     const mensaje = extractTag(xml, "Mensaje") || "Error obteniendo etiqueta";
     throw new Error(`MRW label error: ${mensaje}`);
   }
@@ -176,41 +187,102 @@ export async function getLabel(albaran: string): Promise<string> {
 }
 
 /**
- * Gets tracking info for an albaran via GetEnvios.
+ * Gets tracking info via MRW TrackingService (separate from SAGEC).
+ * Uses SOAP 1.1 with namespace http://tempuri.org/.
  */
 export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> {
-  const bodyContent = `
-      <request>
-        <NumeroEnvio>${escapeXml(albaran)}</NumeroEnvio>
-      </request>`;
+  const creds = getCredentials();
 
-  const xml = await soapRequest("GetEnvios", bodyContent);
+  const envelope = `<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <tem:GetEnvios>
+      <tem:login>${escapeXml(creds.username)}</tem:login>
+      <tem:pass>${escapeXml(creds.password)}</tem:pass>
+      <tem:codigoIdioma>3082</tem:codigoIdioma>
+      <tem:tipoFiltro>0</tem:tipoFiltro>
+      <tem:valorFiltroDesde>${escapeXml(albaran)}</tem:valorFiltroDesde>
+      <tem:valorFiltroHasta>${escapeXml(albaran)}</tem:valorFiltroHasta>
+      <tem:fechaDesde></tem:fechaDesde>
+      <tem:fechaHasta></tem:fechaHasta>
+      <tem:tipoInformacion>1</tem:tipoInformacion>
+    </tem:GetEnvios>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+  const res = await fetch(MRW_TRACKING_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+      SOAPAction: '"http://tempuri.org/ITrackingServiceContract/GetEnvios"',
+    },
+    body: envelope,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`MRW tracking error ${res.status}: ${text.slice(0, 500)}`);
+  }
+
+  const xml = await res.text();
 
   const events: MrwTrackingEvent[] = [];
-  const segRegex = /<SeguimientoEnvioItem>([\s\S]*?)<\/SeguimientoEnvioItem>/g;
+
+  // Parse Seguimiento items from the tracking response
+  const segRegex = /<a:SeguimientoEnvioItem>([\s\S]*?)<\/a:SeguimientoEnvioItem>/g;
   let match;
   while ((match = segRegex.exec(xml)) !== null) {
     const item = match[1];
     events.push({
-      date: extractTag(item, "Fecha") || extractTag(item, "FechaHora"),
-      description: extractTag(item, "EstadoMercancia") || extractTag(item, "Comentario"),
-      city: extractTag(item, "Poblacion") || undefined,
+      date: extractTag(item, "a:Fecha") || extractTag(item, "a:FechaHora"),
+      description: extractTag(item, "a:EstadoMercancia") || extractTag(item, "a:Comentario") || extractTag(item, "a:EstadoDescripcion"),
+      city: extractTag(item, "a:Poblacion") || undefined,
     });
+  }
+
+  // Fallback: try without namespace prefix
+  if (events.length === 0) {
+    const segRegex2 = /<SeguimientoEnvioItem>([\s\S]*?)<\/SeguimientoEnvioItem>/g;
+    while ((match = segRegex2.exec(xml)) !== null) {
+      const item = match[1];
+      events.push({
+        date: extractTag(item, "Fecha") || extractTag(item, "FechaHora"),
+        description: extractTag(item, "EstadoMercancia") || extractTag(item, "Comentario") || extractTag(item, "EstadoDescripcion"),
+        city: extractTag(item, "Poblacion") || undefined,
+      });
+    }
+  }
+
+  // If still no events, try to get the top-level status
+  if (events.length === 0) {
+    const estado = extractTag(xml, "Estado") || extractTag(xml, "a:Estado");
+    const desc = extractTag(xml, "EstadoDescripcion") || extractTag(xml, "a:EstadoDescripcion");
+    if (estado || desc) {
+      events.push({
+        date: extractTag(xml, "FechaEntrega") || extractTag(xml, "a:FechaEntrega") || "",
+        description: desc || `Estado: ${estado}`,
+      });
+    }
   }
 
   return events;
 }
 
 /**
- * Cancels a shipment by albaran number.
+ * Cancels a shipment by albaran number via CancelarEnvio.
  */
 export async function cancelShipment(albaran: string): Promise<boolean> {
-  const bodyContent = `
-      <request>
-        <NumeroEnvio>${escapeXml(albaran)}</NumeroEnvio>
-      </request>`;
+  const bodyContent = `<mrw:CancelarEnvio>
+      <mrw:request>
+        <mrw:CancelaEnvio>
+          <mrw:NumeroEnvioOriginal>${escapeXml(albaran)}</mrw:NumeroEnvioOriginal>
+        </mrw:CancelaEnvio>
+      </mrw:request>
+    </mrw:CancelarEnvio>`;
 
-  const xml = await soapRequest("CancelarEnvio", bodyContent);
+  const xml = await sagecRequest(bodyContent);
   const estado = extractTag(xml, "Estado");
   return estado === "1";
 }

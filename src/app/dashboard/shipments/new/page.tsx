@@ -15,9 +15,9 @@ const GLS_SERVICES = [
 ] as const;
 
 const MRW_SERVICES = [
-  { id: "0000", name: "MRW Urgente 19h", delivery: "Entrega antes de las 19:00", code: "0000" },
-  { id: "0005", name: "MRW Urgente 14h", delivery: "Entrega antes de las 14:00", code: "0005" },
-  { id: "0010", name: "MRW Urgente 10h", delivery: "Entrega antes de las 10:00", code: "0010" },
+  { id: "0200", name: "MRW Urgente 19", delivery: "Entrega antes de las 19:00", code: "0200" },
+  { id: "0300", name: "MRW Económico", delivery: "Entrega en 24-48h", code: "0300" },
+  { id: "0800", name: "MRW Ecommerce", delivery: "Servicio ecommerce", code: "0800" },
 ] as const;
 
 interface ProjectOption {
@@ -62,7 +62,7 @@ export default function NewShipmentPage() {
   const [glsServiceId, setGlsServiceId] = useState("business24");
   const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [mrwServiceId, setMrwServiceId] = useState("0000");
+  const [mrwServiceId, setMrwServiceId] = useState("0200");
   const [mrwAlbaran, setMrwAlbaran] = useState<string | null>(null);
   const [mrwLabelUrl, setMrwLabelUrl] = useState<string | null>(null);
 
