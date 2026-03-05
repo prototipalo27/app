@@ -57,14 +57,16 @@ function buildSagecEnvelope(soapAction: string, bodyContent: string): string {
  */
 async function sagecRequest(soapAction: string, bodyContent: string): Promise<string> {
   const envelope = buildSagecEnvelope(soapAction, bodyContent);
+  const body = Buffer.from(envelope, "utf-8");
 
   const res = await fetch(MRW_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "text/xml; charset=utf-8",
+      "Content-Length": String(body.byteLength),
       SOAPAction: `"http://www.mrw.es/${soapAction}"`,
     },
-    body: envelope,
+    body,
     cache: "no-store",
   });
 
