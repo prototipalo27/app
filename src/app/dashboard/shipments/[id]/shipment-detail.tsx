@@ -14,8 +14,7 @@ interface GlsTrackingEvent {
 
 type TrackingEvent = PacklinkTrackingEvent | GlsTrackingEvent;
 
-// The DB has gls_barcode/cabify_parcel_id but generated types may not include them yet
-type ShipmentRow = Tables<"shipping_info"> & { gls_barcode?: string | null; cabify_parcel_id?: string | null };
+type ShipmentRow = Tables<"shipping_info">;
 import { linkShipmentToProject, unlinkShipmentFromProject, deleteShipment } from "../actions";
 
 interface ShipmentDetailProps {
@@ -50,17 +49,20 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
 
   const isGls = shipment.carrier === "GLS";
   const isCabify = shipment.carrier === "Cabify";
-  const hasRef = isGls ? !!shipment.gls_barcode : isCabify ? !!shipment.cabify_parcel_id : !!shipment.packlink_shipment_ref;
+  const isMrw = shipment.carrier === "MRW";
+  const hasRef = isMrw ? !!shipment.mrw_albaran : isGls ? !!shipment.gls_barcode : isCabify ? !!shipment.cabify_parcel_id : !!shipment.packlink_shipment_ref;
 
   useEffect(() => {
-    if (isGls && shipment.gls_barcode) {
+    if (isMrw && shipment.mrw_albaran) {
+      fetchMrwTracking(shipment.mrw_albaran);
+    } else if (isGls && shipment.gls_barcode) {
       fetchGlsTracking(shipment.gls_barcode);
     } else if (isCabify && shipment.cabify_parcel_id) {
       fetchCabifyTracking(shipment.cabify_parcel_id);
     } else if (shipment.packlink_shipment_ref) {
       fetchPacklinkTracking(shipment.packlink_shipment_ref);
     }
-  }, [shipment.packlink_shipment_ref, shipment.gls_barcode, shipment.cabify_parcel_id, isGls, isCabify]);
+  }, [shipment.packlink_shipment_ref, shipment.gls_barcode, shipment.cabify_parcel_id, shipment.mrw_albaran, isGls, isCabify, isMrw]);
 
   async function fetchPacklinkTracking(ref: string) {
     try {
@@ -98,8 +100,22 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
     }
   }
 
+  async function fetchMrwTracking(albaran: string) {
+    try {
+      const res = await fetch(`/api/mrw/shipments/${albaran}/tracking`);
+      if (res.ok) {
+        const data = await res.json();
+        setTracking(data.events ?? []);
+      }
+    } catch {
+      // Tracking may not be available yet
+    }
+  }
+
   function refreshTracking() {
-    if (isGls && shipment.gls_barcode) {
+    if (isMrw && shipment.mrw_albaran) {
+      fetchMrwTracking(shipment.mrw_albaran);
+    } else if (isGls && shipment.gls_barcode) {
       fetchGlsTracking(shipment.gls_barcode);
     } else if (isCabify && shipment.cabify_parcel_id) {
       fetchCabifyTracking(shipment.cabify_parcel_id);
@@ -110,15 +126,20 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
 
   async function downloadLabel() {
     if (isCabify) {
-      // Cabify doesn't provide downloadable labels — open tracking URL if available
       if (shipment.tracking_number) {
         window.open(shipment.tracking_number, "_blank");
       }
       return;
     }
 
+    if (isMrw) {
+      const albaran = shipment.mrw_albaran;
+      if (!albaran) return;
+      window.open(`/api/mrw/shipments/${albaran}/label`, "_blank");
+      return;
+    }
+
     if (isGls) {
-      // GLS: open label PDF endpoint in new tab, or use stored label_url
       const barcode = shipment.gls_barcode;
       if (!barcode) return;
       window.open(`/api/gls/shipments/${barcode}/label`, "_blank");
@@ -212,11 +233,11 @@ export function ShipmentDetail({ shipment, linkedProject, availableProjects, can
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Shipment details</h2>
           <div className="space-y-2">
-            {(shipment.packlink_shipment_ref || shipment.gls_barcode || shipment.cabify_parcel_id) && (
+            {(shipment.packlink_shipment_ref || shipment.gls_barcode || shipment.cabify_parcel_id || shipment.mrw_albaran) && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-500 dark:text-zinc-400">{isGls ? "GLS Barcode" : isCabify ? "Cabify Parcel" : "Reference"}</span>
+                <span className="text-zinc-500 dark:text-zinc-400">{isMrw ? "MRW Albaran" : isGls ? "GLS Barcode" : isCabify ? "Cabify Parcel" : "Reference"}</span>
                 <span className="font-mono font-medium text-zinc-900 dark:text-white">
-                  {isGls ? shipment.gls_barcode : isCabify ? shipment.cabify_parcel_id : shipment.packlink_shipment_ref}
+                  {isMrw ? shipment.mrw_albaran : isGls ? shipment.gls_barcode : isCabify ? shipment.cabify_parcel_id : shipment.packlink_shipment_ref}
                 </span>
               </div>
             )}

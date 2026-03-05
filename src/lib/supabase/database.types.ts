@@ -1700,6 +1700,7 @@ export type Database = {
           gls_barcode: string | null
           id: string
           label_url: string | null
+          mrw_albaran: string | null
           notes: string | null
           package_height: number | null
           package_length: number | null
@@ -1735,6 +1736,7 @@ export type Database = {
           gls_barcode?: string | null
           id?: string
           label_url?: string | null
+          mrw_albaran?: string | null
           notes?: string | null
           package_height?: number | null
           package_length?: number | null
@@ -1770,6 +1772,7 @@ export type Database = {
           gls_barcode?: string | null
           id?: string
           label_url?: string | null
+          mrw_albaran?: string | null
           notes?: string | null
           package_height?: number | null
           package_length?: number | null
@@ -2699,3 +2702,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

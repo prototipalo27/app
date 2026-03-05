@@ -14,6 +14,12 @@ const GLS_SERVICES = [
   { id: "economy", name: "EconomyParcel 48-72H", delivery: "48-72h" },
 ] as const;
 
+const MRW_SERVICES = [
+  { id: "0000", name: "MRW Urgente 19h", delivery: "Entrega antes de las 19:00", code: "0000" },
+  { id: "0005", name: "MRW Urgente 14h", delivery: "Entrega antes de las 14:00", code: "0005" },
+  { id: "0010", name: "MRW Urgente 10h", delivery: "Entrega antes de las 10:00", code: "0010" },
+] as const;
+
 interface ProjectOption {
   id: string;
   name: string;
@@ -45,7 +51,7 @@ export default function NewShipmentPage() {
   const [reference, setReference] = useState<string | null>(null);
 
   // Carrier selection
-  const [carrier, setCarrier] = useState<"packlink" | "gls" | "cabify">("packlink");
+  const [carrier, setCarrier] = useState<"packlink" | "gls" | "cabify" | "mrw">("packlink");
   const [glsBarcode, setGlsBarcode] = useState<string | null>(null);
   const [glsLabelUrl, setGlsLabelUrl] = useState<string | null>(null);
   const [cabifyParcelId, setCabifyParcelId] = useState<string | null>(null);
@@ -56,6 +62,9 @@ export default function NewShipmentPage() {
   const [glsServiceId, setGlsServiceId] = useState("business24");
   const [glsPrices, setGlsPrices] = useState<Record<string, { price: number; zone: string; service: string; horario: string }>>({});
   const glsPriceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [mrwServiceId, setMrwServiceId] = useState("0000");
+  const [mrwAlbaran, setMrwAlbaran] = useState<string | null>(null);
+  const [mrwLabelUrl, setMrwLabelUrl] = useState<string | null>(null);
 
   // Projects for optional linking
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -362,6 +371,56 @@ export default function NewShipmentPage() {
     }
   }
 
+  async function createMrwShipment() {
+    setLoading(true);
+    setError(null);
+    setStep("creating");
+
+    try {
+      const totalWeight = packages.reduce((sum, p) => sum + Number(p.weight), 0);
+      const firstPkg = packages[0];
+
+      const res = await fetch("/api/mrw/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
+          recipientName: `${recipientName} ${recipientSurname}`.trim(),
+          recipientAddress: street,
+          recipientCity: city,
+          recipientPostalCode: postalCode,
+          recipientCountry: country,
+          recipientPhone: recipientPhone || undefined,
+          recipientEmail: recipientEmail || undefined,
+          packages: packages.length,
+          weight: totalWeight,
+          packageWidth: Number(firstPkg.width),
+          packageHeight: Number(firstPkg.height),
+          packageLength: Number(firstPkg.length),
+          title: title || undefined,
+          contentDescription: contentDescription || undefined,
+          declaredValue: declaredValue ? Number(declaredValue) : undefined,
+          service: mrwServiceId,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create MRW shipment");
+      }
+
+      const data = await res.json();
+      setMrwAlbaran(data.albaran);
+      setMrwLabelUrl(data.labelUrl);
+      setStep("created");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error creating MRW shipment");
+      setStep("form");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function createShipment() {
     if (!selectedService) return;
     setLoading(true);
@@ -461,6 +520,17 @@ export default function NewShipmentPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setCarrier("mrw")}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  carrier === "mrw"
+                    ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                    : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                }`}
+              >
+                MRW
+              </button>
+              <button
+                type="button"
                 onClick={() => setCarrier("cabify")}
                 className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                   carrier === "cabify"
@@ -506,6 +576,33 @@ export default function NewShipmentPage() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* MRW service selector */}
+          {carrier === "mrw" && (
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">MRW Service</p>
+              <div className="space-y-2">
+                {MRW_SERVICES.map((svc) => (
+                  <button
+                    key={svc.id}
+                    type="button"
+                    onClick={() => setMrwServiceId(svc.id)}
+                    className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                      mrwServiceId === svc.id
+                        ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                        : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                    }`}
+                  >
+                    <div>
+                      <span className="font-medium">{svc.name}</span>
+                      <br />
+                      <span className="text-xs opacity-70">{svc.delivery}</span>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -669,7 +766,9 @@ export default function NewShipmentPage() {
                   ? createCabifyShipment
                   : carrier === "gls"
                     ? createGlsShipment
-                    : searchServices
+                    : carrier === "mrw"
+                      ? createMrwShipment
+                      : searchServices
               }
               disabled={
                 loading ||
@@ -680,8 +779,8 @@ export default function NewShipmentPage() {
               className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:focus:ring-offset-black"
             >
               {loading
-                ? carrier === "cabify" ? "Creating…" : carrier === "gls" ? "Creating…" : "Searching…"
-                : carrier === "cabify" ? "Crear envio Cabify" : carrier === "gls" ? "Crear envio GLS" : "Search carriers"}
+                ? carrier === "cabify" || carrier === "gls" || carrier === "mrw" ? "Creating…" : "Searching…"
+                : carrier === "cabify" ? "Crear envio Cabify" : carrier === "gls" ? "Crear envio GLS" : carrier === "mrw" ? "Crear envio MRW" : "Search carriers"}
             </button>
           </div>
         </div>
@@ -786,13 +885,24 @@ export default function NewShipmentPage() {
               <span className="font-mono font-medium text-zinc-900 dark:text-white">{glsBarcode}</span>
             </div>
           )}
+          {mrwAlbaran && (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500 dark:text-zinc-400">MRW Albaran</span>
+              <span className="font-mono font-medium text-zinc-900 dark:text-white">{mrwAlbaran}</span>
+            </div>
+          )}
           {cabifyParcelId && (
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500 dark:text-zinc-400">Cabify Parcel ID</span>
               <span className="font-mono font-medium text-zinc-900 dark:text-white">{cabifyParcelId}</span>
             </div>
           )}
-          {carrier === "cabify" ? (
+          {carrier === "mrw" ? (
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
+              <span className="font-medium text-zinc-900 dark:text-white">MRW — {MRW_SERVICES.find(s => s.id === mrwServiceId)?.name || "Urgente 19h"}</span>
+            </div>
+          ) : carrier === "cabify" ? (
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-500 dark:text-zinc-400">Carrier</span>
@@ -855,6 +965,21 @@ export default function NewShipmentPage() {
               </a>
             </div>
           )}
+          {mrwLabelUrl && (
+            <div className="pt-2">
+              <a
+                href={mrwLabelUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-400 dark:hover:bg-cyan-900/20"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Download MRW label
+              </a>
+            </div>
+          )}
           {cabifyTrackingUrl && (
             <div className="pt-2">
               <a
@@ -890,6 +1015,9 @@ export default function NewShipmentPage() {
               setCabifyParcelId(null);
               setCabifyTrackingUrl(null);
               setCabifyEstimate(null);
+              setMrwAlbaran(null);
+              setMrwLabelUrl(null);
+              setMrwServiceId("0000");
               setCarrier("packlink");
               setTitle("");
               setContentDescription("");
