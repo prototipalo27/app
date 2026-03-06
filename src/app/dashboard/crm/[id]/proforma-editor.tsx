@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   saveQuoteItems,
+  sendQuoteToClient,
   type ProformaLineItem,
 } from "../actions";
 import {
@@ -159,24 +160,15 @@ export default function ProformaEditor({
           setError(saveResult.error || "Error al guardar");
           return;
         }
+        setSaved(true);
       }
 
-      // Build email body from line items
-      const validLines = lines.filter((l) => l.concept.trim() && l.price > 0);
-      const subtotal = validLines.reduce((s, i) => s + i.price * i.units, 0);
-      const taxTotal = validLines.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
-      const total = subtotal + taxTotal;
-
-      const itemsText = validLines
-        .map((i) => `  - ${i.concept}: ${i.units} ud × ${i.price.toFixed(2)} € = ${(i.price * i.units).toFixed(2)} €`)
-        .join("\n");
-
-      const body = `Hola,\n\nTe envío el presupuesto para tu proyecto:\n\n${itemsText}\n\nSubtotal: ${subtotal.toFixed(2)} €\nIVA: ${taxTotal.toFixed(2)} €\nTotal: ${total.toFixed(2)} €\n\nAdjunto el presupuesto formal en PDF. Si tienes alguna duda, no dudes en contestar a este email.\n\nGracias,`;
-
-      // Dispatch event to pre-fill EmailPanel
-      window.dispatchEvent(
-        new CustomEvent("send-proforma", { detail: { body } })
-      );
+      const result = await sendQuoteToClient(leadId);
+      if (result.success) {
+        setSent(true);
+      } else {
+        setError(result.error || "Error al enviar el presupuesto");
+      }
     });
   };
 

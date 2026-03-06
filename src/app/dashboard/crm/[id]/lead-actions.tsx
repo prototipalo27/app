@@ -14,6 +14,7 @@ import {
   getProformaDetails,
   createLeadProforma,
   updateLeadOwner,
+  sendQuoteToClient,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { HoldedDocument } from "@/lib/holded/types";
@@ -438,20 +439,19 @@ export default function LeadActions({
                 {leadEmail ? (
                   <button
                     onClick={() => {
-                      const items = (quoteRequest.items || []) as { concept: string; price: number; units: number; tax: number }[];
-                      const subtotal = items.reduce((s, i) => s + i.price * i.units, 0);
-                      const taxTotal = items.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
-                      const total = subtotal + taxTotal;
-                      const itemsText = items
-                        .filter((i) => i.concept?.trim() && i.price > 0)
-                        .map((i) => `  - ${i.concept}: ${i.units} ud × ${i.price.toFixed(2)} € = ${(i.price * i.units).toFixed(2)} €`)
-                        .join("\n");
-                      const body = `Hola,\n\nTe envío el presupuesto para tu proyecto:\n\n${itemsText}\n\nSubtotal: ${subtotal.toFixed(2)} €\nIVA: ${taxTotal.toFixed(2)} €\nTotal: ${total.toFixed(2)} €\n\nAdjunto el presupuesto formal en PDF. Si tienes alguna duda, no dudes en contestar a este email.\n\nGracias,`;
-                      window.dispatchEvent(new CustomEvent("send-proforma", { detail: { body } }));
+                      setQuoteError(null);
+                      startTransition(async () => {
+                        const result = await sendQuoteToClient(leadId);
+                        if (!result.success) {
+                          setQuoteError(result.error || "Error al enviar el presupuesto");
+                        }
+                        router.refresh();
+                      });
                     }}
-                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
+                    disabled={isPending}
+                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
                   >
-                    Enviar al cliente
+                    {isPending ? "Enviando..." : "Enviar al cliente"}
                   </button>
                 ) : (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
