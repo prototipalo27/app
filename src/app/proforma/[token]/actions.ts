@@ -87,7 +87,9 @@ export async function acceptProforma(
         .update(shippingRow)
         .eq("id", existingShipping.id);
     } else {
-      await supabase.from("shipping_info").insert(shippingRow);
+      await supabase.from("shipping_info").upsert(shippingRow, {
+        onConflict: "project_id",
+      });
     }
 
     // 3. Update quote_request if linked

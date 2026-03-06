@@ -5,6 +5,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 import type { Metadata } from "next";
 import { getTracking } from "@/lib/packlink/api";
 import { getTracking as getGlsTracking } from "@/lib/gls/api";
+import { getTracking as getMrwTracking } from "@/lib/mrw/api";
 import { getVerifiedClient } from "@/lib/client-auth";
 import ClientPortal from "./client-portal";
 
@@ -260,7 +261,20 @@ export default async function TrackingPage({
   const shippingRow = shipping as Record<string, unknown> | null;
   const glsBarcode = shippingRow?.gls_barcode as string | null;
 
-  if (shipping?.carrier === "GLS" && glsBarcode) {
+  const mrwAlbaran = shippingRow?.mrw_albaran as string | null;
+
+  if (shipping?.carrier === "MRW" && mrwAlbaran) {
+    try {
+      const events = await getMrwTracking(mrwAlbaran);
+      trackingEvents = events.map((e) => ({
+        description: e.description,
+        date: e.date,
+        city: e.city,
+      }));
+    } catch {
+      // Tracking may not be available
+    }
+  } else if (shipping?.carrier === "GLS" && glsBarcode) {
     try {
       const events = await getGlsTracking(glsBarcode);
       trackingEvents = events.map((e) => ({

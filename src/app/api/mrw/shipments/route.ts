@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createShipment } from "@/lib/mrw/api";
 import type { MrwShipmentParams } from "@/lib/mrw/types";
+import { sendShippingNotification } from "@/lib/shipping-notification";
 
 /**
  * POST /api/mrw/shipments
@@ -130,9 +131,11 @@ export async function POST(request: NextRequest) {
     if (addressId) row.address_id = addressId;
     if (projectId) row.project_id = projectId;
 
-    const { error: dbError } = await supabase
-      .from("shipping_info")
-      .insert(row);
+    const { error: dbError } = projectId
+      ? await supabase
+          .from("shipping_info")
+          .upsert(row, { onConflict: "project_id" })
+      : await supabase.from("shipping_info").insert(row);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
@@ -141,6 +144,26 @@ export async function POST(request: NextRequest) {
         .from("projects")
         .update({ status: "shipping" })
         .eq("id", projectId);
+
+      // Send shipping notification email to client
+      const { data: proj } = await supabase
+        .from("projects")
+        .select("client_email, client_name, name, tracking_token")
+        .eq("id", projectId)
+        .single();
+
+      if (proj?.client_email && proj.tracking_token) {
+        sendShippingNotification({
+          clientEmail: proj.client_email,
+          clientName: proj.client_name,
+          projectName: proj.name,
+          carrier: "MRW",
+          trackingNumber: result.albaran,
+          trackingToken: proj.tracking_token,
+        }).catch(() => {
+          // Email failure should not break the shipment flow
+        });
+      }
     }
 
     return NextResponse.json({
