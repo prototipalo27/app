@@ -7,6 +7,16 @@ import {
   STATUS_LABELS,
   type LeadStatus,
 } from "@/lib/crm-config";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 export default async function CrmListPage({
   searchParams,
@@ -35,7 +45,6 @@ export default async function CrmListPage({
 
   const { data: leads } = await query;
 
-  // Fetch assignee emails
   const assigneeIds = [
     ...new Set((leads || []).map((l) => l.assigned_to).filter(Boolean)),
   ] as string[];
@@ -54,159 +63,125 @@ export default async function CrmListPage({
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+        <h1 className="text-2xl font-bold text-foreground">
           CRM — Lista de Leads
         </h1>
         <div className="flex gap-2">
-          <Link
-            href="/dashboard/crm"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <svg className="mr-1.5 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Button variant="outline" render={<Link href="/dashboard/crm" />}>
+            <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
             </svg>
             Kanban
-          </Link>
-          <Link
-            href="/dashboard/crm/new"
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-          >
+          </Button>
+          <Button render={<Link href="/dashboard/crm/new" />} className="bg-brand text-white hover:bg-brand-dark">
             + Nuevo lead
-          </Link>
+          </Button>
         </div>
       </div>
 
       {/* Status filter tabs */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/dashboard/crm/list"
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            !filterStatus
-              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-              : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          }`}
+        <Button
+          variant={!filterStatus ? "default" : "ghost"}
+          size="sm"
+          render={<Link href="/dashboard/crm/list" />}
         >
           Todos
-        </Link>
+        </Button>
         {LEAD_COLUMNS.map((col) => (
-          <Link
+          <Button
             key={col.id}
-            href={`/dashboard/crm/list?status=${col.id}`}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              filterStatus === col.id
-                ? col.badge
-                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            }`}
+            variant={filterStatus === col.id ? "secondary" : "ghost"}
+            size="sm"
+            render={<Link href={`/dashboard/crm/list?status=${col.id}`} />}
+            className={filterStatus === col.id ? col.badge : ""}
           >
             {col.label}
-          </Link>
+          </Button>
         ))}
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-                <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
-                  Nombre
-                </th>
-                <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
-                  Empresa
-                </th>
-                <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
-                  Email
-                </th>
-                <th className="hidden px-4 py-3 font-semibold text-zinc-700 md:table-cell dark:text-zinc-300">
-                  Telefono
-                </th>
-                <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
-                  Estado
-                </th>
-                <th className="hidden px-4 py-3 text-right font-semibold text-zinc-700 md:table-cell dark:text-zinc-300">
-                  Valor est.
-                </th>
-                <th className="hidden px-4 py-3 font-semibold text-zinc-700 md:table-cell dark:text-zinc-300">
-                  Asignado
-                </th>
-                <th className="px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300">
-                  Fecha
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!leads || leads.length === 0) ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
-                  >
-                    No hay leads
-                    {filterStatus ? ` con estado "${STATUS_LABELS[filterStatus as LeadStatus] || filterStatus}"` : ""}.
-                  </td>
-                </tr>
-              ) : (
-                leads.map((lead) => {
-                  const col = LEAD_COLUMNS.find((c) => c.id === lead.status);
-                  return (
-                    <tr
-                      key={lead.id}
-                      className="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/dashboard/crm/${lead.id}`}
-                          className="font-medium text-zinc-900 hover:underline dark:text-white"
-                        >
-                          {lead.full_name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                        {lead.company || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                        {lead.email || "—"}
-                      </td>
-                      <td className="hidden px-4 py-3 text-zinc-600 md:table-cell dark:text-zinc-400">
-                        {lead.phone || "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {col && (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${col.badge}`}
-                          >
-                            {col.label}
-                          </span>
-                        )}
-                      </td>
-                      <td className="hidden px-4 py-3 text-right text-zinc-600 md:table-cell dark:text-zinc-400">
-                        {lead.estimated_value != null ? (
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            {lead.estimated_value.toLocaleString("es-ES")} €
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="hidden px-4 py-3 text-zinc-600 md:table-cell dark:text-zinc-400">
-                        {lead.assigned_to
-                          ? assigneeMap.get(lead.assigned_to) || "—"
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
-                        {new Date(lead.created_at).toLocaleDateString("es-ES", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Empresa</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead className="hidden md:table-cell">Telefono</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="hidden text-right md:table-cell">Valor est.</TableHead>
+              <TableHead className="hidden md:table-cell">Asignado</TableHead>
+              <TableHead>Fecha</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(!leads || leads.length === 0) ? (
+              <TableRow>
+                <TableCell
+                  colSpan={8}
+                  className="py-8 text-center text-muted-foreground"
+                >
+                  No hay leads
+                  {filterStatus ? ` con estado "${STATUS_LABELS[filterStatus as LeadStatus] || filterStatus}"` : ""}.
+                </TableCell>
+              </TableRow>
+            ) : (
+              leads.map((lead) => {
+                const col = LEAD_COLUMNS.find((c) => c.id === lead.status);
+                return (
+                  <TableRow key={lead.id}>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/crm/${lead.id}`}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {lead.full_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {lead.company || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {lead.email || "—"}
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {lead.phone || "—"}
+                    </TableCell>
+                    <TableCell>
+                      {col && (
+                        <Badge variant="secondary" className={col.badge}>
+                          {col.label}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden text-right md:table-cell">
+                      {lead.estimated_value != null ? (
+                        <span className="font-medium text-green-600 dark:text-green-400">
+                          {lead.estimated_value.toLocaleString("es-ES")} €
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {lead.assigned_to
+                        ? assigneeMap.get(lead.assigned_to) || "—"
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(lead.created_at).toLocaleDateString("es-ES", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -26,6 +26,9 @@ import {
   URGENCY_OPTIONS,
   type LeadStatus,
 } from "@/lib/crm-config";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 
 interface LeadActionsProps {
   leadId: string;
@@ -72,28 +75,20 @@ export default function LeadActions({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Note form
   const [note, setNote] = useState("");
-
-  // Lost reason
   const [showLostReason, setShowLostReason] = useState(false);
   const [lostReason, setLostReason] = useState("");
-
-  // Quote
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  // Proforma panel
   const [proformaOpen, setProformaOpen] = useState(false);
   const [proformaLoading, setProformaLoading] = useState(false);
   const [proformaData, setProformaData] = useState<HoldedDocument | null>(null);
   const [proformaError, setProformaError] = useState<string | null>(null);
-
-  // Delete confirmation
   const [showDelete, setShowDelete] = useState(false);
-
-  // Block confirmation
   const [showBlock, setShowBlock] = useState(false);
+
+  const selectClass =
+    "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
 
   const handleStatusChange = (newStatus: LeadStatus) => {
     if (newStatus === "lost") {
@@ -162,7 +157,6 @@ export default function LeadActions({
     }
   };
 
-  // Available status transitions
   const nextStatuses = LEAD_COLUMNS.filter(
     (col) => col.id !== currentStatus
   );
@@ -171,70 +165,74 @@ export default function LeadActions({
     <div className="space-y-6">
       {/* Status buttons */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Cambiar estado
         </h3>
-        <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mb-2 text-xs text-muted-foreground">
           Actual: {STATUS_LABELS[currentStatus]}
         </p>
         <div className="flex flex-wrap gap-2">
           {nextStatuses.map((col) => (
-            <button
+            <Button
               key={col.id}
+              variant="secondary"
+              size="sm"
               onClick={() => handleStatusChange(col.id)}
               disabled={isPending}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${col.badge} hover:opacity-80`}
+              className={col.badge}
             >
               {col.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
-      {/* Lost reason modal inline */}
+      {/* Lost reason inline */}
       {showLostReason && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/10">
-          <p className="text-sm font-medium text-red-700 dark:text-red-400">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-sm font-medium text-destructive">
             Motivo de perdida (opcional)
           </p>
-          <textarea
+          <Textarea
             value={lostReason}
             onChange={(e) => setLostReason(e.target.value)}
             placeholder="Ej: Presupuesto demasiado alto..."
-            className="mt-2 w-full rounded-lg border border-red-300 bg-white px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none dark:border-red-700 dark:bg-zinc-900 dark:text-white"
+            className="mt-2"
             rows={2}
           />
           <div className="mt-2 flex gap-2">
-            <button
+            <Button
+              size="sm"
               onClick={handleLostConfirm}
               disabled={isPending}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               Confirmar
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setShowLostReason(false);
                 setLostReason("");
               }}
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
             >
               Cancelar
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Assign */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Asignar a
         </h3>
         <select
           value={assignedTo || ""}
           onChange={(e) => handleAssign(e.target.value)}
           disabled={isPending}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className={selectClass}
         >
           <option value="">Sin asignar</option>
           {managers.map((m) => (
@@ -245,9 +243,9 @@ export default function LeadActions({
         </select>
       </div>
 
-      {/* Owner (captado por) */}
+      {/* Owner */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Captado por
         </h3>
         <select
@@ -260,7 +258,7 @@ export default function LeadActions({
             });
           }}
           disabled={isPending}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className={selectClass}
         >
           <option value="">Sin asignar</option>
           {managers.map((m) => (
@@ -272,18 +270,19 @@ export default function LeadActions({
 
         {commission && (
           <div className="mt-2 space-y-1">
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            <Badge
+              variant="secondary"
+              className={
                 commission.isReturning
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                   : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-              }`}
+              }
             >
               {commission.isReturning ? "Recurrente 7.5%" : "Nuevo 15%"}
-            </span>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Comision: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{commission.commission.toFixed(2)} €</span>
-              <span className="ml-1 text-zinc-400">(sobre {commission.quoteTotal.toFixed(2)} €)</span>
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              Comision: <span className="font-semibold text-foreground">{commission.commission.toFixed(2)} €</span>
+              <span className="ml-1 text-muted-foreground/70">(sobre {commission.quoteTotal.toFixed(2)} €)</span>
             </p>
           </div>
         )}
@@ -291,7 +290,7 @@ export default function LeadActions({
 
       {/* Payment condition */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Condicion de pago
         </h3>
         <select
@@ -304,7 +303,7 @@ export default function LeadActions({
             });
           }}
           disabled={isPending}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className={selectClass}
         >
           <option value="">Sin definir</option>
           <option value="50-50">50-50 (dos plazos)</option>
@@ -314,7 +313,7 @@ export default function LeadActions({
 
       {/* Project type tag */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Tipo de proyecto
         </h3>
         <select
@@ -327,7 +326,7 @@ export default function LeadActions({
             });
           }}
           disabled={isPending}
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+          className={selectClass}
         >
           <option value="">Sin tipo</option>
           {projectTemplateTags.map((tag) => (
@@ -338,9 +337,9 @@ export default function LeadActions({
         </select>
       </div>
 
-      {/* Estimacion de valor */}
+      {/* Estimation */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Estimacion de valor
         </h3>
         <div className="space-y-2">
@@ -354,7 +353,7 @@ export default function LeadActions({
               });
             }}
             disabled={isPending}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+            className={selectClass}
           >
             <option value="">Cantidad...</option>
             {QUANTITY_RANGES.map((r) => (
@@ -372,7 +371,7 @@ export default function LeadActions({
               });
             }}
             disabled={isPending}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+            className={selectClass}
           >
             <option value="">Complejidad...</option>
             {COMPLEXITY_OPTIONS.map((c) => (
@@ -390,7 +389,7 @@ export default function LeadActions({
               });
             }}
             disabled={isPending}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+            className={selectClass}
           >
             <option value="">Urgencia...</option>
             {URGENCY_OPTIONS.map((u) => (
@@ -400,10 +399,10 @@ export default function LeadActions({
 
           {estimatedValue != null && (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                 {estimatedValue.toLocaleString("es-ES")} €
-              </span>
-              <span className="text-[11px] text-zinc-400">valor estimado</span>
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">valor estimado</span>
             </div>
           )}
         </div>
@@ -411,33 +410,30 @@ export default function LeadActions({
 
       {/* Presupuesto */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Presupuesto
         </h3>
         {(() => {
-          // No quote request yet — prompt to create one via the editor
           if (!quoteRequest || (!quoteRequest.items && quoteRequest.status === "pending")) {
             return (
-              <div className="space-y-2">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Crea un presupuesto en el editor de la izquierda.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Crea un presupuesto en el editor de la izquierda.
+              </p>
             );
           }
 
           const hasItems = Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0;
           const status = quoteRequest.status;
 
-          // Items saved but not yet sent to client
           if (hasItems && status === "pending") {
             return (
               <div className="space-y-2">
-                <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                   Presupuesto guardado
-                </span>
+                </Badge>
                 {leadEmail ? (
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => {
                       setQuoteError(null);
                       startTransition(async () => {
@@ -449,29 +445,28 @@ export default function LeadActions({
                       });
                     }}
                     disabled={isPending}
-                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                    className="block bg-brand text-white hover:bg-brand-dark"
                   >
                     {isPending ? "Enviando..." : "Enviar al cliente"}
-                  </button>
+                  </Button>
                 ) : (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="text-xs text-muted-foreground">
                     El lead necesita un email para enviar el presupuesto.
                   </p>
                 )}
                 {quoteError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{quoteError}</p>
+                  <p className="text-xs text-destructive">{quoteError}</p>
                 )}
               </div>
             );
           }
 
-          // Quote sent, waiting for client billing data
           if (status === "quote_sent") {
             return (
               <div className="space-y-2">
-                <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                   Pendiente de datos del cliente
-                </span>
+                </Badge>
                 <button
                   onClick={() => {
                     const baseUrl = window.location.origin;
@@ -487,21 +482,20 @@ export default function LeadActions({
             );
           }
 
-          // Client submitted billing data
           if (status === "submitted") {
             return (
               <div className="space-y-2">
-                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                   Datos recibidos
-                </span>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                </Badge>
+                <div className="text-xs text-muted-foreground">
                   <p><strong>Razón social:</strong> {quoteRequest.billing_name}</p>
                   <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
                 </div>
 
-                {/* Create proforma in Holded if not yet created */}
                 {!quoteRequest.holded_proforma_id && quoteRequest.holded_contact_id && (
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => {
                       setQuoteError(null);
                       startTransition(async () => {
@@ -513,10 +507,10 @@ export default function LeadActions({
                       });
                     }}
                     disabled={isPending}
-                    className="block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+                    className="block bg-brand text-white hover:bg-brand-dark"
                   >
                     {isPending ? "Creando..." : "Crear proforma en Holded"}
-                  </button>
+                  </Button>
                 )}
 
                 {quoteRequest.holded_proforma_id && (
@@ -530,10 +524,11 @@ export default function LeadActions({
                       Ver proforma en Holded
                     </a>
 
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleViewProforma}
                       disabled={proformaLoading}
-                      className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                     >
                       {proformaLoading ? (
                         <>
@@ -551,19 +546,19 @@ export default function LeadActions({
                           {proformaOpen ? "Ocultar proforma" : "Ver proforma"}
                         </>
                       )}
-                    </button>
+                    </Button>
 
                     {proformaError && (
-                      <p className="text-xs text-red-600 dark:text-red-400">{proformaError}</p>
+                      <p className="text-xs text-destructive">{proformaError}</p>
                     )}
 
                     {proformaOpen && proformaData && (
-                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+                      <div className="rounded-lg border bg-muted/50 p-3">
                         <div className="mb-3">
-                          <p className="text-xs font-semibold text-zinc-900 dark:text-white">
+                          <p className="text-xs font-semibold text-foreground">
                             Proforma {proformaData.docNumber}
                           </p>
-                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          <p className="text-[11px] text-muted-foreground">
                             {new Date(proformaData.date * 1000).toLocaleDateString("es-ES", {
                               day: "numeric",
                               month: "long",
@@ -575,22 +570,22 @@ export default function LeadActions({
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-[11px]">
                             <thead>
-                              <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
+                              <tr className="border-b text-muted-foreground">
                                 <th className="pb-1.5 pr-2 font-medium">Producto</th>
                                 <th className="pb-1.5 pr-2 text-right font-medium">Uds</th>
                                 <th className="pb-1.5 pr-2 text-right font-medium">Precio</th>
                                 <th className="pb-1.5 text-right font-medium">Subtotal</th>
                               </tr>
                             </thead>
-                            <tbody className="text-zinc-700 dark:text-zinc-300">
+                            <tbody className="text-foreground">
                               {proformaData.products.map((p, i) => {
                                 const lineSubtotal = p.units * p.price * (1 - p.discount / 100);
                                 return (
-                                  <tr key={i} className="border-b border-zinc-100 dark:border-zinc-700/50">
+                                  <tr key={i} className="border-b border-border/50">
                                     <td className="py-1.5 pr-2">
                                       <span className="font-medium">{p.name}</span>
                                       {p.desc && (
-                                        <span className="block text-[10px] text-zinc-400">{p.desc}</span>
+                                        <span className="block text-[10px] text-muted-foreground">{p.desc}</span>
                                       )}
                                     </td>
                                     <td className="py-1.5 pr-2 text-right tabular-nums">{p.units}</td>
@@ -603,16 +598,16 @@ export default function LeadActions({
                           </table>
                         </div>
 
-                        <div className="mt-3 space-y-1 border-t border-zinc-200 pt-2 text-[11px] dark:border-zinc-600">
-                          <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                        <div className="mt-3 space-y-1 border-t pt-2 text-[11px]">
+                          <div className="flex justify-between text-muted-foreground">
                             <span>Subtotal</span>
                             <span className="tabular-nums">{proformaData.subtotal.toFixed(2)} €</span>
                           </div>
-                          <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                          <div className="flex justify-between text-muted-foreground">
                             <span>IVA</span>
                             <span className="tabular-nums">{proformaData.tax.toFixed(2)} €</span>
                           </div>
-                          <div className="flex justify-between text-sm font-semibold text-zinc-900 dark:text-white">
+                          <div className="flex justify-between text-sm font-semibold text-foreground">
                             <span>Total</span>
                             <span className="tabular-nums">{proformaData.total.toFixed(2)} €</span>
                           </div>
@@ -623,7 +618,7 @@ export default function LeadActions({
                 )}
 
                 {quoteError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{quoteError}</p>
+                  <p className="text-xs text-destructive">{quoteError}</p>
                 )}
               </div>
             );
@@ -635,96 +630,101 @@ export default function LeadActions({
 
       {/* Add note */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
           Nota rapida
         </h3>
-        <textarea
+        <Textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Escribe una nota..."
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
           rows={3}
         />
-        <button
+        <Button
           onClick={handleAddNote}
           disabled={isPending || !note.trim()}
-          className="mt-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="mt-2"
         >
           Guardar nota
-        </button>
+        </Button>
       </div>
 
       {/* Block + Delete */}
-      <div className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-        {/* Block sender */}
+      <div className="space-y-3 border-t pt-4">
         {leadEmail && (
           <>
             {!showBlock ? (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowBlock(true)}
-                className="flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                className="text-orange-600 hover:text-orange-700 dark:text-orange-400"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
                 Bloquear remitente
-              </button>
+              </Button>
             ) : (
               <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-900/10">
                 <p className="text-sm text-orange-700 dark:text-orange-400">
                   Bloquear <strong>{leadEmail}</strong> y eliminar este lead. Los futuros emails de esta direccion no crearan leads.
                 </p>
                 <div className="mt-2 flex gap-2">
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => {
                       startTransition(async () => {
                         await blockEmailAndDeleteLead(leadId, leadEmail, "Bloqueado manualmente");
                       });
                     }}
                     disabled={isPending}
-                    className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                    className="bg-orange-600 text-white hover:bg-orange-700"
                   >
                     Bloquear y eliminar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setShowBlock(false)}
-                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                   >
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
           </>
         )}
 
-        {/* Delete */}
         {!showDelete ? (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowDelete(true)}
-            className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            className="text-destructive hover:text-destructive"
           >
             Eliminar lead
-          </button>
+          </Button>
         ) : (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/10">
-            <p className="text-sm text-red-700 dark:text-red-400">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+            <p className="text-sm text-destructive">
               Esto eliminara el lead y todo su historial.
             </p>
             <div className="mt-2 flex gap-2">
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={handleDelete}
                 disabled={isPending}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Confirmar eliminacion
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowDelete(false)}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
               >
                 Cancelar
-              </button>
+              </Button>
             </div>
           </div>
         )}

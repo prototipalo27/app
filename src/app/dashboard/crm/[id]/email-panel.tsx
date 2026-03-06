@@ -3,6 +3,10 @@
 import { useState, useTransition, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail, generateEmailDraft } from "../actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface Activity {
   id: string;
@@ -56,7 +60,6 @@ function groupIntoThreads(activities: Activity[]): EmailThread[] {
 
   for (const activity of emailActivities) {
     const subject = String(activity.metadata?.email_subject || "(sin asunto)");
-    // Use thread_id if available, otherwise group by normalized subject
     const key = activity.thread_id || `subj:${normalizeSubject(subject)}`;
 
     if (!threadMap.has(key)) {
@@ -67,7 +70,6 @@ function groupIntoThreads(activities: Activity[]): EmailThread[] {
 
   const threads: EmailThread[] = [];
   for (const [threadId, emails] of threadMap) {
-    // Sort emails chronologically within thread
     emails.sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
@@ -82,7 +84,6 @@ function groupIntoThreads(activities: Activity[]): EmailThread[] {
     });
   }
 
-  // Sort threads by most recent activity first
   threads.sort(
     (a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime()
   );
@@ -99,7 +100,7 @@ function buildDefaultSubject(tag: string | null, company: string | null, name: s
 const SNIPPET_CATEGORIES = [
   { id: "saludo", label: "Saludo", color: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50" },
   { id: "pagos", label: "Pagos", color: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50" },
-  { id: "envios", label: "Envíos", color: "bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50" },
+  { id: "envios", label: "Envios", color: "bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50" },
   { id: "plazos", label: "Plazos", color: "bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50" },
   { id: "materiales", label: "Materiales", color: "bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50" },
   { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
@@ -111,23 +112,15 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
   const defaultSubject = buildDefaultSubject(emailSubjectTag, leadCompany, leadName, leadNumber);
 
-  // Proforma attachment toggle
   const [attachProforma, setAttachProforma] = useState(false);
-
-  // Compose state
   const [emailTo, setEmailTo] = useState(leadEmail || "");
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("");
-
-  // Reply state
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBanner, setReplyBanner] = useState<string | null>(null);
-
-  // Send error
   const [sendError, setSendError] = useState<string | null>(null);
 
-  // Auto-resize textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current;
@@ -136,15 +129,11 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     ta.style.height = `${ta.scrollHeight}px`;
   }, []);
 
-  // AI draft state
   const [isGenerating, setIsGenerating] = useState(false);
-
-  // Expanded threads
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
 
   const threads = groupIntoThreads(activities);
 
-  // Pre-fill with saved AI draft (generated when the lead arrived)
   useEffect(() => {
     if (aiDraft && !emailBody) {
       setEmailBody(aiDraft);
@@ -152,19 +141,16 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiDraft]);
 
-  // Auto-resize textarea when body changes
   useEffect(() => {
     resizeTextarea();
   }, [emailBody, resizeTextarea]);
 
-  // Listen for "send-proforma" event from lead-actions / proforma-editor
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as { body?: string; subject?: string } | undefined;
       if (detail?.body) setEmailBody(detail.body);
       if (detail?.subject) setEmailSubject(detail.subject);
       setAttachProforma(true);
-      // Clear any reply state so it sends as a new email
       setReplyToMessageId(null);
       setReplyThreadId(null);
       setReplyBanner(null);
@@ -193,7 +179,6 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     setEmailBody("");
     setReplyBanner(normalizeSubject(subject) || "(sin asunto)");
 
-    // Scroll to compose
     document.getElementById("email-compose")?.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -208,7 +193,6 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const handleGenerateDraft = async () => {
     setIsGenerating(true);
     try {
-      // If replying, find the content of the email being replied to
       let replyContent: string | undefined;
       if (replyToMessageId) {
         const replyEmail = activities.find(
@@ -264,14 +248,14 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     <div className="space-y-4">
       {/* Email threads */}
       {threads.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+        <Card>
+          <CardHeader className="border-b">
+            <h3 className="text-sm font-semibold text-card-foreground">
               Emails ({activities.filter((a) => a.activity_type === "email_sent" || a.activity_type === "email_received").length})
             </h3>
-          </div>
+          </CardHeader>
 
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="divide-y">
             {threads.map((thread) => {
               const isExpanded = expandedThreads.has(thread.threadId);
               const lastEmail = thread.emails[thread.emails.length - 1];
@@ -279,23 +263,22 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
               return (
                 <div key={thread.threadId}>
-                  {/* Thread header */}
                   <button
                     onClick={() => toggleThread(thread.threadId)}
-                    className="flex w-full items-center gap-3 px-6 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                        <span className="truncate text-sm font-medium text-foreground">
                           {thread.subject}
                         </span>
                         {hasMultiple && (
-                          <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                          <Badge variant="secondary">
                             {thread.emails.length}
-                          </span>
+                          </Badge>
                         )}
                       </div>
-                      <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {lastEmail.activity_type === "email_received"
                           ? `De: ${lastEmail.metadata?.email_from_name || lastEmail.metadata?.email_from || ""}`
                           : `Para: ${lastEmail.metadata?.email_to || ""}`}
@@ -304,7 +287,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                         {(lastEmail.content?.length || 0) > 80 ? "..." : ""}
                       </p>
                     </div>
-                    <span className="shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       {new Date(thread.lastDate).toLocaleDateString("es-ES", {
                         day: "numeric",
                         month: "short",
@@ -313,7 +296,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                       })}
                     </span>
                     <svg
-                      className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -322,9 +305,8 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                     </svg>
                   </button>
 
-                  {/* Thread emails */}
                   {isExpanded && (
-                    <div className="border-t border-zinc-100 bg-zinc-50/50 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-800/20">
+                    <div className="border-t bg-muted/30 px-4 py-4">
                       <div className="space-y-3">
                         {thread.emails.map((email) => {
                           const isSent = email.activity_type === "email_sent";
@@ -336,13 +318,13 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                                 className={`rounded-lg px-4 py-3 ${
                                   isSent
                                     ? "ml-8 bg-blue-600 text-white"
-                                    : "mr-8 bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                                    : "mr-8 bg-card text-foreground"
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span
                                     className={`text-xs font-semibold ${
-                                      isSent ? "text-blue-200" : "text-zinc-500 dark:text-zinc-400"
+                                      isSent ? "text-blue-200" : "text-muted-foreground"
                                     }`}
                                   >
                                     {isSent
@@ -351,7 +333,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                                   </span>
                                   <span
                                     className={`text-[10px] ${
-                                      isSent ? "text-blue-300" : "text-zinc-400 dark:text-zinc-500"
+                                      isSent ? "text-blue-300" : "text-muted-foreground"
                                     }`}
                                   >
                                     {new Date(email.created_at).toLocaleDateString("es-ES", {
@@ -369,17 +351,18 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                                   </p>
                                 )}
 
-                                {/* Reply button on received emails */}
                                 {!isSent && (
-                                  <button
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleReply(email)}
-                                    className="mt-2 flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                                    className="mt-2 text-muted-foreground hover:text-foreground"
                                   >
                                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                     </svg>
                                     Responder
-                                  </button>
+                                  </Button>
                                 )}
                               </div>
                             </div>
@@ -392,147 +375,144 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Compose */}
-      <div
-        id="email-compose"
-        className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-            {replyBanner ? "Responder email" : "Nuevo email"}
-          </h3>
-          <button
-            type="button"
-            onClick={handleGenerateDraft}
-            disabled={isGenerating}
-            title="Generar borrador con IA"
-            className="flex items-center gap-1 rounded-lg bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-200 disabled:opacity-50 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
-          >
-            {isGenerating ? (
-              <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-              </svg>
-            )}
-            {isGenerating ? "Generando..." : "IA"}
-          </button>
-          {snippets.length > 0 && (
-            <>
-              <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              {SNIPPET_CATEGORIES.filter((cat) =>
-                snippets.some((s) => s.category === cat.id)
-              ).map((cat) => (
-                <div key={cat.id} className="group relative">
-                  <button
-                    type="button"
-                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${cat.color}`}
-                  >
-                    {cat.label}
-                  </button>
-                  <div className="invisible absolute left-0 top-full z-20 pt-1 opacity-0 transition-all group-hover:visible group-hover:opacity-100">
-                    <div className="min-w-56 max-w-72 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                      {snippets
-                        .filter((s) => s.category === cat.id)
-                        .map((snippet) => (
-                          <button
-                            key={snippet.id}
-                            type="button"
-                            onClick={() =>
-                              setEmailBody((prev) =>
-                                prev ? prev + "\n\n" + snippet.content : snippet.content
-                              )
-                            }
-                            className="block w-full px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
-                          >
-                            <span className="block text-xs font-medium text-zinc-800 dark:text-zinc-200">
-                              {snippet.title}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[10px] text-zinc-500 dark:text-zinc-400">
-                              {snippet.content.slice(0, 80)}
-                              {snippet.content.length > 80 ? "..." : ""}
-                            </span>
-                          </button>
-                        ))}
+      <Card id="email-compose">
+        <CardContent>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-card-foreground">
+              {replyBanner ? "Responder email" : "Nuevo email"}
+            </h3>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleGenerateDraft}
+              disabled={isGenerating}
+              className="bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50"
+            >
+              {isGenerating ? (
+                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                </svg>
+              )}
+              {isGenerating ? "Generando..." : "IA"}
+            </Button>
+            {snippets.length > 0 && (
+              <>
+                <span className="text-border">|</span>
+                {SNIPPET_CATEGORIES.filter((cat) =>
+                  snippets.some((s) => s.category === cat.id)
+                ).map((cat) => (
+                  <div key={cat.id} className="group relative">
+                    <button
+                      type="button"
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${cat.color}`}
+                    >
+                      {cat.label}
+                    </button>
+                    <div className="invisible absolute left-0 top-full z-20 pt-1 opacity-0 transition-all group-hover:visible group-hover:opacity-100">
+                      <div className="min-w-56 max-w-72 rounded-lg border bg-popover py-1 shadow-lg">
+                        {snippets
+                          .filter((s) => s.category === cat.id)
+                          .map((snippet) => (
+                            <button
+                              key={snippet.id}
+                              type="button"
+                              onClick={() =>
+                                setEmailBody((prev) =>
+                                  prev ? prev + "\n\n" + snippet.content : snippet.content
+                                )
+                              }
+                              className="block w-full px-3 py-2 text-left hover:bg-muted"
+                            >
+                              <span className="block text-xs font-medium text-foreground">
+                                {snippet.title}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                                {snippet.content.slice(0, 80)}
+                                {snippet.content.length > 80 ? "..." : ""}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-        {replyBanner && (
-          <div className="mb-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-            <span className="text-xs text-blue-700 dark:text-blue-300">
-              Respondiendo a: {replyBanner}
-            </span>
-            <button
-              onClick={cancelReply}
-              className="ml-2 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <input
-            type="email"
-            value={emailTo}
-            onChange={(e) => setEmailTo(e.target.value)}
-            placeholder="Para"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-          />
-          <input
-            type="text"
-            value={emailSubject}
-            onChange={(e) => setEmailSubject(e.target.value)}
-            placeholder="Asunto"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-          />
-          <textarea
-            ref={textareaRef}
-            value={emailBody}
-            onChange={(e) => setEmailBody(e.target.value)}
-            placeholder="Escribe tu mensaje..."
-            className="min-h-[6rem] w-full resize-none overflow-hidden rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-          />
-          {sendError && (
-            <p className="text-xs text-red-600 dark:text-red-400">{sendError}</p>
-          )}
-          <div className="flex items-center justify-between">
-            {holdedProformaId ? (
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={attachProforma}
-                  onChange={(e) => setAttachProforma(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
-                />
-                Adjuntar presupuesto PDF
-              </label>
-            ) : (
-              <div />
+                ))}
+              </>
             )}
-            <button
-              onClick={handleSend}
-              disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isPending ? "Enviando..." : "Enviar"}
-            </button>
           </div>
-        </div>
-      </div>
+
+          {replyBanner && (
+            <div className="mb-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+              <span className="text-xs text-blue-700 dark:text-blue-300">
+                Respondiendo a: {replyBanner}
+              </span>
+              <button
+                onClick={cancelReply}
+                className="ml-2 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Input
+              type="email"
+              value={emailTo}
+              onChange={(e) => setEmailTo(e.target.value)}
+              placeholder="Para"
+            />
+            <Input
+              type="text"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Asunto"
+            />
+            <textarea
+              ref={textareaRef}
+              value={emailBody}
+              onChange={(e) => setEmailBody(e.target.value)}
+              placeholder="Escribe tu mensaje..."
+              className="min-h-[6rem] w-full resize-none overflow-hidden rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+            {sendError && (
+              <p className="text-xs text-destructive">{sendError}</p>
+            )}
+            <div className="flex items-center justify-between">
+              {holdedProformaId ? (
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={attachProforma}
+                    onChange={(e) => setAttachProforma(e.target.checked)}
+                    className="h-4 w-4 rounded border-input text-blue-600 focus:ring-blue-500"
+                  />
+                  Adjuntar presupuesto PDF
+                </label>
+              ) : (
+                <div />
+              )}
+              <Button
+                onClick={handleSend}
+                disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {isPending ? "Enviando..." : "Enviar"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

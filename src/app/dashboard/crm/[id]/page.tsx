@@ -17,6 +17,8 @@ import {
 } from "@/lib/crm-config";
 import { getBasePrices, getCommissionSummary } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function LeadDetailPage({
   params,
@@ -38,7 +40,6 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
 
-  // Fetch active lead IDs for prev/next navigation (exclude won/lost)
   const { data: activeLeadIds } = await supabase
     .from("leads")
     .select("id")
@@ -51,31 +52,26 @@ export default async function LeadDetailPage({
   const prevId = currentIndex > 0 ? ids[currentIndex - 1] : null;
   const nextId = currentIndex >= 0 && currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
 
-  // Fetch activities
   const { data: activities } = await supabase
     .from("lead_activities")
     .select("*")
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  // Fetch managers for assignment dropdown
   const { data: managers } = await supabase
     .from("user_profiles")
     .select("id, email")
     .in("role", ["manager", "super_admin"])
     .eq("is_active", true);
 
-  // Fetch linked projects
   const { data: linkedProjects } = await supabase
     .from("projects")
     .select("id, name, status, project_type")
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  // Fetch commission summary (only for won leads)
   const commission = await getCommissionSummary(id);
 
-  // Fetch user names for activities & assignee & owner
   const userIds = [
     ...new Set([
       lead.assigned_to,
@@ -93,7 +89,6 @@ export default async function LeadDetailPage({
     userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
 
-  // Fetch latest quote request
   const { data: quoteRequest } = await supabase
     .from("quote_requests")
     .select("*")
@@ -102,14 +97,12 @@ export default async function LeadDetailPage({
     .limit(1)
     .maybeSingle();
 
-  // Fetch email snippets
   const { data: snippets } = await supabase
     .from("email_snippets")
     .select("id, title, category, content")
     .order("category")
     .order("sort_order", { ascending: true });
 
-  // Fetch project template names for tag selector
   const { data: projectTemplates } = await supabase
     .from("project_templates")
     .select("name")
@@ -123,7 +116,7 @@ export default async function LeadDetailPage({
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 
   const STATUS_COLORS: Record<string, string> = {
-    pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    pending: "bg-secondary text-secondary-foreground",
     design: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
     printing: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     post_processing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
@@ -142,157 +135,160 @@ export default async function LeadDetailPage({
       />
 
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Left panel: lead info + emails + timeline */}
+        {/* Left panel */}
         <div className="space-y-4 md:col-span-2">
           {/* Lead info card */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {statusColumn && (
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColumn.badge}`}
-                >
-                  {statusColumn.label}
-                </span>
-              )}
-              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                {lead.source}
-              </span>
-            </div>
+          <Card>
+            <CardContent>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {statusColumn && (
+                  <Badge variant="secondary" className={statusColumn.badge}>
+                    {statusColumn.label}
+                  </Badge>
+                )}
+                <Badge variant="secondary">
+                  {lead.source}
+                </Badge>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {lead.full_name}
-              </h1>
-              {lead.project_type_tag && (
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${tagClasses(lead.project_type_tag)}`}>
-                  {lead.project_type_tag}
-                </span>
-              )}
-            </div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-card-foreground">
+                  {lead.full_name}
+                </h1>
+                {lead.project_type_tag && (
+                  <Badge variant="secondary" className={tagClasses(lead.project_type_tag)}>
+                    {lead.project_type_tag}
+                  </Badge>
+                )}
+              </div>
 
-            {lead.company && (
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                {lead.company}
+              {lead.company && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {lead.company}
+                </p>
+              )}
+
+              <div className="mt-4 space-y-2">
+                {lead.email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <a
+                      href={`mailto:${lead.email}`}
+                      className="text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      {lead.email}
+                    </a>
+                  </div>
+                )}
+                {lead.phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="text-foreground hover:underline"
+                    >
+                      {lead.phone}
+                    </a>
+                  </div>
+                )}
+                {lead.assigned_to && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="text-foreground">
+                      {userMap.get(lead.assigned_to) || "—"}
+                    </span>
+                  </div>
+                )}
+                {lead.owned_by && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                    <span className="text-foreground">
+                      Captado por {userMap.get(lead.owned_by) || "—"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {lead.message && (
+                <div className="mt-4 rounded-lg bg-muted p-4">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Mensaje original
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                    {lead.message}
+                  </p>
+                </div>
+              )}
+
+              {lead.attachments && (
+                <AttachmentGallery attachments={lead.attachments} />
+              )}
+
+              {lead.lost_reason && (
+                <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                  <p className="text-xs font-semibold uppercase text-destructive">
+                    Motivo de perdida
+                  </p>
+                  <p className="mt-1 text-sm text-destructive/80">
+                    {lead.lost_reason}
+                  </p>
+                </div>
+              )}
+
+              <p className="mt-4 text-xs text-muted-foreground">
+                Creado el{" "}
+                {new Date(lead.created_at).toLocaleDateString("es-ES", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </p>
-            )}
-
-            <div className="mt-4 space-y-2">
-              {lead.email && (
-                <div className="flex items-center gap-2 text-sm">
-                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  <a
-                    href={`mailto:${lead.email}`}
-                    className="text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    {lead.email}
-                  </a>
-                </div>
-              )}
-              {lead.phone && (
-                <div className="flex items-center gap-2 text-sm">
-                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                  <a
-                    href={`tel:${lead.phone}`}
-                    className="text-zinc-700 hover:underline dark:text-zinc-300"
-                  >
-                    {lead.phone}
-                  </a>
-                </div>
-              )}
-              {lead.assigned_to && (
-                <div className="flex items-center gap-2 text-sm">
-                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span className="text-zinc-700 dark:text-zinc-300">
-                    {userMap.get(lead.assigned_to) || "—"}
-                  </span>
-                </div>
-              )}
-              {lead.owned_by && (
-                <div className="flex items-center gap-2 text-sm">
-                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
-                  <span className="text-zinc-700 dark:text-zinc-300">
-                    Captado por {userMap.get(lead.owned_by) || "—"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {lead.message && (
-              <div className="mt-4 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800">
-                <p className="text-xs font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-                  Mensaje original
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                  {lead.message}
-                </p>
-              </div>
-            )}
-
-            {lead.attachments && (
-              <AttachmentGallery attachments={lead.attachments} />
-            )}
-
-            {lead.lost_reason && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/10">
-                <p className="text-xs font-semibold uppercase text-red-700 dark:text-red-400">
-                  Motivo de perdida
-                </p>
-                <p className="mt-1 text-sm text-red-600 dark:text-red-300">
-                  {lead.lost_reason}
-                </p>
-              </div>
-            )}
-
-            <p className="mt-4 text-xs text-zinc-400 dark:text-zinc-500">
-              Creado el{" "}
-              {new Date(lead.created_at).toLocaleDateString("es-ES", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Linked projects */}
           {linkedProjects && linkedProjects.length > 0 && (
-            <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
-                Proyectos vinculados ({linkedProjects.length})
-              </h3>
-              <div className="space-y-2">
-                {linkedProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href={`/dashboard/projects/${project.id}`}
-                    className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
-                  >
-                    <div>
-                      <span className="text-sm font-medium text-zinc-900 dark:text-white">
-                        {project.name}
-                      </span>
-                      <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        {project.project_type === "upcoming" ? "Proforma" : "Confirmado"}
-                      </span>
-                    </div>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status] || STATUS_COLORS.pending}`}
+            <Card>
+              <CardContent>
+                <h3 className="mb-3 text-sm font-semibold text-card-foreground">
+                  Proyectos vinculados ({linkedProjects.length})
+                </h3>
+                <div className="space-y-2">
+                  {linkedProjects.map((project) => (
+                    <Link
+                      key={project.id}
+                      href={`/dashboard/projects/${project.id}`}
+                      className="flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-muted/50"
                     >
-                      {project.status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
+                      <div>
+                        <span className="text-sm font-medium text-foreground">
+                          {project.name}
+                        </span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {project.project_type === "upcoming" ? "Proforma" : "Confirmado"}
+                        </span>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={STATUS_COLORS[project.status] || STATUS_COLORS.pending}
+                      >
+                        {project.status}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Presupuesto editor */}
@@ -309,7 +305,7 @@ export default async function LeadDetailPage({
             basePrices={basePrices}
           />
 
-          {/* Email panel (threads + compose + inline snippets) */}
+          {/* Email panel */}
           <EmailPanel
             activities={activities || []}
             leadId={lead.id}
@@ -325,114 +321,118 @@ export default async function LeadDetailPage({
           />
 
           {/* Activity timeline */}
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">
-              Actividad ({activities?.length || 0})
-            </h3>
+          <Card>
+            <CardContent>
+              <h3 className="mb-4 text-sm font-semibold text-card-foreground">
+                Actividad ({activities?.length || 0})
+              </h3>
 
-            {(!activities || activities.length === 0) ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Sin actividad registrada.
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {activities.map((activity) => {
-                  const actType = activity.activity_type as ActivityType;
-                  const metadata = activity.metadata as Record<string, unknown> | null;
+              {(!activities || activities.length === 0) ? (
+                <p className="text-sm text-muted-foreground">
+                  Sin actividad registrada.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {activities.map((activity) => {
+                    const actType = activity.activity_type as ActivityType;
+                    const metadata = activity.metadata as Record<string, unknown> | null;
 
-                  return (
-                    <div key={activity.id} className="flex gap-3">
-                      <div className="mt-0.5">
-                        <span
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${ACTIVITY_COLORS[actType] || ""}`}
-                        >
-                          {actType === "note" && "N"}
-                          {actType === "email_sent" && "E"}
-                          {actType === "email_received" && "R"}
-                          {actType === "status_change" && "S"}
-                          {actType === "call" && "C"}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                            {ACTIVITY_LABELS[actType] || actType}
-                          </span>
-                          {activity.created_by && (
-                            <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                              por {userMap.get(activity.created_by) || "—"}
-                            </span>
-                          )}
-                          <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">
-                            {new Date(activity.created_at).toLocaleDateString(
-                              "es-ES",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
+                    return (
+                      <div key={activity.id} className="flex gap-3">
+                        <div className="mt-0.5">
+                          <span
+                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${ACTIVITY_COLORS[actType] || ""}`}
+                          >
+                            {actType === "note" && "N"}
+                            {actType === "email_sent" && "E"}
+                            {actType === "email_received" && "R"}
+                            {actType === "status_change" && "S"}
+                            {actType === "call" && "C"}
                           </span>
                         </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-foreground">
+                              {ACTIVITY_LABELS[actType] || actType}
+                            </span>
+                            {activity.created_by && (
+                              <span className="text-xs text-muted-foreground">
+                                por {userMap.get(activity.created_by) || "—"}
+                              </span>
+                            )}
+                            <span className="ml-auto text-xs text-muted-foreground">
+                              {new Date(activity.created_at).toLocaleDateString(
+                                "es-ES",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                          </div>
 
-                        {actType === "email_sent" && metadata && (
-                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            Para: {String(metadata.email_to || "")} — Asunto:{" "}
-                            {String(metadata.email_subject || "")}
-                          </p>
-                        )}
+                          {actType === "email_sent" && metadata && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Para: {String(metadata.email_to || "")} — Asunto:{" "}
+                              {String(metadata.email_subject || "")}
+                            </p>
+                          )}
 
-                        {actType === "email_received" && metadata && (
-                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            De: {String(metadata.email_from_name || metadata.email_from || "")} — Asunto:{" "}
-                            {String(metadata.email_subject || "")}
-                          </p>
-                        )}
+                          {actType === "email_received" && metadata && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              De: {String(metadata.email_from_name || metadata.email_from || "")} — Asunto:{" "}
+                              {String(metadata.email_subject || "")}
+                            </p>
+                          )}
 
-                        {actType === "status_change" && metadata && (
-                          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            {STATUS_LABELS[metadata.old_status as LeadStatus] || String(metadata.old_status)}
-                            {" → "}
-                            {STATUS_LABELS[metadata.new_status as LeadStatus] || String(metadata.new_status)}
-                          </p>
-                        )}
+                          {actType === "status_change" && metadata && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {STATUS_LABELS[metadata.old_status as LeadStatus] || String(metadata.old_status)}
+                              {" → "}
+                              {STATUS_LABELS[metadata.new_status as LeadStatus] || String(metadata.new_status)}
+                            </p>
+                          )}
 
-                        {activity.content && (
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">
-                            {activity.content}
-                          </p>
-                        )}
+                          {activity.content && (
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                              {activity.content}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right panel: actions */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <LeadActions
-            leadId={lead.id}
-            leadEmail={lead.email}
-            currentStatus={lead.status as LeadStatus}
-            managers={managers || []}
-            assignedTo={lead.assigned_to}
-            quoteRequest={quoteRequest}
-            paymentCondition={lead.payment_condition}
-            projectTypeTag={lead.project_type_tag}
-            projectTemplateTags={projectTemplateTags}
-            estimatedQuantity={lead.estimated_quantity}
-            estimatedComplexity={lead.estimated_complexity}
-            estimatedUrgency={lead.estimated_urgency}
-            estimatedValue={lead.estimated_value}
-            nextId={nextId}
-            ownedBy={lead.owned_by}
-            commission={commission}
-          />
-        </div>
+        <Card>
+          <CardContent>
+            <LeadActions
+              leadId={lead.id}
+              leadEmail={lead.email}
+              currentStatus={lead.status as LeadStatus}
+              managers={managers || []}
+              assignedTo={lead.assigned_to}
+              quoteRequest={quoteRequest}
+              paymentCondition={lead.payment_condition}
+              projectTypeTag={lead.project_type_tag}
+              projectTemplateTags={projectTemplateTags}
+              estimatedQuantity={lead.estimated_quantity}
+              estimatedComplexity={lead.estimated_complexity}
+              estimatedUrgency={lead.estimated_urgency}
+              estimatedValue={lead.estimated_value}
+              nextId={nextId}
+              ownedBy={lead.owned_by}
+              commission={commission}
+            />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -3,6 +3,18 @@ import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { ProformaLineItem } from "../actions";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableFooter,
+} from "@/components/ui/table";
 
 export default async function ComisionesPage({
   searchParams,
@@ -20,7 +32,6 @@ export default async function ComisionesPage({
 
   const supabase = await createClient();
 
-  // Fetch all won leads with an owner in the selected period
   const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString();
   const endDate = new Date(selectedYear, selectedMonth, 1).toISOString();
 
@@ -33,7 +44,6 @@ export default async function ComisionesPage({
     .lt("updated_at", endDate)
     .order("updated_at", { ascending: false });
 
-  // Fetch quote_requests for these leads to get totals
   const leadIds = (wonLeads || []).map((l) => l.id);
   let quoteMap = new Map<string, number>();
   if (leadIds.length > 0) {
@@ -49,7 +59,6 @@ export default async function ComisionesPage({
     }
   }
 
-  // Fetch owner names
   const ownerIds = [...new Set((wonLeads || []).map((l) => l.owned_by).filter(Boolean))] as string[];
   let ownerMap = new Map<string, string>();
   if (ownerIds.length > 0) {
@@ -60,8 +69,6 @@ export default async function ComisionesPage({
     ownerMap = new Map(owners?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
 
-  // For each won lead, determine if client is new or returning
-  // (check if there are other won leads with the same email created before this one)
   type LeadCommission = {
     id: string;
     fullName: string;
@@ -107,7 +114,6 @@ export default async function ComisionesPage({
     });
   }
 
-  // Group by owner
   const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number }>();
   for (const lc of leadCommissions) {
     if (!byOwner.has(lc.ownerId)) {
@@ -124,17 +130,20 @@ export default async function ComisionesPage({
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
   ];
 
+  const selectClass =
+    "h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <Link
             href="/dashboard/crm"
-            className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             &larr; Volver a CRM
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+          <h1 className="mt-1 text-2xl font-bold text-foreground">
             Comisiones
           </h1>
         </div>
@@ -143,113 +152,99 @@ export default async function ComisionesPage({
       {/* Period selector */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <form className="flex items-center gap-2">
-          <select
-            name="month"
-            defaultValue={selectedMonth}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-          >
+          <select name="month" defaultValue={selectedMonth} className={selectClass}>
             {MONTHS.map((m, i) => (
               <option key={i + 1} value={i + 1}>{m}</option>
             ))}
           </select>
-          <select
-            name="year"
-            defaultValue={selectedYear}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-          >
+          <select name="year" defaultValue={selectedYear} className={selectClass}>
             {[2024, 2025, 2026, 2027].map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-          >
+          <Button type="submit" className="bg-brand text-white hover:bg-brand-dark">
             Filtrar
-          </button>
+          </Button>
         </form>
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">
+        <span className="text-sm text-muted-foreground">
           {MONTHS[selectedMonth - 1]} {selectedYear}
         </span>
       </div>
 
-      {/* Summary per owner */}
       {byOwner.size === 0 ? (
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No hay leads ganados con propietario comercial en este periodo.
-          </p>
-        </div>
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              No hay leads ganados con propietario comercial en este periodo.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-6">
           {/* Summary table */}
-          <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                Resumen por comercial
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-100 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                    <th className="px-6 py-3 font-medium">Comercial</th>
-                    <th className="px-6 py-3 text-right font-medium">Leads ganados</th>
-                    <th className="px-6 py-3 text-right font-medium">Total facturado</th>
-                    <th className="px-6 py-3 text-right font-medium">Comision total</th>
-                  </tr>
-                </thead>
-                <tbody>
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Resumen por comercial</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Comercial</TableHead>
+                    <TableHead className="text-right">Leads ganados</TableHead>
+                    <TableHead className="text-right">Total facturado</TableHead>
+                    <TableHead className="text-right">Comision total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {[...byOwner.values()].map((owner) => (
-                    <tr key={owner.name} className="border-b border-zinc-50 dark:border-zinc-800/50">
-                      <td className="px-6 py-3 font-medium text-zinc-900 dark:text-white">{owner.name}</td>
-                      <td className="px-6 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{owner.leads.length}</td>
-                      <td className="px-6 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{owner.total.toFixed(2)} €</td>
-                      <td className="px-6 py-3 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">{owner.commission.toFixed(2)} €</td>
-                    </tr>
+                    <TableRow key={owner.name}>
+                      <TableCell className="font-medium">{owner.name}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.leads.length}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.total.toFixed(2)} €</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">{owner.commission.toFixed(2)} €</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-zinc-700">
-                    <td className="px-6 py-3 font-semibold text-zinc-900 dark:text-white">Total</td>
-                    <td className="px-6 py-3 text-right tabular-nums font-semibold text-zinc-900 dark:text-white">
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-semibold">Total</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">
                       {leadCommissions.length}
-                    </td>
-                    <td className="px-6 py-3 text-right tabular-nums font-semibold text-zinc-900 dark:text-white">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">
                       {leadCommissions.reduce((s, l) => s + l.quoteTotal, 0).toFixed(2)} €
-                    </td>
-                    <td className="px-6 py-3 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
                       {leadCommissions.reduce((s, l) => s + l.commission, 0).toFixed(2)} €
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </CardContent>
+          </Card>
 
           {/* Detail breakdown */}
-          <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-                Desglose por lead
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-100 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                    <th className="px-6 py-3 font-medium">Lead</th>
-                    <th className="px-6 py-3 font-medium">Comercial</th>
-                    <th className="px-6 py-3 font-medium">Tipo</th>
-                    <th className="px-6 py-3 text-right font-medium">Total</th>
-                    <th className="px-6 py-3 text-right font-medium">%</th>
-                    <th className="px-6 py-3 text-right font-medium">Comision</th>
-                  </tr>
-                </thead>
-                <tbody>
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Desglose por lead</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Comercial</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">%</TableHead>
+                    <TableHead className="text-right">Comision</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {leadCommissions.map((lc) => (
-                    <tr key={lc.id} className="border-b border-zinc-50 dark:border-zinc-800/50">
-                      <td className="px-6 py-3">
+                    <TableRow key={lc.id}>
+                      <TableCell>
                         <Link
                           href={`/dashboard/crm/${lc.id}`}
                           className="font-medium text-blue-600 hover:underline dark:text-blue-400"
@@ -257,36 +252,37 @@ export default async function ComisionesPage({
                           {lc.fullName}
                         </Link>
                         {lc.company && (
-                          <span className="ml-1.5 text-xs text-zinc-400">{lc.company}</span>
+                          <span className="ml-1.5 text-xs text-muted-foreground">{lc.company}</span>
                         )}
-                      </td>
-                      <td className="px-6 py-3 text-zinc-600 dark:text-zinc-400">{lc.ownerName}</td>
-                      <td className="px-6 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{lc.ownerName}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={
                             lc.isReturning
                               ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
                               : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          }`}
+                          }
                         >
                           {lc.isReturning ? "Recurrente" : "Nuevo"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
                         {lc.quoteTotal.toFixed(2)} €
-                      </td>
-                      <td className="px-6 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
                         {(lc.rate * 100).toFixed(1)}%
-                      </td>
-                      <td className="px-6 py-3 text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
                         {lc.commission.toFixed(2)} €
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
