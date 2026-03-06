@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createShipment } from "@/lib/gls/api";
 import type { GlsShipmentParams } from "@/lib/gls/types";
 import { sendShippingNotification } from "@/lib/shipping-notification";
+import { printLabel } from "@/lib/label-printer";
 
 // Map ISO country codes to GLS numeric codes
 const COUNTRY_MAP: Record<string, string> = {
@@ -126,6 +127,11 @@ export async function POST(request: NextRequest) {
           .getPublicUrl(filePath);
         labelUrl = urlData.publicUrl;
       }
+    }
+
+    // Print label automatically
+    if (result.labelPdf) {
+      printLabel(Buffer.from(result.labelPdf, "base64")).catch(() => {});
     }
 
     // Build DB row

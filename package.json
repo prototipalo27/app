@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "googleapis": "^171.4.0",
+    "ipp": "^1.1.0",
     "jose": "^6.1.3",
     "lucide-react": "^0.577.0",
     "mqtt": "^5.15.0",
