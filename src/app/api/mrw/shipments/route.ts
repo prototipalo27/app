@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createShipment } from "@/lib/mrw/api";
 import type { MrwShipmentParams } from "@/lib/mrw/types";
 import { sendShippingNotification } from "@/lib/shipping-notification";
-import { printLabel } from "@/lib/label-printer";
 
 /**
  * POST /api/mrw/shipments
@@ -103,11 +102,6 @@ export async function POST(request: NextRequest) {
           .getPublicUrl(filePath);
         labelUrl = urlData.publicUrl;
       }
-    }
-
-    // Print label automatically
-    if (result.labelPdf) {
-      printLabel(Buffer.from(result.labelPdf, "base64")).catch(() => {});
     }
 
     // Build DB row
