@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createLead } from "../actions";
 import { QUANTITY_RANGES, COMPLEXITY_OPTIONS, URGENCY_OPTIONS } from "@/lib/crm-config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function NewLeadPage() {
   const profile = await getUserProfile();
@@ -18,181 +22,160 @@ export default async function NewLeadPage() {
     .in("role", ["manager", "super_admin"])
     .eq("is_active", true);
 
+  const selectClass =
+    "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+
   return (
     <div className="mx-auto max-w-xl">
       <div className="mb-6">
         <Link
           href="/dashboard/crm"
-          className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           &larr; Volver a CRM
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="mb-6 text-xl font-bold text-zinc-900 dark:text-white">
-          Nuevo Lead
-        </h1>
+      <Card>
+        <CardContent>
+          <h1 className="mb-6 text-xl font-bold text-card-foreground">
+            Nuevo Lead
+          </h1>
 
-        <form action={createLead} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Nombre completo *
-            </label>
-            <input
-              type="text"
-              name="full_name"
-              required
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              placeholder="Nombre del contacto"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Empresa
-            </label>
-            <input
-              type="text"
-              name="company"
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              placeholder="Nombre de la empresa"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          <form action={createLead} className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Email
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Nombre completo *
               </label>
-              <input
-                type="email"
-                name="email"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-                placeholder="email@ejemplo.com"
+              <Input
+                type="text"
+                name="full_name"
+                required
+                placeholder="Nombre del contacto"
               />
             </div>
+
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Telefono
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Empresa
               </label>
-              <input
-                type="tel"
-                name="phone"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-                placeholder="+34 600 000 000"
+              <Input
+                type="text"
+                name="company"
+                placeholder="Nombre de la empresa"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Mensaje
-            </label>
-            <textarea
-              name="message"
-              rows={4}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              placeholder="Descripcion del proyecto o consulta..."
-            />
-          </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Email
+                </label>
+                <Input
+                  type="email"
+                  name="email"
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Telefono
+                </label>
+                <Input
+                  type="tel"
+                  name="phone"
+                  placeholder="+34 600 000 000"
+                />
+              </div>
+            </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Cantidad estimada
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Mensaje
               </label>
-              <select
-                name="estimated_quantity"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              >
-                <option value="">Sin definir</option>
-                {QUANTITY_RANGES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
+              <Textarea
+                name="message"
+                rows={4}
+                placeholder="Descripcion del proyecto o consulta..."
+              />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Complejidad
-              </label>
-              <select
-                name="estimated_complexity"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              >
-                <option value="">Sin definir</option>
-                {COMPLEXITY_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Urgencia
-              </label>
-              <select
-                name="estimated_urgency"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              >
-                <option value="">Sin definir</option>
-                {URGENCY_OPTIONS.map((u) => (
-                  <option key={u.value} value={u.value}>{u.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Asignar a
-              </label>
-              <select
-                name="assigned_to"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              >
-                <option value="">Sin asignar</option>
-                {(managers || []).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.email.split("@")[0]}
-                  </option>
-                ))}
-              </select>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Cantidad estimada
+                </label>
+                <select name="estimated_quantity" className={selectClass}>
+                  <option value="">Sin definir</option>
+                  {QUANTITY_RANGES.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Complejidad
+                </label>
+                <select name="estimated_complexity" className={selectClass}>
+                  <option value="">Sin definir</option>
+                  {COMPLEXITY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Urgencia
+                </label>
+                <select name="estimated_urgency" className={selectClass}>
+                  <option value="">Sin definir</option>
+                  {URGENCY_OPTIONS.map((u) => (
+                    <option key={u.value} value={u.value}>{u.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Captado por
-              </label>
-              <select
-                name="owned_by"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              >
-                <option value="">Sin asignar</option>
-                {(managers || []).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.email.split("@")[0]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Link
-              href="/dashboard/crm"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Cancelar
-            </Link>
-            <button
-              type="submit"
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-            >
-              Crear lead
-            </button>
-          </div>
-        </form>
-      </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Asignar a
+                </label>
+                <select name="assigned_to" className={selectClass}>
+                  <option value="">Sin asignar</option>
+                  {(managers || []).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.email.split("@")[0]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Captado por
+                </label>
+                <select name="owned_by" className={selectClass}>
+                  <option value="">Sin asignar</option>
+                  {(managers || []).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.email.split("@")[0]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="ghost" render={<Link href="/dashboard/crm" />}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-brand text-white hover:bg-brand-dark">
+                Crear lead
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

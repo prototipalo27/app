@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { updateBasePrice } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface PricingConfigProps {
   basePrices: Record<string, number>;
@@ -52,14 +55,14 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
   };
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <Card>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between p-4 text-left"
+        className="flex w-full items-center justify-between px-4 py-4 text-left"
       >
         <div className="flex items-center gap-2">
           <svg
-            className="h-4 w-4 text-zinc-400"
+            className="h-4 w-4 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -71,12 +74,12 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
               d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+          <span className="text-sm font-semibold text-card-foreground">
             Precios base por categoria
           </span>
         </div>
         <svg
-          className={`h-4 w-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -86,24 +89,24 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
       </button>
 
       {open && (
-        <div className="border-t border-zinc-200 px-4 pb-4 dark:border-zinc-800">
-          <p className="mb-3 mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+        <CardContent className="border-t pt-4">
+          <p className="mb-3 text-xs text-muted-foreground">
             Estos precios se usan para estimar el valor de los leads y pre-rellenar presupuestos.
           </p>
 
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="divide-y">
             {categories.map((cat) => (
               <div
                 key={cat}
                 className="flex items-center justify-between py-2.5"
               >
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm text-foreground">
                   {cat}
                 </span>
 
                 {editing === cat ? (
                   <div className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="number"
                       step="0.01"
                       min="0"
@@ -114,29 +117,31 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
                         if (e.key === "Escape") cancelEdit();
                       }}
                       autoFocus
-                      className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1 text-right text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                      className="w-20 text-right"
                     />
-                    <span className="text-xs text-zinc-400">&euro;/ud</span>
-                    <button
+                    <span className="text-xs text-muted-foreground">&euro;/ud</span>
+                    <Button
+                      size="sm"
                       onClick={() => saveEdit(cat)}
                       disabled={isPending}
-                      className="rounded-md bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      className="bg-green-600 text-white hover:bg-green-700"
                     >
                       {isPending ? "..." : "OK"}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={cancelEdit}
-                      className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                     >
                       X
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <button
                     onClick={() => startEdit(cat)}
                     className="group flex items-center gap-1.5"
                   >
-                    <span className="text-sm font-medium text-zinc-900 dark:text-white">
+                    <span className="text-sm font-medium text-foreground">
                       {prices[cat].toFixed(2)} &euro;/ud
                     </span>
                     {saved === cat ? (
@@ -145,7 +150,7 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
                       </svg>
                     ) : (
                       <svg
-                        className="h-3.5 w-3.5 text-zinc-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-zinc-600"
+                        className="h-3.5 w-3.5 text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -160,10 +165,10 @@ export default function PricingConfig({ basePrices }: PricingConfigProps) {
           </div>
 
           {error && (
-            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+            <p className="mt-2 text-xs text-destructive">{error}</p>
           )}
-        </div>
+        </CardContent>
       )}
-    </div>
+    </Card>
   );
 }

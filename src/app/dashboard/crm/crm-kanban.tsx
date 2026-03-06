@@ -8,6 +8,17 @@ import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
 import { ContactModal } from "./contact-modal";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
@@ -32,17 +43,15 @@ function CrmColumn({
   const totalValue = leads.reduce((sum, l) => sum + (l.estimated_value ?? 0), 0);
 
   return (
-    <div className="flex min-w-0 flex-col rounded-xl bg-zinc-100 dark:bg-zinc-900">
+    <div className="flex min-w-0 flex-col rounded-xl bg-muted">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <h3 className="text-sm font-semibold text-foreground">
           {column.label}
         </h3>
-        <span
-          className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${column.badge}`}
-        >
+        <Badge variant="secondary" className={`ml-auto ${column.badge}`}>
           {leads.length}
-        </span>
+        </Badge>
       </div>
       {totalValue > 0 && (
         <div className="px-3 pb-1">
@@ -98,10 +107,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
       const previousStatus = lead.status;
 
-      // If moving to "lost", show modal for reason
       if (newStatus === "lost") {
         setLostModal({ leadId, previousStatus });
-        // Optimistic update
         setLeads((prev) =>
           prev.map((l) =>
             l.id === leadId ? { ...l, status: newStatus } : l
@@ -110,7 +117,6 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         return;
       }
 
-      // Optimistic update
       setLeads((prev) =>
         prev.map((l) =>
           l.id === leadId ? { ...l, status: newStatus } : l
@@ -146,10 +152,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   };
 
   const handleLostCancel = () => {
-    if (!lostModal) {
-      return;
-    }
-    // Revert optimistic update
+    if (!lostModal) return;
     setLeads((prev) =>
       prev.map((l) =>
         l.id === lostModal.leadId
@@ -210,16 +213,13 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     setDismissingId(null);
   };
 
-  // Compute unique tags for the filter
   const uniqueTags = [...new Set(leads.map((l) => l.project_type_tag).filter(Boolean))] as string[];
 
   const filteredLeads = leads.filter((l) => {
-    // Manager filter
     if (filterManager !== "all") {
       if (filterManager === "unassigned" && l.assigned_to) return false;
       if (filterManager !== "unassigned" && l.assigned_to !== filterManager) return false;
     }
-    // Type filter
     if (filterType !== "all") {
       if (filterType === "none" && l.project_type_tag) return false;
       if (filterType !== "none" && l.project_type_tag !== filterType) return false;
@@ -232,72 +232,66 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
   return (
     <>
-      {/* ── Filters ── */}
+      {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-        {/* Commercial filter */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Comercial:</span>
+          <span className="text-sm font-medium text-muted-foreground">Comercial:</span>
           {[
             { id: "all", label: "Todos" },
             ...managers.map((m) => ({ id: m.id, label: m.name })),
             { id: "unassigned", label: "Sin asignar" },
           ].map((opt) => (
-            <button
+            <Button
               key={opt.id}
+              variant={filterManager === opt.id ? "default" : "secondary"}
+              size="sm"
               onClick={() => setFilterManager(opt.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                filterManager === opt.id
-                  ? "bg-brand text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              }`}
+              className={filterManager === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
             >
               {opt.label}
-            </button>
+            </Button>
           ))}
         </div>
 
-        {/* Type filter */}
         {uniqueTags.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Tipo:</span>
+            <span className="text-sm font-medium text-muted-foreground">Tipo:</span>
             {[
               { id: "all", label: "Todos" },
               ...uniqueTags.map((t) => ({ id: t, label: t })),
               { id: "none", label: "Sin tipo" },
             ].map((opt) => (
-              <button
+              <Button
                 key={opt.id}
+                variant={filterType === opt.id ? "default" : "secondary"}
+                size="sm"
                 onClick={() => setFilterType(opt.id)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                  filterType === opt.id
-                    ? "bg-brand text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                }`}
+                className={filterType === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
               >
                 {opt.label}
-              </button>
+              </Button>
             ))}
           </div>
         )}
       </div>
 
-      {/* ── New leads strip ── */}
+      {/* New leads strip */}
       {newLeads.length > 0 && (
-        <div className="mb-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-            <span className="h-2.5 w-2.5 rounded-full bg-zinc-400" />
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="mb-4 rounded-xl border bg-card">
+          <div className="flex items-center gap-2 border-b px-4 py-2.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50" />
+            <h3 className="text-sm font-semibold text-foreground">
               Nuevos
             </h3>
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            <Badge variant="secondary">
               {newLeads.length}
-            </span>
+            </Badge>
           </div>
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <div className="divide-y">
             {newLeads.map((lead) => (
               <div
                 key={lead.id}
-                className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
                 onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
               >
                 {/* Owner badge */}
@@ -311,7 +305,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     </span>
                   ) : (
                     <span
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-[11px] text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground"
                       title="Sin asignar"
                     >
                       —
@@ -321,19 +315,19 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
                 {/* Name + company */}
                 <div className="min-w-0 shrink-0 basis-44">
-                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+                  <p className="truncate text-sm font-semibold text-foreground">
                     {lead.full_name}
                   </p>
                   {lead.company && (
-                    <p className="truncate text-xs text-zinc-400">
+                    <p className="truncate text-xs text-muted-foreground">
                       {lead.company}
                     </p>
                   )}
                 </div>
 
-                {/* Message (~30 words max) + attachment icon */}
+                {/* Message */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
                     {lead.message ? truncateWords(lead.message, 30) : "—"}
                   </p>
                   {lead.attachments && (
@@ -348,20 +342,20 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
                 {/* Type tag */}
                 {lead.project_type_tag && (
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tagClasses(lead.project_type_tag)}`}>
+                  <Badge variant="secondary" className={tagClasses(lead.project_type_tag)}>
                     {lead.project_type_tag}
-                  </span>
+                  </Badge>
                 )}
 
                 {/* Estimated value */}
                 {lead.estimated_value != null && (
-                  <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                     {lead.estimated_value.toLocaleString("es-ES")} €
-                  </span>
+                  </Badge>
                 )}
 
                 {/* Aging badge */}
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${agingClasses(lead.created_at)}`}>
+                <Badge variant="secondary" className={agingClasses(lead.created_at)}>
                   {(() => {
                     const diff = Date.now() - new Date(lead.created_at).getTime();
                     const mins = Math.floor(diff / 60000);
@@ -370,35 +364,37 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     if (hours < 24) return `${hours}h`;
                     return `${Math.floor(hours / 24)}d`;
                   })()}
-                </span>
+                </Badge>
 
                 {/* Phone */}
                 {lead.phone ? (
                   <a
                     href={`tel:${lead.phone}`}
-                    className="shrink-0 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                    className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {lead.phone}
                   </a>
                 ) : (
-                  <span className="shrink-0 text-sm text-zinc-300 dark:text-zinc-600">
+                  <span className="shrink-0 text-sm text-muted-foreground/50">
                     Sin tel.
                   </span>
                 )}
 
                 {/* Descartar */}
-                <button
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={(e) => { e.stopPropagation(); handleDismiss(lead); }}
                   disabled={dismissingId === lead.id}
-                  className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                   title={lead.email ? `Bloquear ${lead.email} y eliminar` : "Eliminar lead"}
                 >
                   {dismissingId === lead.id ? "..." : "Descartar"}
-                </button>
+                </Button>
 
-                {/* Contactar button → opens contact modal */}
-                <button
+                {/* Contactar */}
+                <Button
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (lead.email) {
@@ -408,21 +404,21 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     }
                   }}
                   disabled={loadingContactId === lead.id}
-                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="bg-blue-600 text-white hover:bg-blue-700"
                 >
                   {loadingContactId === lead.id
                     ? "..."
                     : lead.email
                       ? "Contactar"
                       : "Ver lead"}
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Kanban ── */}
+      {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
         <div className="grid min-h-0 flex-1 auto-cols-[240px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto">
           {kanbanColumns.map((column) => (
@@ -451,39 +447,33 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
       )}
 
       {/* Lost reason modal */}
-      {lostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
-              Motivo de perdida
-            </h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <Dialog open={!!lostModal} onOpenChange={(open) => { if (!open) handleLostCancel(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Motivo de perdida</DialogTitle>
+            <DialogDescription>
               Opcional: indica por que se perdio este lead.
-            </p>
-            <textarea
-              value={lostReason}
-              onChange={(e) => setLostReason(e.target.value)}
-              placeholder="Ej: Presupuesto demasiado alto, eligio competidor..."
-              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
-              rows={3}
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={handleLostCancel}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleLostConfirm}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Marcar como perdido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={lostReason}
+            onChange={(e) => setLostReason(e.target.value)}
+            placeholder="Ej: Presupuesto demasiado alto, eligio competidor..."
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={handleLostCancel}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleLostConfirm}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Marcar como perdido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

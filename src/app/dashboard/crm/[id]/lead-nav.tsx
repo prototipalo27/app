@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 interface LeadNavProps {
   prevId: string | null;
@@ -16,7 +17,6 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Ignore when typing in inputs/textareas
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement).isContentEditable) return;
 
@@ -37,43 +37,35 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
     <div className="mb-6 flex items-center justify-between">
       <Link
         href="/dashboard/crm"
-        className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+        className="text-sm text-muted-foreground hover:text-foreground"
       >
         &larr; Volver a CRM
       </Link>
 
       <div className="flex items-center gap-3">
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs text-muted-foreground">
           {current} de {total}
         </span>
 
         <div className="flex gap-1">
           {prevId ? (
-            <Link
-              href={`/dashboard/crm/${prevId}`}
-              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              title="Anterior (k)"
-            >
+            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${prevId}`} title="Anterior (k)" />}>
               &larr; Ant
-            </Link>
+            </Button>
           ) : (
-            <span className="rounded-lg border border-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-300 dark:border-zinc-800 dark:text-zinc-600">
+            <Button variant="outline" size="sm" disabled>
               &larr; Ant
-            </span>
+            </Button>
           )}
 
           {nextId ? (
-            <Link
-              href={`/dashboard/crm/${nextId}`}
-              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              title="Siguiente (j)"
-            >
+            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${nextId}`} title="Siguiente (j)" />}>
               Sig &rarr;
-            </Link>
+            </Button>
           ) : (
-            <span className="rounded-lg border border-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-300 dark:border-zinc-800 dark:text-zinc-600">
+            <Button variant="outline" size="sm" disabled>
               Sig &rarr;
-            </span>
+            </Button>
           )}
         </div>
       </div>

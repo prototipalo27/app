@@ -3,6 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendLeadEmail } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface EmailActivity {
   id: string;
@@ -46,13 +57,11 @@ export function ContactModal({
   const [isPending, startTransition] = useTransition();
   const [attachProforma, setAttachProforma] = useState(false);
 
-  // Find the latest received email to show
   const receivedEmails = activities.filter(
     (a) => a.activity_type === "email_received"
   );
   const latestReceived = receivedEmails[receivedEmails.length - 1] || null;
 
-  // Build default subject
   const identifier = emailSubjectTag || leadCompany || leadName;
   const ref = leadNumber ? ` [PT-${String(leadNumber).padStart(4, "0")}]` : "";
   const defaultSubject = latestReceived
@@ -81,51 +90,21 @@ export function ContactModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-700">
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
-              Contactar a {leadName}
-            </h3>
-            {leadCompany && (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {leadCompany}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Contactar a {leadName}</DialogTitle>
+          {leadCompany && (
+            <DialogDescription>{leadCompany}</DialogDescription>
+          )}
+        </DialogHeader>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto space-y-4">
           {/* Show received emails */}
           {activities.length > 0 && (
-            <div className="mb-4 space-y-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Emails recibidos
               </h4>
               {activities.map((email) => {
@@ -137,7 +116,7 @@ export function ContactModal({
                     className={`rounded-lg px-4 py-3 ${
                       isSent
                         ? "ml-8 bg-blue-600 text-white"
-                        : "bg-zinc-50 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                        : "bg-muted text-foreground"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -146,7 +125,7 @@ export function ContactModal({
                           className={`text-xs font-semibold ${
                             isSent
                               ? "text-blue-200"
-                              : "text-zinc-500 dark:text-zinc-400"
+                              : "text-muted-foreground"
                           }`}
                         >
                           {isSent
@@ -158,7 +137,7 @@ export function ContactModal({
                             className={`ml-2 text-xs ${
                               isSent
                                 ? "text-blue-300"
-                                : "text-zinc-400 dark:text-zinc-500"
+                                : "text-muted-foreground/70"
                             }`}
                           >
                             — {normalizeSubject(meta.email_subject)}
@@ -169,7 +148,7 @@ export function ContactModal({
                         className={`shrink-0 text-[10px] ${
                           isSent
                             ? "text-blue-300"
-                            : "text-zinc-400 dark:text-zinc-500"
+                            : "text-muted-foreground/70"
                         }`}
                       >
                         {new Date(email.created_at).toLocaleDateString(
@@ -196,28 +175,26 @@ export function ContactModal({
 
           {/* Composer */}
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {latestReceived ? "Responder" : "Nuevo email"}
             </h4>
             <div className="space-y-2">
-              <input
+              <Input
                 type="email"
                 value={emailTo}
                 onChange={(e) => setEmailTo(e.target.value)}
                 placeholder="Para"
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
               />
-              <input
+              <Input
                 type="text"
                 value={emailSubject}
                 readOnly
-                className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                className="bg-muted text-muted-foreground"
               />
-              <textarea
+              <Textarea
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
                 placeholder="Escribe tu mensaje..."
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
                 rows={4}
                 autoFocus
               />
@@ -226,36 +203,32 @@ export function ContactModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-zinc-100 px-6 py-4 dark:border-zinc-700">
+        <DialogFooter className="flex-row items-center justify-between sm:justify-between">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() =>
-                router.push(`/dashboard/crm/${leadId}`)
-              }
-              className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            <Button
+              variant="link"
+              onClick={() => router.push(`/dashboard/crm/${leadId}`)}
+              className="px-0"
             >
               Ver ficha completa
-            </button>
+            </Button>
             {holdedProformaId && (
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={attachProforma}
                   onChange={(e) => setAttachProforma(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+                  className="h-4 w-4 rounded border-input text-blue-600 focus:ring-blue-500"
                 />
                 Adjuntar presupuesto PDF
               </label>
             )}
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-            >
+            <Button variant="outline" onClick={onClose}>
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleSend}
               disabled={
                 isPending ||
@@ -263,13 +236,13 @@ export function ContactModal({
                 !emailSubject.trim() ||
                 !emailBody.trim()
               }
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="bg-blue-600 text-white hover:bg-blue-700"
             >
               {isPending ? "Enviando..." : "Enviar"}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

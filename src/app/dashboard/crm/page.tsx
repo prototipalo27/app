@@ -6,6 +6,7 @@ import { CrmKanban } from "./crm-kanban";
 import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
 import { getBasePrices } from "./actions";
+import { Button } from "@/components/ui/button";
 
 export default async function CrmPage() {
   const profile = await getUserProfile();
@@ -59,31 +60,22 @@ export default async function CrmPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+        <h1 className="text-2xl font-bold text-foreground">
           CRM — Leads
         </h1>
         <div className="flex gap-2">
-          <Link
-            href="/dashboard/crm/comisiones"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
+          <Button variant="outline" render={<Link href="/dashboard/crm/comisiones" />}>
             Comisiones
-          </Link>
-          <Link
-            href="/dashboard/crm/list"
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <svg className="mr-1.5 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          </Button>
+          <Button variant="outline" render={<Link href="/dashboard/crm/list" />}>
+            <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
             Lista
-          </Link>
-          <Link
-            href="/dashboard/crm/new"
-            className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-          >
+          </Button>
+          <Button render={<Link href="/dashboard/crm/new" />} className="bg-brand text-white hover:bg-brand-dark">
             + Nuevo lead
-          </Link>
+          </Button>
         </div>
       </div>
 
