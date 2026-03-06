@@ -69,6 +69,56 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   call: "Llamada",
 };
 
+// ── Qualification Levels ─────────────────────────────────
+
+export type QualificationLevel = 1 | 2 | 3 | 4 | 5;
+
+export const QUALIFICATION_LEVELS: {
+  level: QualificationLevel;
+  label: string;
+  color: string;
+  badge: string;
+}[] = [
+  {
+    level: 1,
+    label: "Frío",
+    color: "bg-zinc-400",
+    badge: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  },
+  {
+    level: 2,
+    label: "Tibio",
+    color: "bg-blue-400",
+    badge: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+  },
+  {
+    level: 3,
+    label: "Cualificado",
+    color: "bg-amber-400",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  },
+  {
+    level: 4,
+    label: "Caliente",
+    color: "bg-orange-500",
+    badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  },
+  {
+    level: 5,
+    label: "Prioritario",
+    color: "bg-red-500",
+    badge: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  },
+];
+
+export const QUALIFICATION_LABELS: Record<QualificationLevel, string> = {
+  1: "Frío",
+  2: "Tibio",
+  3: "Cualificado",
+  4: "Caliente",
+  5: "Prioritario",
+};
+
 // ── Estimation ───────────────────────────────────────────
 
 export type EstimatedQuantity = "1-10" | "10-50" | "50-200" | "200-500" | "500+";

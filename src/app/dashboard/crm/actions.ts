@@ -163,6 +163,29 @@ export async function updateEstimationField(
   return { success: true };
 }
 
+// ── Update Qualification Level ───────────────────────────
+
+export async function updateQualificationLevel(
+  id: string,
+  level: number | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const value = level && level >= 1 && level <= 5 ? level : null;
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ qualification_level: value })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
 // ── Update Lead Tag ──────────────────────────────────────
 
 export async function updateLeadTag(

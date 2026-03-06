@@ -427,6 +427,7 @@ export default async function LeadDetailPage({
               estimatedComplexity={lead.estimated_complexity}
               estimatedUrgency={lead.estimated_urgency}
               estimatedValue={lead.estimated_value}
+              qualificationLevel={lead.qualification_level}
               nextId={nextId}
               ownedBy={lead.owned_by}
               commission={commission}

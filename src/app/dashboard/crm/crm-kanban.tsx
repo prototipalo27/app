@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
-import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
+import { LEAD_COLUMNS, QUALIFICATION_LEVELS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
 import { ContactModal } from "./contact-modal";
@@ -82,6 +82,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const [leads, setLeads] = useState(initialLeads);
   const [filterManager, setFilterManager] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterLevel, setFilterLevel] = useState<string>("all");
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -224,10 +225,16 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
       if (filterType === "none" && l.project_type_tag) return false;
       if (filterType !== "none" && l.project_type_tag !== filterType) return false;
     }
+    if (filterLevel !== "all") {
+      const lvl = Number(filterLevel);
+      if (l.qualification_level !== lvl) return false;
+    }
     return true;
   });
 
-  const newLeads = filteredLeads.filter((l) => l.status === "new");
+  const newLeads = filteredLeads
+    .filter((l) => l.status === "new")
+    .sort((a, b) => (b.qualification_level ?? 0) - (a.qualification_level ?? 0));
   const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
 
   return (
@@ -273,6 +280,27 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             ))}
           </div>
         )}
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Nivel:</span>
+          {[
+            { id: "all", label: "Todos" },
+            ...QUALIFICATION_LEVELS.map((q) => ({
+              id: String(q.level),
+              label: `${"★".repeat(q.level)} ${q.label}`,
+            })),
+          ].map((opt) => (
+            <Button
+              key={opt.id}
+              variant={filterLevel === opt.id ? "default" : "secondary"}
+              size="sm"
+              onClick={() => setFilterLevel(opt.id)}
+              className={filterLevel === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* New leads strip */}
@@ -353,6 +381,17 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     {lead.estimated_value.toLocaleString("es-ES")} €
                   </Badge>
                 )}
+
+                {/* Qualification level */}
+                {lead.qualification_level != null && (() => {
+                  const ql = QUALIFICATION_LEVELS.find((q) => q.level === lead.qualification_level);
+                  if (!ql) return null;
+                  return (
+                    <Badge variant="secondary" className={ql.badge} title={`Nivel ${ql.level}: ${ql.label}`}>
+                      {"★".repeat(ql.level)}
+                    </Badge>
+                  );
+                })()}
 
                 {/* Aging badge */}
                 <Badge variant="secondary" className={agingClasses(lead.created_at)}>

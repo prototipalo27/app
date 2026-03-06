@@ -762,6 +762,7 @@ export type Database = {
           payment_condition: string | null
           phone: string | null
           project_type_tag: string | null
+          qualification_level: number | null
           source: string
           status: string
           updated_at: string
@@ -790,6 +791,7 @@ export type Database = {
           payment_condition?: string | null
           phone?: string | null
           project_type_tag?: string | null
+          qualification_level?: number | null
           source?: string
           status?: string
           updated_at?: string
@@ -818,6 +820,7 @@ export type Database = {
           payment_condition?: string | null
           phone?: string | null
           project_type_tag?: string | null
+          qualification_level?: number | null
           source?: string
           status?: string
           updated_at?: string
@@ -2551,6 +2554,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compute_qualification_level: {
+        Args: {
+          p_company: string
+          p_email: string
+          p_estimated_quantity: string
+          p_estimated_urgency: string
+          p_estimated_value: number
+          p_phone: string
+          p_project_type_tag: string
+        }
+        Returns: number
+      }
       get_base_price: { Args: { tag: string }; Returns: number }
       get_quantity_midpoint: { Args: { q: string }; Returns: number }
       get_user_role: { Args: never; Returns: string }
@@ -2702,4 +2717,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

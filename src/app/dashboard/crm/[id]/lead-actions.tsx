@@ -10,6 +10,7 @@ import {
   blockEmailAndDeleteLead,
   updatePaymentCondition,
   updateLeadTag,
+  updateQualificationLevel,
   updateEstimationField,
   getProformaDetails,
   createLeadProforma,
@@ -24,6 +25,7 @@ import {
   QUANTITY_RANGES,
   COMPLEXITY_OPTIONS,
   URGENCY_OPTIONS,
+  QUALIFICATION_LEVELS,
   type LeadStatus,
 } from "@/lib/crm-config";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,7 @@ interface LeadActionsProps {
   estimatedComplexity: string | null;
   estimatedUrgency: string | null;
   estimatedValue: number | null;
+  qualificationLevel: number | null;
   nextId: string | null;
   ownedBy: string | null;
   commission: {
@@ -68,6 +71,7 @@ export default function LeadActions({
   estimatedComplexity,
   estimatedUrgency,
   estimatedValue,
+  qualificationLevel,
   nextId,
   ownedBy,
   commission,
@@ -335,6 +339,40 @@ export default function LeadActions({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Qualification level */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
+          Nivel de cualificacion
+        </h3>
+        <div className="flex gap-1">
+          {QUALIFICATION_LEVELS.map((q) => (
+            <button
+              key={q.level}
+              onClick={() => {
+                startTransition(async () => {
+                  await updateQualificationLevel(leadId, q.level);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition-colors ${
+                qualificationLevel === q.level
+                  ? `${q.badge} border-current font-bold`
+                  : "border-input text-muted-foreground hover:bg-muted"
+              }`}
+              title={`Nivel ${q.level}: ${q.label}`}
+            >
+              {q.level}
+            </button>
+          ))}
+        </div>
+        {qualificationLevel != null && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {"★".repeat(qualificationLevel)} {QUALIFICATION_LEVELS.find((q) => q.level === qualificationLevel)?.label}
+          </p>
+        )}
       </div>
 
       {/* Estimation */}
