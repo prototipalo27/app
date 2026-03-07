@@ -12,6 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -240,67 +247,48 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   return (
     <>
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Comercial:</span>
-          {[
-            { id: "all", label: "Todos" },
-            ...managers.map((m) => ({ id: m.id, label: m.name })),
-            { id: "unassigned", label: "Sin asignar" },
-          ].map((opt) => (
-            <Button
-              key={opt.id}
-              variant={filterManager === opt.id ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setFilterManager(opt.id)}
-              className={filterManager === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
-            >
-              {opt.label}
-            </Button>
-          ))}
-        </div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Select value={filterManager} onValueChange={setFilterManager}>
+          <SelectTrigger size="sm">
+            <SelectValue placeholder="Comercial" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los comerciales</SelectItem>
+            {managers.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+            <SelectItem value="unassigned">Sin asignar</SelectItem>
+          </SelectContent>
+        </Select>
 
         {uniqueTags.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Tipo:</span>
-            {[
-              { id: "all", label: "Todos" },
-              ...uniqueTags.map((t) => ({ id: t, label: t })),
-              { id: "none", label: "Sin tipo" },
-            ].map((opt) => (
-              <Button
-                key={opt.id}
-                variant={filterType === opt.id ? "default" : "secondary"}
-                size="sm"
-                onClick={() => setFilterType(opt.id)}
-                className={filterType === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
-              >
-                {opt.label}
-              </Button>
-            ))}
-          </div>
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger size="sm">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los tipos</SelectItem>
+              {uniqueTags.map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+              <SelectItem value="none">Sin tipo</SelectItem>
+            </SelectContent>
+          </Select>
         )}
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Nivel:</span>
-          {[
-            { id: "all", label: "Todos" },
-            ...QUALIFICATION_LEVELS.map((q) => ({
-              id: String(q.level),
-              label: `${"★".repeat(q.level)} ${q.label}`,
-            })),
-          ].map((opt) => (
-            <Button
-              key={opt.id}
-              variant={filterLevel === opt.id ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setFilterLevel(opt.id)}
-              className={filterLevel === opt.id ? "bg-brand text-white hover:bg-brand-dark" : ""}
-            >
-              {opt.label}
-            </Button>
-          ))}
-        </div>
+        <Select value={filterLevel} onValueChange={setFilterLevel}>
+          <SelectTrigger size="sm">
+            <SelectValue placeholder="Nivel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los niveles</SelectItem>
+            {QUALIFICATION_LEVELS.map((q) => (
+              <SelectItem key={q.level} value={String(q.level)}>
+                {"★".repeat(q.level)} {q.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* New leads strip */}
