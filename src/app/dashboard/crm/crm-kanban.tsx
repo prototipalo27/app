@@ -90,6 +90,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const [filterManager, setFilterManager] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterLevel, setFilterLevel] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("qualification");
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -239,9 +240,17 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     return true;
   });
 
+  const sortFn = (a: LeadWithAssignee, b: LeadWithAssignee) => {
+    if (sortBy === "price_desc") return (b.estimated_value ?? 0) - (a.estimated_value ?? 0);
+    if (sortBy === "price_asc") return (a.estimated_value ?? 0) - (b.estimated_value ?? 0);
+    if (sortBy === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortBy === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return (b.qualification_level ?? 0) - (a.qualification_level ?? 0);
+  };
+
   const newLeads = filteredLeads
     .filter((l) => l.status === "new")
-    .sort((a, b) => (b.qualification_level ?? 0) - (a.qualification_level ?? 0));
+    .sort(sortFn);
   const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
 
   return (
@@ -287,6 +296,19 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 {"★".repeat(q.level)} {q.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={sortBy} onValueChange={(v) => v && setSortBy(v)}>
+          <SelectTrigger size="sm">
+            <SelectValue placeholder="Ordenar" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="qualification">Nivel (mayor primero)</SelectItem>
+            <SelectItem value="price_desc">Precio estimado ↓</SelectItem>
+            <SelectItem value="price_asc">Precio estimado ↑</SelectItem>
+            <SelectItem value="newest">Mas recientes</SelectItem>
+            <SelectItem value="oldest">Mas antiguos</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -452,7 +474,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             <CrmColumn
               key={column.id}
               column={column}
-              leads={filteredLeads.filter((l) => l.status === column.id)}
+              leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
             />
           ))}
         </div>
