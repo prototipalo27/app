@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (@media (prefers-color-scheme: dark));
+@custom-variant dark (&:is(.dark *));
 
 :root {
   --slider-track: #e4e4e7;
@@ -91,10 +91,8 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --slider-track: #3f3f46;
-  }
+.dark {
+  --slider-track: #3f3f46;
 }
 
 body {
@@ -153,19 +151,16 @@ body {
   transform: scale(1.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  .item-slider::-webkit-slider-thumb {
-    background: #e4e4e7;
-    border-color: #3f3f46;
-  }
-  .item-slider::-moz-range-thumb {
-    background: #e4e4e7;
-    border-color: #3f3f46;
-  }
+.dark .item-slider::-webkit-slider-thumb {
+  background: #e4e4e7;
+  border-color: #3f3f46;
+}
+.dark .item-slider::-moz-range-thumb {
+  background: #e4e4e7;
+  border-color: #3f3f46;
 }
 
-@media (prefers-color-scheme: dark) {
-:root {
+.dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -197,7 +192,6 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-}
 }
 
 @layer base {

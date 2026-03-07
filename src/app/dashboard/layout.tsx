@@ -11,6 +11,7 @@ import { getUserProfile, getRealProfile, hasRole, type UserRole } from "@/lib/rb
 import { getImpersonatedUserId } from "@/lib/impersonate";
 import { createClient } from "@/lib/supabase/server";
 import DesktopNav from "./desktop-nav";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: "Admin",
@@ -91,6 +92,7 @@ export default async function DashboardLayout({
           </Link>
         )}
       </div>
+      <ThemeToggle />
       {realIsSuperAdmin && <ImpersonateButton users={impersonatableUsers} />}
       <form action={signOut}>
         <button
