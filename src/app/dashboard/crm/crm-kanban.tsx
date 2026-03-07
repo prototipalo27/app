@@ -248,7 +248,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     <>
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Select value={filterManager} onValueChange={setFilterManager}>
+        <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Comercial" />
           </SelectTrigger>
@@ -262,7 +262,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         </Select>
 
         {uniqueTags.length > 0 && (
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType} onValueChange={(v) => v && setFilterType(v)}>
             <SelectTrigger size="sm">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
@@ -276,7 +276,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
           </Select>
         )}
 
-        <Select value={filterLevel} onValueChange={setFilterLevel}>
+        <Select value={filterLevel} onValueChange={(v) => v && setFilterLevel(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Nivel" />
           </SelectTrigger>
