@@ -14,10 +14,10 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
     <div className="flex items-center gap-0.5">
       <Link
         href={href}
-        className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium ${
+        className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
           isActive
-            ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+            : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
         }`}
       >
         {icon}
@@ -34,10 +34,10 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
           <Link
             key={action.href}
             href={action.href}
-            className={`flex items-center rounded-lg p-2 ${
+            className={`flex items-center rounded-md p-2 ${
               active
-                ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white"
-                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                ? "bg-brand/5 text-zinc-900 dark:text-white"
+                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
             }`}
             title={action.title}
           >
@@ -51,18 +51,15 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <>
-      <div className="my-1 border-t border-zinc-200 dark:border-zinc-800" />
-      <p className="px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-        {label}
-      </p>
-    </>
+    <p className="mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+      {label}
+    </p>
   );
 }
 
 export default function DesktopNav({ isManager, pendingTaskCount = 0 }: { isManager: boolean; pendingTaskCount?: number }) {
   return (
-    <nav className="flex-1 space-y-0.5 overflow-hidden p-3">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 [&::-webkit-scrollbar]:hidden">
       {/* ── VENTAS ── */}
       {isManager && (
         <>

@@ -119,8 +119,8 @@ export default async function DashboardLayout({
       <MobileSidebar isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
-      <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900 ${isImpersonating ? "pt-10" : ""}`}>
-        <div className="shrink-0 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+      <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:flex dark:border-zinc-800 dark:bg-zinc-950 ${isImpersonating ? "pt-10" : ""}`}>
+        <div className="shrink-0 border-b border-zinc-200/80 px-5 py-3 dark:border-zinc-800/50">
           <Link href={isManager ? "/dashboard/control" : "/dashboard"}>
             <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-[5.25rem] w-auto dark:hidden" priority />
             <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-[5.25rem] w-auto dark:block" priority />
@@ -129,7 +129,7 @@ export default async function DashboardLayout({
 
         <DesktopNav isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0} />
 
-        <div className="shrink-0 border-t border-zinc-200 p-2 dark:border-zinc-800">
+        <div className="shrink-0 border-t border-zinc-200/80 p-2 dark:border-zinc-800/50">
           {bottomSection}
         </div>
       </aside>

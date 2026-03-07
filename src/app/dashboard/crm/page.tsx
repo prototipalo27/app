@@ -59,15 +59,16 @@ export default async function CrmPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">
-          CRM — Leads
-        </h1>
-        <div className="flex gap-2">
-          <Button variant="outline" render={<Link href="/dashboard/crm/comisiones" />}>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">Gestiona tu pipeline comercial</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" render={<Link href="/dashboard/crm/comisiones" />}>
             Comisiones
           </Button>
-          <Button variant="outline" render={<Link href="/dashboard/crm/list" />}>
+          <Button variant="ghost" size="sm" render={<Link href="/dashboard/crm/list" />}>
             <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>

@@ -316,20 +316,17 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
       {/* New leads strip */}
       {newLeads.length > 0 && (
         <div className="mb-4 rounded-xl border bg-card">
-          <div className="flex items-center gap-2 border-b px-4 py-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/50" />
-            <h3 className="text-sm font-semibold text-foreground">
-              Nuevos
-            </h3>
-            <Badge variant="secondary">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Nuevos</h3>
+            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
               {newLeads.length}
-            </Badge>
+            </span>
           </div>
-          <div className="divide-y">
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
             {newLeads.map((lead) => (
               <div
                 key={lead.id}
-                className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
+                className="group flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
                 onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
               >
                 {/* Owner badge */}
@@ -351,10 +348,20 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   )}
                 </div>
 
-                {/* Name + company */}
+                {/* Name + company + aging */}
                 <div className="min-w-0 shrink-0 basis-44">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {lead.full_name}
+                    <span className={`ml-1.5 text-[11px] font-normal ${agingClasses(lead.created_at)}`}>
+                      {(() => {
+                        const diff = Date.now() - new Date(lead.created_at).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        if (mins < 60) return `${mins}m`;
+                        const hours = Math.floor(mins / 60);
+                        if (hours < 24) return `${hours}h`;
+                        return `${Math.floor(hours / 24)}d`;
+                      })()}
+                    </span>
                   </p>
                   {lead.company && (
                     <p className="truncate text-xs text-muted-foreground">
@@ -403,64 +410,55 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   );
                 })()}
 
-                {/* Aging badge */}
-                <Badge variant="secondary" className={agingClasses(lead.created_at)}>
-                  {(() => {
-                    const diff = Date.now() - new Date(lead.created_at).getTime();
-                    const mins = Math.floor(diff / 60000);
-                    if (mins < 60) return `${mins}m`;
-                    const hours = Math.floor(mins / 60);
-                    if (hours < 24) return `${hours}h`;
-                    return `${Math.floor(hours / 24)}d`;
-                  })()}
-                </Badge>
-
                 {/* Phone */}
                 {lead.phone ? (
                   <a
                     href={`tel:${lead.phone}`}
-                    className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+                    className="shrink-0 text-xs text-muted-foreground/70 hover:text-foreground"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {lead.phone}
                   </a>
                 ) : (
-                  <span className="shrink-0 text-sm text-muted-foreground/50">
+                  <span className="shrink-0 text-xs text-muted-foreground/40">
                     Sin tel.
                   </span>
                 )}
 
-                {/* Descartar */}
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={(e) => { e.stopPropagation(); handleDismiss(lead); }}
-                  disabled={dismissingId === lead.id}
-                  title={lead.email ? `Bloquear ${lead.email} y eliminar` : "Eliminar lead"}
-                >
-                  {dismissingId === lead.id ? "..." : "Descartar"}
-                </Button>
+                {/* Action buttons — visible on hover */}
+                <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  {/* Descartar */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); handleDismiss(lead); }}
+                    disabled={dismissingId === lead.id}
+                    title={lead.email ? `Bloquear ${lead.email} y eliminar` : "Eliminar lead"}
+                  >
+                    {dismissingId === lead.id ? "..." : "Descartar"}
+                  </Button>
 
-                {/* Contactar */}
-                <Button
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (lead.email) {
-                      handleContact(lead);
-                    } else {
-                      router.push(`/dashboard/crm/${lead.id}`);
-                    }
-                  }}
-                  disabled={loadingContactId === lead.id}
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  {loadingContactId === lead.id
-                    ? "..."
-                    : lead.email
-                      ? "Contactar"
-                      : "Ver lead"}
-                </Button>
+                  {/* Contactar */}
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (lead.email) {
+                        handleContact(lead);
+                      } else {
+                        router.push(`/dashboard/crm/${lead.id}`);
+                      }
+                    }}
+                    disabled={loadingContactId === lead.id}
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    {loadingContactId === lead.id
+                      ? "..."
+                      : lead.email
+                        ? "Contactar"
+                        : "Ver lead"}
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
