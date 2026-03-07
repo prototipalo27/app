@@ -3,7 +3,7 @@ import { Montserrat, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const montserrat = Montserrat({
-  variable: "--font-sans",
+  variable: "--font-montserrat",
   subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700"],
 });
