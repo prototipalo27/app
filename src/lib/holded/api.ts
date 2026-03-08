@@ -321,15 +321,17 @@ export async function getDocumentPdf(
     throw new Error(`Holded PDF error: ${res.status} ${res.statusText}`);
   }
 
-  const contentType = res.headers.get("content-type") || "";
+  // Read the full response as text first — Holded sometimes returns JSON
+  // without a proper content-type header
+  const raw = await res.text();
 
-  // Holded may return JSON with base64-encoded PDF or raw binary
-  if (contentType.includes("application/json")) {
-    const json = await res.json();
-    const b64 = json.data || json.pdf || json.file || json;
+  // Try to parse as JSON (Holded returns { status: 1, data: "<base64>" })
+  try {
+    const json = JSON.parse(raw);
+    const b64 = json.data || json.pdf || json.file;
     if (typeof b64 === "string") {
       const decoded = Buffer.from(b64, "base64");
-      // Holded sometimes prepends HTTP headers before the actual PDF data
+      // Holded prepends HTTP headers before the actual PDF data
       const decodedStr = decoded.toString("binary");
       const pdfStart = decodedStr.indexOf("%PDF");
       if (pdfStart > 0) {
@@ -338,10 +340,16 @@ export async function getDocumentPdf(
       return decoded;
     }
     throw new Error("Unexpected JSON response from Holded PDF endpoint");
+  } catch {
+    // Not JSON — treat as raw binary
+    const buf = Buffer.from(raw, "binary");
+    const str = buf.toString("binary");
+    const pdfStart = str.indexOf("%PDF");
+    if (pdfStart > 0) {
+      return Buffer.from(str.slice(pdfStart), "binary");
+    }
+    return buf;
   }
-
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 // ── Contacts (search) ──────────────────────────────────────
