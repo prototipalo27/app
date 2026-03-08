@@ -59,12 +59,12 @@ export default async function CrmPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
           <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">Gestiona tu pipeline comercial</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" render={<Link href="/dashboard/crm/comisiones" />}>
             Comisiones
           </Button>

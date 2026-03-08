@@ -128,7 +128,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
 
   return (
     <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="grid min-h-0 flex-1 auto-cols-[280px] grid-flow-col gap-4 overflow-x-auto md:grid-cols-4 md:auto-cols-auto">
+      <div className="grid min-h-0 flex-1 auto-cols-[220px] grid-flow-col gap-3 overflow-x-auto md:grid-cols-4 md:auto-cols-auto md:gap-4">
         {COLUMNS.map((column) => {
           // These are rendered as the bottom half of a stacked pair
           if (column.id === "printing" || column.id === "qc" || column.id === "delivered") return null;

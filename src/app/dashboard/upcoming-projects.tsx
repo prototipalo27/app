@@ -57,7 +57,7 @@ function UpcomingCard({ project, onClick }: { project: ProjectWithItems; onClick
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      className="relative w-52 shrink-0 cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-2.5 transition hover:shadow-md dark:border-amber-800/50 dark:bg-amber-900/10"
+      className="relative w-44 md:w-52 shrink-0 cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-2.5 transition hover:shadow-md dark:border-amber-800/50 dark:bg-amber-900/10"
     >
       <h4 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
         {project.name}

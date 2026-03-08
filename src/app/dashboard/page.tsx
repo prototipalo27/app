@@ -75,14 +75,14 @@ export default async function DashboardPage() {
       <AutoSync lastSyncAt={syncMeta?.value ?? null} />
       <div className="mb-4 flex shrink-0 items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+          <h1 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white">
             Proyectos
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Gestiona tus proyectos de produccion
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           <SyncHoldedButton />
           <Link
             href="/dashboard/projects/new"

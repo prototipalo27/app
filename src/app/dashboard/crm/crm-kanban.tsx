@@ -256,7 +256,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   return (
     <>
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3">
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Comercial" />
@@ -349,7 +349,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 </div>
 
                 {/* Name + company + aging */}
-                <div className="min-w-0 shrink-0 basis-44">
+                <div className="min-w-0 shrink-0 basis-32 md:basis-44">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {lead.full_name}
                     <span className={`ml-1.5 text-[11px] font-normal ${agingClasses(lead.created_at)}`}>
@@ -426,7 +426,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 )}
 
                 {/* Action buttons — visible on hover */}
-                <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 items-center gap-2 md:opacity-0 transition-opacity md:group-hover:opacity-100">
                   {/* Descartar */}
                   <Button
                     variant="destructive"
@@ -467,7 +467,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
-        <div className="grid min-h-0 flex-1 auto-cols-[240px] grid-flow-col gap-4 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto">
+        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
           {kanbanColumns.map((column) => (
             <CrmColumn
               key={column.id}

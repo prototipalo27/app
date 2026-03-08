@@ -73,7 +73,7 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName }: Ka
 
       {/* Hover tooltip with full info */}
       {showTooltip && !isDragging && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-72 rounded-lg border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
+        <div className="absolute top-full left-0 z-50 mt-1 w-64 md:w-72 rounded-lg border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
             {project.name}
           </h4>
