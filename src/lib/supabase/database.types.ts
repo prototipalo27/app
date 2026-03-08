@@ -741,6 +741,7 @@ export type Database = {
       leads: {
         Row: {
           ai_draft: string | null
+          ai_summary: string | null
           assigned_to: string | null
           attachments: string | null
           company: string | null
@@ -770,6 +771,7 @@ export type Database = {
         }
         Insert: {
           ai_draft?: string | null
+          ai_summary?: string | null
           assigned_to?: string | null
           attachments?: string | null
           company?: string | null
@@ -799,6 +801,7 @@ export type Database = {
         }
         Update: {
           ai_draft?: string | null
+          ai_summary?: string | null
           assigned_to?: string | null
           attachments?: string | null
           company?: string | null

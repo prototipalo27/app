@@ -7,6 +7,7 @@ import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
 import { getBasePrices } from "./actions";
 import { Button } from "@/components/ui/button";
+import { generateMissingSummaries } from "@/lib/ai-summary";
 
 export default async function CrmPage() {
   const profile = await getUserProfile();
@@ -49,6 +50,16 @@ export default async function CrmPage() {
       .select("id, email")
       .in("id", userIds);
     userEmailMap = new Map(users?.map((u) => [u.id, u.email]) || []);
+  }
+
+  // Generate AI summaries for new leads that don't have one (fire-and-forget for speed)
+  const leadsWithoutSummary = (leads || [])
+    .filter((l) => l.status === "new" && !l.ai_summary && l.message);
+  if (leadsWithoutSummary.length > 0) {
+    generateMissingSummaries(leadsWithoutSummary).then((summaryMap) => {
+      // Summaries are saved to DB by the function itself
+      // They'll appear on next page load
+    });
   }
 
   const leadsWithAssignee: LeadWithAssignee[] = (leads || []).map((l) => ({
