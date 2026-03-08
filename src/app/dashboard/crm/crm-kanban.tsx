@@ -88,6 +88,12 @@ function CrmColumn({
 export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
+
+  // Sync leads when server data changes (e.g. after pull-to-refresh)
+  useEffect(() => {
+    setLeads(initialLeads);
+  }, [initialLeads]);
+
   const [filterManager, setFilterManager] = useState<string>(() => {
     if (typeof window === "undefined") return "all";
     return localStorage.getItem("crm_filterManager") || "all";
