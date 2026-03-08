@@ -1605,6 +1605,7 @@ export type Database = {
           billing_province: string | null
           created_at: string | null
           holded_contact_id: string | null
+          holded_estimate_id: string | null
           holded_proforma_id: string | null
           id: string
           items: Json | null
@@ -1632,6 +1633,7 @@ export type Database = {
           billing_province?: string | null
           created_at?: string | null
           holded_contact_id?: string | null
+          holded_estimate_id?: string | null
           holded_proforma_id?: string | null
           id?: string
           items?: Json | null
@@ -1659,6 +1661,7 @@ export type Database = {
           billing_province?: string | null
           created_at?: string | null
           holded_contact_id?: string | null
+          holded_estimate_id?: string | null
           holded_proforma_id?: string | null
           id?: string
           items?: Json | null

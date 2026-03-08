@@ -220,6 +220,50 @@ export async function createProforma(
   return (await res.json()) as { id: string };
 }
 
+/** Create an estimate (presupuesto no vinculante) for a contact */
+export async function createEstimate(
+  contactId: string,
+  options?: {
+    items?: Array<{
+      name: string;
+      desc?: string;
+      units: number;
+      subtotal: number;
+      tax: number;
+    }>;
+    notes?: string;
+  },
+): Promise<{ id: string }> {
+  const body: Record<string, unknown> = {
+    contactId,
+    date: Math.floor(Date.now() / 1000),
+  };
+
+  if (options?.items && options.items.length > 0) {
+    body.items = options.items.map((item) => ({
+      name: item.name,
+      desc: item.desc || "",
+      units: item.units,
+      subtotal: item.subtotal,
+      tax: item.tax,
+    }));
+  }
+
+  if (options?.notes) body.notes = options.notes;
+
+  const res = await fetch(`${HOLDED_API_BASE}/documents/estimate`, {
+    method: "POST",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as { id: string };
+}
+
 /** Update a proforma with line items and optional notes */
 export async function updateProforma(
   documentId: string,

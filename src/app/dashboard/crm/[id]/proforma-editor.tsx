@@ -59,6 +59,7 @@ interface ProformaEditorProps {
   existingItems: ProformaLineItem[] | null;
   existingNotes: string | null;
   quoteStatus: string | null;
+  holdedEstimateId?: string | null;
   projectTypeTag?: string | null;
   estimatedQuantity?: string | null;
   estimatedComplexity?: string | null;
@@ -72,6 +73,7 @@ export default function ProformaEditor({
   existingItems,
   existingNotes,
   quoteStatus,
+  holdedEstimateId,
   projectTypeTag,
   estimatedQuantity,
   estimatedComplexity,
@@ -101,6 +103,7 @@ export default function ProformaEditor({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(!!existingItems && existingItems.length > 0);
   const [sent, setSent] = useState(quoteStatus === "quote_sent");
+  const [estimateId, setEstimateId] = useState<string | null>(holdedEstimateId || null);
 
   const selectClass =
     "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
@@ -169,6 +172,7 @@ export default function ProformaEditor({
       const result = await sendQuoteToClient(leadId);
       if (result.success) {
         setSent(true);
+        if (result.holdedEstimateId) setEstimateId(result.holdedEstimateId);
       } else {
         setError(result.error || "Error al enviar el presupuesto");
       }
@@ -188,13 +192,25 @@ export default function ProformaEditor({
               Presupuesto enviado por email al cliente
             </span>
           </div>
-          <Button
-            variant="link"
-            onClick={() => setSent(false)}
-            className="mt-3 px-0 text-brand hover:text-brand-dark"
-          >
-            Editar presupuesto
-          </Button>
+          <div className="mt-3 flex items-center gap-3">
+            {estimateId && (
+              <a
+                href={`https://app.holded.com/documents/estimate/${estimateId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-brand hover:text-brand-dark hover:underline"
+              >
+                Ver en Holded &rarr;
+              </a>
+            )}
+            <Button
+              variant="link"
+              onClick={() => setSent(false)}
+              className="px-0 text-brand hover:text-brand-dark"
+            >
+              Editar presupuesto
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

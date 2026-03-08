@@ -297,6 +297,7 @@ export default async function LeadDetailPage({
             existingItems={(quoteRequest?.items as { concept: string; price: number; units: number; tax: number }[] | null) || null}
             existingNotes={quoteRequest?.notes || null}
             quoteStatus={quoteRequest?.status || null}
+            holdedEstimateId={quoteRequest?.holded_estimate_id || null}
             projectTypeTag={lead.project_type_tag}
             estimatedQuantity={lead.estimated_quantity}
             estimatedComplexity={lead.estimated_complexity}

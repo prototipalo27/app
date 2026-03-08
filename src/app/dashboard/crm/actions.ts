@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, getDocumentPdf, getDocument } from "@/lib/holded/api";
+import { createProforma, createEstimate, createContact, searchContacts, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
@@ -575,7 +575,7 @@ export async function saveQuoteItems(
 
 export async function sendQuoteToClient(
   leadId: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; holdedEstimateId?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
@@ -660,28 +660,47 @@ export async function sendQuoteToClient(
     return { success: false, error: "Error al enviar el email" };
   }
 
-  // Create proforma in Holded (if contact is linked and not already created)
-  let holdedProformaId = qr.holded_proforma_id || null;
-  if (qr.holded_contact_id && !holdedProformaId) {
-    try {
-      const proforma = await createProforma(qr.holded_contact_id, {
-        items: items.map((item) => ({
-          name: item.concept,
-          units: item.units,
-          subtotal: item.price,
-          tax: item.tax,
-        })),
-        notes: qr.notes || undefined,
-      });
-      holdedProformaId = proforma.id;
-    } catch {
-      // Holded creation failure should not block the quote sending
+  // Create estimate (presupuesto no vinculante) in Holded
+  let holdedContactId = qr.holded_contact_id || null;
+  let holdedEstimateId: string | null = null;
+
+  try {
+    // Find or create a basic contact in Holded from lead data
+    if (!holdedContactId) {
+      if (lead.email) {
+        const existing = await searchContacts(lead.email);
+        if (existing.length > 0) {
+          holdedContactId = existing[0].id;
+        }
+      }
+      if (!holdedContactId) {
+        const newContact = await createContact({
+          name: lead.full_name,
+          email: lead.email || undefined,
+        });
+        holdedContactId = newContact.id;
+      }
     }
+
+    // Create estimate with the quote items
+    const estimate = await createEstimate(holdedContactId, {
+      items: items.map((item) => ({
+        name: item.concept,
+        units: item.units,
+        subtotal: item.price,
+        tax: item.tax,
+      })),
+      notes: qr.notes || undefined,
+    });
+    holdedEstimateId = estimate.id;
+  } catch {
+    // Holded failure should not block quote sending
   }
 
-  // Update quote request status + holded proforma id
+  // Update quote request status + Holded IDs
   const updateData: Record<string, unknown> = { status: "quote_sent" };
-  if (holdedProformaId) updateData.holded_proforma_id = holdedProformaId;
+  if (holdedContactId) updateData.holded_contact_id = holdedContactId;
+  if (holdedEstimateId) updateData.holded_estimate_id = holdedEstimateId;
 
   await supabase
     .from("quote_requests")
@@ -697,13 +716,13 @@ export async function sendQuoteToClient(
       email_to: lead.email,
       email_subject: "Presupuesto — Prototipalo",
       quote_token: qr.token,
-      ...(holdedProformaId ? { holded_proforma_id: holdedProformaId } : {}),
+      ...(holdedEstimateId ? { holded_estimate_id: holdedEstimateId } : {}),
     },
     created_by: profile.id,
   });
 
   revalidatePath(`/dashboard/crm/${leadId}`);
-  return { success: true };
+  return { success: true, holdedEstimateId: holdedEstimateId || undefined };
 }
 
 // ── Legacy: Quote Request (billing data form) ───────────
