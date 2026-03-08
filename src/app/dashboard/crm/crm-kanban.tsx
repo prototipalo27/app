@@ -100,8 +100,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     return localStorage.getItem("crm_filterLevel") || "all";
   });
   const [sortBy, setSortBy] = useState<string>(() => {
-    if (typeof window === "undefined") return "qualification";
-    return localStorage.getItem("crm_sortBy") || "qualification";
+    if (typeof window === "undefined") return "newest";
+    return localStorage.getItem("crm_sortBy") || "newest";
   });
 
   useEffect(() => {
