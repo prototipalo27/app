@@ -322,7 +322,120 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
               {newLeads.length}
             </span>
           </div>
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+          {/* Mobile: card layout */}
+          <div className="grid grid-cols-1 gap-3 p-3 md:hidden">
+            {newLeads.map((lead) => {
+              const aging = (() => {
+                const diff = Date.now() - new Date(lead.created_at).getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 60) return `${mins}m`;
+                const hours = Math.floor(mins / 60);
+                if (hours < 24) return `${hours}h`;
+                return `${Math.floor(hours / 24)}d`;
+              })();
+              const ql = lead.qualification_level != null ? QUALIFICATION_LEVELS.find((q) => q.level === lead.qualification_level) : null;
+              return (
+                <div
+                  key={lead.id}
+                  className="rounded-lg border border-zinc-200 bg-white p-3.5 transition-colors active:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:active:bg-zinc-700"
+                  onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
+                >
+                  {/* Row 1: Name + aging + value */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+                        {lead.full_name}
+                      </p>
+                      {lead.company && (
+                        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{lead.company}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${agingClasses(lead.created_at)}`}>
+                        {aging}
+                      </span>
+                      {lead.estimated_value != null && (
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                          {lead.estimated_value.toLocaleString("es-ES")} €
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Tags */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {lead.project_type_tag && (
+                      <Badge variant="secondary" className={tagClasses(lead.project_type_tag)}>
+                        {lead.project_type_tag}
+                      </Badge>
+                    )}
+                    {ql && (
+                      <Badge variant="secondary" className={ql.badge}>
+                        {"★".repeat(ql.level)}
+                      </Badge>
+                    )}
+                    {lead.assignee_email && (
+                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
+                        {lead.assignee_email.split("@")[0]}
+                      </span>
+                    )}
+                    {lead.attachments && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        Adjuntos
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Row 3: Actions */}
+                  <div className="mt-3 flex items-center gap-2">
+                    {lead.phone ? (
+                      <a
+                        href={`tel:${lead.phone}`}
+                        className="flex items-center gap-1 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        Llamar
+                      </a>
+                    ) : null}
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); handleDismiss(lead); }}
+                        disabled={dismissingId === lead.id}
+                      >
+                        {dismissingId === lead.id ? "..." : "Descartar"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (lead.email) {
+                            handleContact(lead);
+                          } else {
+                            router.push(`/dashboard/crm/${lead.id}`);
+                          }
+                        }}
+                        disabled={loadingContactId === lead.id}
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        {loadingContactId === lead.id ? "..." : lead.email ? "Contactar" : "Ver"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop: table rows */}
+          <div className="hidden divide-y divide-zinc-100 md:block dark:divide-zinc-800/50">
             {newLeads.map((lead) => (
               <div
                 key={lead.id}
@@ -349,7 +462,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 </div>
 
                 {/* Name + company + aging */}
-                <div className="min-w-0 shrink-0 basis-32 md:basis-44">
+                <div className="min-w-0 shrink-0 basis-44">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {lead.full_name}
                     <span className={`ml-1.5 text-[11px] font-normal ${agingClasses(lead.created_at)}`}>
@@ -426,8 +539,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 )}
 
                 {/* Action buttons — visible on hover */}
-                <div className="flex shrink-0 items-center gap-2 md:opacity-0 transition-opacity md:group-hover:opacity-100">
-                  {/* Descartar */}
+                <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                   <Button
                     variant="destructive"
                     size="sm"
@@ -437,8 +549,6 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   >
                     {dismissingId === lead.id ? "..." : "Descartar"}
                   </Button>
-
-                  {/* Contactar */}
                   <Button
                     size="sm"
                     onClick={(e) => {

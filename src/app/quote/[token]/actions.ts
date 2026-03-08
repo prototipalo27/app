@@ -205,7 +205,7 @@ export async function submitBillingData(
     if (holdedProformaId && lead?.email) {
       try {
         const pdfBuffer = await getDocumentPdf("proform", holdedProformaId);
-        const bookingUrl = process.env.BOOKING_URL || "https://prototipalo.com";
+        const bookingUrl = "https://calendly.com/prototipalo/conoce-prototipalo";
 
         await sendEmail({
           to: lead.email,
