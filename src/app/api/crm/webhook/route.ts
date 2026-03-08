@@ -225,15 +225,13 @@ export async function POST(request: NextRequest) {
       message: message?.trim(),
     }).catch((err) => console.error("AI draft error:", err));
 
-    // Send push notification (card-style with details)
-    const pushBody = [
-      company?.trim(),
-      message?.trim()?.slice(0, 120),
-    ].filter(Boolean).join("\n");
+    // Send push notification
+    const titleParts = [fullName.trim(), company?.trim()].filter(Boolean);
     await sendPushToAll({
-      title: `📩 ${fullName.trim()}`,
-      body: pushBody || "Nuevo lead recibido",
+      title: `📩 ${titleParts.join(" - ")}`,
+      body: message?.trim()?.slice(0, 120) || "Nuevo lead recibido",
       url: `/dashboard/crm/${lead.id}`,
+      phone: phone?.trim() || undefined,
     }).catch((err) => console.error("Push notification error:", err));
 
     return NextResponse.json({ ok: true, lead_id: lead.id });

@@ -62,31 +62,44 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || "Prototipalo";
+  const actions = [];
+  if (data.url && data.url.includes("/crm/")) {
+    if (data.phone) {
+      actions.push({ action: "call", title: "Llamar" });
+    }
+    actions.push({ action: "contact", title: "Contactar" });
+  }
   const options = {
     body: data.body || "",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    data: { url: data.url || "/dashboard" },
-    actions: data.url && data.url.includes("/crm/")
-      ? [{ action: "open", title: "Ver lead" }]
-      : [],
+    data: { url: data.url || "/dashboard", phone: data.phone || null },
+    actions: actions,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetPath = event.notification.data?.url || "/dashboard";
+  const action = event.action;
+  const notifData = event.notification.data || {};
+
+  // "Llamar" action — open tel: link
+  if (action === "call" && notifData.phone) {
+    event.waitUntil(clients.openWindow("tel:" + notifData.phone));
+    return;
+  }
+
+  // "Contactar" or default tap — open the lead page
+  const targetPath = notifData.url || "/dashboard";
   const targetUrl = new URL(targetPath, self.location.origin).href;
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
-      // If app is already open, navigate to the target URL
       for (const client of windowClients) {
         if ("navigate" in client) {
           return client.focus().then(() => client.navigate(targetUrl));
         }
       }
-      // No existing window, open a new one
       return clients.openWindow(targetUrl);
     })
   );

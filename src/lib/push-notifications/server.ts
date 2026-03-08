@@ -20,6 +20,7 @@ interface PushPayload {
   title: string;
   body: string;
   url?: string;
+  phone?: string;
 }
 
 function getSupabase() {
