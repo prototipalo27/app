@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
@@ -93,6 +93,48 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   useEffect(() => {
     setLeads(initialLeads);
   }, [initialLeads]);
+
+  // Pull-to-refresh (mobile)
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+  const pulling = useRef(false);
+  const PULL_THRESHOLD = 80;
+
+  useEffect(() => {
+    const onTouchStart = (e: TouchEvent) => {
+      if (refreshing) return;
+      if (window.scrollY > 0) return;
+      pullStartY.current = e.touches[0].clientY;
+      pulling.current = true;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pulling.current || refreshing) return;
+      const dy = e.touches[0].clientY - pullStartY.current;
+      if (dy < 0) { setPullDistance(0); return; }
+      setPullDistance(Math.min(dy * 0.45, 110));
+    };
+    const onTouchEnd = () => {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullDistance >= PULL_THRESHOLD) {
+        setRefreshing(true);
+        setPullDistance(40);
+        router.refresh();
+        setTimeout(() => { setRefreshing(false); setPullDistance(0); }, 1200);
+      } else {
+        setPullDistance(0);
+      }
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [refreshing, pullDistance, router]);
 
   const [filterManager, setFilterManager] = useState<string>(() => {
     if (typeof window === "undefined") return "all";
@@ -281,6 +323,25 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
   return (
     <>
+      {/* Pull-to-refresh indicator */}
+      {pullDistance > 0 && (
+        <div
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-200 ease-out md:hidden"
+          style={{ height: pullDistance }}
+        >
+          <div className={`flex items-center gap-2 text-sm text-muted-foreground ${refreshing ? "animate-pulse" : ""}`}>
+            <svg
+              className="h-5 w-5"
+              style={{ transform: `rotate(${Math.min(pullDistance / PULL_THRESHOLD, 1) * 360}deg)` }}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {refreshing ? "Actualizando…" : pullDistance >= PULL_THRESHOLD ? "Suelta para refrescar" : ""}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3">
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
