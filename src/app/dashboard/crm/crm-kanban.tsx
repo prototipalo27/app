@@ -342,6 +342,34 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         </div>
       )}
 
+      {/* Pipeline summary */}
+      {(() => {
+        const phases = LEAD_COLUMNS.map((col) => {
+          const phaseLeads = filteredLeads.filter((l) => l.status === col.id);
+          const total = phaseLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+          return { ...col, count: phaseLeads.length, total };
+        });
+        const grandTotal = phases.reduce((s, p) => s + p.total, 0);
+        return (
+          <div className="mb-4 grid grid-cols-5 gap-1.5 md:gap-3">
+            {phases.map((p) => (
+              <div key={p.id} className="rounded-lg bg-muted/60 px-2 py-2 text-center md:px-3 md:py-2.5">
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${p.accent}`} />
+                  <span className="text-[11px] font-medium text-muted-foreground md:text-xs">{p.label}</span>
+                </div>
+                <p className="mt-1 text-lg font-bold tabular-nums text-foreground md:text-xl">{p.count}</p>
+                {p.total > 0 && (
+                  <p className="text-[11px] font-medium tabular-nums text-green-600 dark:text-green-400 md:text-xs">
+                    {p.total.toLocaleString("es-ES")} €
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3">
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
