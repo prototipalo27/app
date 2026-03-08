@@ -12,6 +12,7 @@ import {
   updateLeadTag,
   updateQualificationLevel,
   updateEstimationField,
+  updateEstimatedValue,
   getProformaDetails,
   createLeadProforma,
   updateLeadOwner,
@@ -435,14 +436,33 @@ export default function LeadActions({
             ))}
           </select>
 
-          {estimatedValue != null && (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                {estimatedValue.toLocaleString("es-ES")} €
-              </Badge>
-              <span className="text-[11px] text-muted-foreground">valor estimado</span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                defaultValue={estimatedValue ?? ""}
+                placeholder="0"
+                onBlur={(e) => {
+                  const raw = e.target.value.trim();
+                  const val = raw ? parseFloat(raw) : null;
+                  if (val === estimatedValue) return;
+                  startTransition(async () => {
+                    await updateEstimatedValue(leadId, val);
+                    router.refresh();
+                  });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                disabled={isPending}
+                className="h-8 w-28 rounded-lg border border-input bg-transparent px-2.5 pr-7 text-sm tabular-nums text-green-700 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:text-green-400"
+              />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-green-700 dark:text-green-400">€</span>
             </div>
-          )}
+            <span className="text-[11px] text-muted-foreground">valor estimado</span>
+          </div>
         </div>
       </div>
 

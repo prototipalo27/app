@@ -141,6 +141,24 @@ async function recalculateEstimatedValue(id: string) {
     .eq("id", id);
 }
 
+export async function updateEstimatedValue(
+  id: string,
+  value: number | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ estimated_value: value })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  return { success: true };
+}
+
 export async function updateEstimationField(
   id: string,
   field: "estimated_quantity" | "estimated_complexity" | "estimated_urgency",
