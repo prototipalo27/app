@@ -328,7 +328,14 @@ export async function getDocumentPdf(
     const json = await res.json();
     const b64 = json.data || json.pdf || json.file || json;
     if (typeof b64 === "string") {
-      return Buffer.from(b64, "base64");
+      const decoded = Buffer.from(b64, "base64");
+      // Holded sometimes prepends HTTP headers before the actual PDF data
+      const decodedStr = decoded.toString("binary");
+      const pdfStart = decodedStr.indexOf("%PDF");
+      if (pdfStart > 0) {
+        return Buffer.from(decodedStr.slice(pdfStart), "binary");
+      }
+      return decoded;
     }
     throw new Error("Unexpected JSON response from Holded PDF endpoint");
   }
