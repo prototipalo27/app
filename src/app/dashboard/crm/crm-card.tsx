@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
 import { tagClasses } from "@/lib/tag-colors";
-import { QUALIFICATION_LEVELS } from "@/lib/crm-config";
 import { Badge } from "@/components/ui/badge";
 
 export { tagClasses };
@@ -111,15 +110,6 @@ export function CrmCard({ lead }: CrmCardProps) {
             {lead.estimated_value.toLocaleString("es-ES")} €
           </Badge>
         )}
-        {lead.qualification_level != null && (() => {
-          const ql = QUALIFICATION_LEVELS.find((q) => q.level === lead.qualification_level);
-          if (!ql) return null;
-          return (
-            <Badge variant="secondary" className={ql.badge} title={`Nivel ${ql.level}: ${ql.label}`}>
-              {"★".repeat(ql.level)}
-            </Badge>
-          );
-        })()}
       </div>
     </div>
   );

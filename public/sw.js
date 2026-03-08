@@ -67,6 +67,9 @@ self.addEventListener("push", (event) => {
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     data: { url: data.url || "/dashboard" },
+    actions: data.url && data.url.includes("/crm/")
+      ? [{ action: "open", title: "Ver lead" }]
+      : [],
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });

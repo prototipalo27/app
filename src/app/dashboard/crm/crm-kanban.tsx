@@ -343,7 +343,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             </span>
           </div>
           {/* Mobile: swipeable card layout */}
-          <div className="flex flex-col gap-0 md:hidden">
+          <div className="flex flex-col gap-2 px-2 pb-2 md:hidden">
             {newLeads.map((lead) => (
               <SwipeableLeadCard
                 key={lead.id}
@@ -417,12 +417,9 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     {lead.message ? truncateWords(lead.message, 30) : "—"}
                   </p>
                   {lead.attachments && (
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
-                      Archivos adjuntos
-                    </span>
+                    <svg className="mt-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
                   )}
                 </div>
 
@@ -439,17 +436,6 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                     {lead.estimated_value.toLocaleString("es-ES")} €
                   </Badge>
                 )}
-
-                {/* Qualification level */}
-                {lead.qualification_level != null && (() => {
-                  const ql = QUALIFICATION_LEVELS.find((q) => q.level === lead.qualification_level);
-                  if (!ql) return null;
-                  return (
-                    <Badge variant="secondary" className={ql.badge} title={`Nivel ${ql.level}: ${ql.label}`}>
-                      {"★".repeat(ql.level)}
-                    </Badge>
-                  );
-                })()}
 
                 {/* Phone */}
                 {lead.phone ? (

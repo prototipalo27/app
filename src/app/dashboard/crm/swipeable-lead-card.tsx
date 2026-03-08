@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { QUALIFICATION_LEVELS } from "@/lib/crm-config";
 import { agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { Badge } from "@/components/ui/badge";
 
@@ -100,14 +99,10 @@ export function SwipeableLeadCard({
     return `${Math.floor(hours / 24)}d`;
   })();
 
-  const ql = lead.qualification_level != null
-    ? QUALIFICATION_LEVELS.find((q) => q.level === lead.qualification_level)
-    : null;
-
   const isProcessing = dismissingId === lead.id || loadingContactId === lead.id;
 
   return (
-    <div className="relative overflow-hidden rounded-lg">
+    <div className="relative overflow-hidden rounded-xl">
       {/* Background actions revealed on swipe */}
       <div className="absolute inset-0 flex">
         {/* Right action (swipe right → contact) */}
@@ -144,7 +139,7 @@ export function SwipeableLeadCard({
 
       {/* Card content */}
       <div
-        className={`relative border border-zinc-200 bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-800 ${
+        className={`relative rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-800 ${
           isProcessing ? "opacity-50" : ""
         }`}
         style={{
@@ -200,23 +195,15 @@ export function SwipeableLeadCard({
               {lead.project_type_tag}
             </Badge>
           )}
-          {ql && (
-            <Badge variant="secondary" className={ql.badge}>
-              {"★".repeat(ql.level)}
-            </Badge>
-          )}
           {lead.assignee_email && (
             <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
               {lead.assignee_email.split("@")[0]}
             </span>
           )}
           {lead.attachments && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400">
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-              Adjuntos
-            </span>
+            <svg className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
           )}
           {lead.phone && (
             <a
