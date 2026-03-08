@@ -41,7 +41,7 @@ function loadGoogleMapsScript(): Promise<void> {
 
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!key) {
-      console.warn("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not set");
+      console.warn("[AddressAutocomplete] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY not set");
       scriptLoading = false;
       return;
     }
@@ -57,6 +57,10 @@ function loadGoogleMapsScript(): Promise<void> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=__googleMapsCallback`;
     script.async = true;
     script.defer = true;
+    script.onerror = () => {
+      console.error("[AddressAutocomplete] Failed to load Google Maps script");
+      scriptLoading = false;
+    };
     document.head.appendChild(script);
   });
 }
