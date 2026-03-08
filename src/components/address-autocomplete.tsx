@@ -1,13 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-
-declare global {
-  interface Window {
-    google?: typeof google;
-    __googleMapsCallback?: () => void;
-  }
-}
+import { useEffect, useRef, useState } from "react";
 
 export interface AddressComponents {
   address: string;
@@ -46,48 +39,21 @@ function loadGoogleMapsScript(): Promise<void> {
       return;
     }
 
-    window.__googleMapsCallback = () => {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&loading=async`;
+    script.async = true;
+    script.onload = () => {
       scriptLoaded = true;
       scriptLoading = false;
       callbacks.forEach((cb) => cb());
       callbacks.length = 0;
     };
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=__googleMapsCallback`;
-    script.async = true;
-    script.defer = true;
     script.onerror = () => {
       console.error("[AddressAutocomplete] Failed to load Google Maps script");
       scriptLoading = false;
     };
     document.head.appendChild(script);
   });
-}
-
-function extractComponents(
-  place: google.maps.places.PlaceResult
-): AddressComponents {
-  const get = (type: string) =>
-    place.address_components?.find((c) => c.types.includes(type));
-
-  const streetNumber = get("street_number")?.long_name || "";
-  const route = get("route")?.long_name || "";
-  const address = route ? `${route}${streetNumber ? `, ${streetNumber}` : ""}` : place.formatted_address || "";
-
-  return {
-    address,
-    postalCode: get("postal_code")?.long_name || "",
-    city:
-      get("locality")?.long_name ||
-      get("administrative_area_level_2")?.long_name ||
-      "",
-    province:
-      get("administrative_area_level_2")?.long_name ||
-      get("administrative_area_level_1")?.long_name ||
-      "",
-    country: get("country")?.long_name || "España",
-  };
 }
 
 export default function AddressAutocomplete({
@@ -98,48 +64,102 @@ export default function AddressAutocomplete({
   defaultValue,
   onAddressSelect,
 }: AddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hiddenInputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(defaultValue || "");
-
-  const handlePlaceChanged = useCallback(() => {
-    const ac = autocompleteRef.current;
-    if (!ac) return;
-
-    const place = ac.getPlace();
-    if (!place.address_components) return;
-
-    const components = extractComponents(place);
-    setValue(components.address);
-    onAddressSelect?.(components);
-  }, [onAddressSelect]);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    loadGoogleMapsScript().then(() => {
-      if (!inputRef.current || !window.google) return;
+    if (initializedRef.current) return;
 
-      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-        types: ["address"],
+    loadGoogleMapsScript().then(async () => {
+      if (!containerRef.current || initializedRef.current) return;
+      initializedRef.current = true;
+
+      // Import the Places library
+      const { Place, PlaceAutocompleteElement } =
+        (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
+
+      // Create autocomplete element
+      const autocomplete = new PlaceAutocompleteElement({
         componentRestrictions: { country: "es" },
-        fields: ["address_components", "formatted_address"],
+        types: ["address"],
       });
 
-      ac.addListener("place_changed", handlePlaceChanged);
-      autocompleteRef.current = ac;
+      // Style the element to match the form
+      autocomplete.style.width = "100%";
+      autocomplete.setAttribute("placeholder", placeholder);
+
+      // Insert it into the container
+      containerRef.current.appendChild(autocomplete);
+
+      // Listen for place selection
+      autocomplete.addEventListener("gmp-select", async (event: Event) => {
+        const selectEvent = event as Event & {
+          place: google.maps.places.Place;
+        };
+        const place = selectEvent.place;
+
+        await place.fetchFields({
+          fields: ["addressComponents", "formattedAddress"],
+        });
+
+        const components = place.addressComponents || [];
+        const get = (type: string) =>
+          components.find((c) => c.types.includes(type));
+
+        const streetNumber = get("street_number")?.longText || "";
+        const route = get("route")?.longText || "";
+        const address = route
+          ? `${route}${streetNumber ? `, ${streetNumber}` : ""}`
+          : place.formattedAddress || "";
+
+        const parsed: AddressComponents = {
+          address,
+          postalCode: get("postal_code")?.longText || "",
+          city:
+            get("locality")?.longText ||
+            get("administrative_area_level_2")?.longText ||
+            "",
+          province:
+            get("administrative_area_level_2")?.longText ||
+            get("administrative_area_level_1")?.longText ||
+            "",
+          country: get("country")?.longText || "España",
+        };
+
+        setValue(parsed.address);
+        if (hiddenInputRef.current) {
+          hiddenInputRef.current.value = parsed.address;
+        }
+        onAddressSelect?.(parsed);
+      });
     });
-  }, [handlePlaceChanged]);
+  }, [placeholder, onAddressSelect]);
 
   return (
-    <input
-      ref={inputRef}
-      name={name}
-      type="text"
-      required={required}
-      className={className}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      autoComplete="off"
-    />
+    <div>
+      {/* Hidden input for form submission */}
+      <input
+        ref={hiddenInputRef}
+        type="hidden"
+        name={name}
+        value={value}
+      />
+      {/* Google Places autocomplete mounts here */}
+      <div ref={containerRef} className={className} />
+      {/* Fallback input if script fails to load */}
+      {!initializedRef.current && (
+        <noscript>
+          <input
+            name={name}
+            type="text"
+            required={required}
+            className={className}
+            placeholder={placeholder}
+          />
+        </noscript>
+      )}
+    </div>
   );
 }
