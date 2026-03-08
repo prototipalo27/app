@@ -91,6 +91,7 @@ export default function LeadActions({
   const [proformaError, setProformaError] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
+  const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
 
   const selectClass =
     "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
@@ -436,32 +437,39 @@ export default function LeadActions({
             ))}
           </select>
 
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                defaultValue={estimatedValue ?? ""}
-                placeholder="0"
-                onBlur={(e) => {
-                  const raw = e.target.value.trim();
-                  const val = raw ? parseFloat(raw) : null;
-                  if (val === estimatedValue) return;
-                  startTransition(async () => {
-                    await updateEstimatedValue(leadId, val);
-                    router.refresh();
-                  });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-                disabled={isPending}
-                className="h-8 w-28 rounded-lg border border-input bg-transparent px-2.5 pr-7 text-sm tabular-nums text-green-700 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:text-green-400"
-              />
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-green-700 dark:text-green-400">€</span>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={editedValue}
+                  onChange={(e) => setEditedValue(e.target.value)}
+                  placeholder="0"
+                  disabled={isPending}
+                  className="h-8 w-28 rounded-lg border border-input bg-transparent px-2.5 pr-7 text-sm tabular-nums text-green-700 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:text-green-400"
+                />
+                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-green-700 dark:text-green-400">€</span>
+              </div>
+              {editedValue !== (estimatedValue?.toString() ?? "") && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const val = editedValue.trim() ? parseFloat(editedValue) : null;
+                    startTransition(async () => {
+                      await updateEstimatedValue(leadId, val);
+                      router.refresh();
+                    });
+                  }}
+                  disabled={isPending}
+                  className="h-8 bg-green-600 text-white hover:bg-green-700"
+                >
+                  Guardar
+                </Button>
+              )}
             </div>
-            <span className="text-[11px] text-muted-foreground">valor estimado</span>
+            <span className="mt-1 block text-[11px] text-muted-foreground">valor estimado</span>
           </div>
         </div>
       </div>
