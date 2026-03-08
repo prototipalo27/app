@@ -567,6 +567,15 @@ export async function saveQuoteItems(
     if (error) return { success: false, error: error.message };
   }
 
+  // Update lead estimated_value from quote total
+  const quoteTotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
+  if (quoteTotal > 0) {
+    await supabase
+      .from("leads")
+      .update({ estimated_value: quoteTotal })
+      .eq("id", leadId);
+  }
+
   revalidatePath(`/dashboard/crm/${leadId}`);
   return { success: true };
 }
