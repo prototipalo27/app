@@ -593,7 +593,7 @@ export async function sendQuoteToClient(
   // Get the quote request with items
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, token, items")
+    .select("id, token, items, notes, holded_contact_id, holded_proforma_id")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -660,10 +660,32 @@ export async function sendQuoteToClient(
     return { success: false, error: "Error al enviar el email" };
   }
 
-  // Update quote request status
+  // Create proforma in Holded (if contact is linked and not already created)
+  let holdedProformaId = qr.holded_proforma_id || null;
+  if (qr.holded_contact_id && !holdedProformaId) {
+    try {
+      const proforma = await createProforma(qr.holded_contact_id, {
+        items: items.map((item) => ({
+          name: item.concept,
+          units: item.units,
+          subtotal: item.price,
+          tax: item.tax,
+        })),
+        notes: qr.notes || undefined,
+      });
+      holdedProformaId = proforma.id;
+    } catch {
+      // Holded creation failure should not block the quote sending
+    }
+  }
+
+  // Update quote request status + holded proforma id
+  const updateData: Record<string, unknown> = { status: "quote_sent" };
+  if (holdedProformaId) updateData.holded_proforma_id = holdedProformaId;
+
   await supabase
     .from("quote_requests")
-    .update({ status: "quote_sent" })
+    .update(updateData)
     .eq("id", qr.id);
 
   // Log activity
@@ -675,6 +697,7 @@ export async function sendQuoteToClient(
       email_to: lead.email,
       email_subject: "Presupuesto — Prototipalo",
       quote_token: qr.token,
+      ...(holdedProformaId ? { holded_proforma_id: holdedProformaId } : {}),
     },
     created_by: profile.id,
   });
