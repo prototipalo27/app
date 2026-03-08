@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
@@ -87,10 +87,29 @@ function CrmColumn({
 export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
-  const [filterManager, setFilterManager] = useState<string>("all");
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterLevel, setFilterLevel] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("qualification");
+  const [filterManager, setFilterManager] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    return localStorage.getItem("crm_filterManager") || "all";
+  });
+  const [filterType, setFilterType] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    return localStorage.getItem("crm_filterType") || "all";
+  });
+  const [filterLevel, setFilterLevel] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    return localStorage.getItem("crm_filterLevel") || "all";
+  });
+  const [sortBy, setSortBy] = useState<string>(() => {
+    if (typeof window === "undefined") return "qualification";
+    return localStorage.getItem("crm_sortBy") || "qualification";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("crm_filterManager", filterManager);
+    localStorage.setItem("crm_filterType", filterType);
+    localStorage.setItem("crm_filterLevel", filterLevel);
+    localStorage.setItem("crm_sortBy", sortBy);
+  }, [filterManager, filterType, filterLevel, sortBy]);
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
