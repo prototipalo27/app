@@ -1611,6 +1611,7 @@ export type Database = {
           items: Json | null
           lead_id: string
           notes: string | null
+          payment_option: string | null
           proforma_accepted_at: string | null
           shipping_address: string | null
           shipping_city: string | null
@@ -1639,6 +1640,7 @@ export type Database = {
           items?: Json | null
           lead_id: string
           notes?: string | null
+          payment_option?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
@@ -1667,6 +1669,7 @@ export type Database = {
           items?: Json | null
           lead_id?: string
           notes?: string | null
+          payment_option?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null

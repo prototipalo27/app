@@ -24,6 +24,7 @@ export default function QuoteForm({
   const [error, setError] = useState<string | null>(null);
   const [needsShipping, setNeedsShipping] = useState(false);
   const [items, setItems] = useState<QuoteItem[]>(initialItems);
+  const [paymentOption, setPaymentOption] = useState<"full" | "split">("full");
 
   const updateUnits = (index: number, value: string) => {
     const parsed = parseInt(value);
@@ -54,6 +55,7 @@ export default function QuoteForm({
         shipping_province: needsShipping ? (fd.get("shipping_province") as string) || null : null,
         shipping_country: needsShipping ? ((fd.get("shipping_country") as string) || "España") : null,
         items,
+        payment_option: paymentOption,
       });
 
       if (result.success) {
@@ -76,21 +78,24 @@ export default function QuoteForm({
           Datos enviados correctamente
         </h2>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Gracias. Nos pondremos en contacto contigo pronto.
+          Gracias. Recibirás la proforma por email en breve para proceder con el pago.
         </p>
       </div>
     );
   }
 
   // Quote items calculations
+  const discountFactor = paymentOption === "full" ? 0.95 : 1;
   const subtotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
+  const discountedSubtotal = Math.round(subtotal * discountFactor * 100) / 100;
   const taxBreakdown = items.reduce<Record<number, number>>((acc, i) => {
-    const taxAmount = i.price * i.units * (i.tax / 100);
+    const lineSubtotal = i.price * i.units * discountFactor;
+    const taxAmount = lineSubtotal * (i.tax / 100);
     acc[i.tax] = (acc[i.tax] || 0) + taxAmount;
     return acc;
   }, {});
   const totalTax = Object.values(taxBreakdown).reduce((s, v) => s + v, 0);
-  const total = subtotal + totalTax;
+  const total = discountedSubtotal + totalTax;
 
   const inputClass =
     "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white";
@@ -138,12 +143,53 @@ export default function QuoteForm({
             </table>
           </div>
 
+          {/* Payment option */}
+          <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <p className="mb-3 text-sm font-medium text-zinc-900 dark:text-white">Forma de pago</p>
+            <div className="space-y-2">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
+                <input
+                  type="radio"
+                  name="payment_option"
+                  value="full"
+                  checked={paymentOption === "full"}
+                  onChange={() => setPaymentOption("full")}
+                  className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
+                />
+                <div>
+                  <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago único — 5% de descuento</span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Paga el 100% ahora y recibe un 5% de descuento sobre el total.</p>
+                </div>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
+                <input
+                  type="radio"
+                  name="payment_option"
+                  value="split"
+                  checked={paymentOption === "split"}
+                  onChange={() => setPaymentOption("split")}
+                  className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
+                />
+                <div>
+                  <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago 50% — 50%</span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">50% al aceptar el presupuesto, 50% a la entrega del proyecto.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
           {/* Totals */}
           <div className="mt-4 space-y-1 border-t border-zinc-200 pt-3 dark:border-zinc-700">
             <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
               <span>Subtotal</span>
               <span className="tabular-nums">{subtotal.toFixed(2)} €</span>
             </div>
+            {paymentOption === "full" && (
+              <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                <span>Descuento 5%</span>
+                <span className="tabular-nums">-{(subtotal * 0.05).toFixed(2)} €</span>
+              </div>
+            )}
             {Object.entries(taxBreakdown)
               .filter(([, amount]) => amount > 0)
               .map(([rate, amount]) => (
@@ -156,6 +202,11 @@ export default function QuoteForm({
               <span>Total</span>
               <span className="tabular-nums">{total.toFixed(2)} €</span>
             </div>
+            {paymentOption === "split" && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Primer pago: {(total / 2).toFixed(2)} € · Segundo pago: {(total / 2).toFixed(2)} €
+              </p>
+            )}
           </div>
 
           {notes && (

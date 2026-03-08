@@ -707,6 +707,28 @@ export async function sendQuoteToClient(
     .update(updateData)
     .eq("id", qr.id);
 
+  // Update lead status to "quoted" (presupuestado)
+  const { data: currentLead } = await supabase
+    .from("leads")
+    .select("status")
+    .eq("id", leadId)
+    .single();
+
+  if (currentLead && currentLead.status !== "won") {
+    await supabase
+      .from("leads")
+      .update({ status: "quoted" })
+      .eq("id", leadId);
+
+    await supabase.from("lead_activities").insert({
+      lead_id: leadId,
+      activity_type: "status_change",
+      content: `Estado cambiado de ${currentLead.status} a quoted`,
+      metadata: { old_status: currentLead.status, new_status: "quoted", auto: true },
+      created_by: profile.id,
+    });
+  }
+
   // Log activity
   await supabase.from("lead_activities").insert({
     lead_id: leadId,

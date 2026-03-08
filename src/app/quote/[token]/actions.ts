@@ -1,7 +1,8 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { searchContacts, createContact, updateContact, createProforma } from "@/lib/holded/api";
+import { searchContacts, createContact, updateContact, createProforma, getDocumentPdf } from "@/lib/holded/api";
+import { sendEmail } from "@/lib/email";
 
 interface BillingData {
   billing_name: string;
@@ -20,6 +21,7 @@ interface BillingData {
   shipping_province: string | null;
   shipping_country: string | null;
   items?: QuoteItem[];
+  payment_option: "full" | "split";
 }
 
 interface QuoteItem {
@@ -148,20 +150,33 @@ export async function submitBillingData(
         }))
       : originalItems;
 
-    if (holdedContactId && items.length > 0) {
+    // Apply 5% discount if paying 100% upfront
+    const isFullPayment = data.payment_option === "full";
+    const proformaItems = items.map((item) => ({
+      name: item.concept,
+      units: item.units,
+      subtotal: isFullPayment
+        ? Math.round(item.price * 0.95 * 100) / 100
+        : item.price,
+      tax: item.tax,
+    }));
+
+    const proformaNotes = [
+      qr.notes || "",
+      isFullPayment
+        ? "Pago único — 5% de descuento aplicado."
+        : "Pago 50% a la aceptación, 50% a la entrega.",
+    ].filter(Boolean).join("\n");
+
+    if (holdedContactId && proformaItems.length > 0) {
       const proforma = await createProforma(holdedContactId, {
-        items: items.map((item) => ({
-          name: item.concept,
-          units: item.units,
-          subtotal: item.price,
-          tax: item.tax,
-        })),
-        notes: qr.notes || undefined,
+        items: proformaItems,
+        notes: proformaNotes,
       });
       holdedProformaId = proforma.id;
     }
 
-    // 5. Mark as submitted
+    // 5. Mark as submitted + save payment option
     await supabase
       .from("quote_requests")
       .update({
@@ -169,8 +184,67 @@ export async function submitBillingData(
         submitted_at: new Date().toISOString(),
         holded_contact_id: holdedContactId,
         holded_proforma_id: holdedProformaId,
+        payment_option: data.payment_option,
       })
       .eq("id", qr.id);
+
+    // 6. Update lead status to "won" (ganado)
+    await supabase
+      .from("leads")
+      .update({ status: "won" })
+      .eq("id", qr.lead_id);
+
+    await supabase.from("lead_activities").insert({
+      lead_id: qr.lead_id,
+      activity_type: "status_change",
+      content: "Estado cambiado a won — cliente ha enviado datos de facturación",
+      metadata: { new_status: "won", auto: true, payment_option: data.payment_option },
+    });
+
+    // 7. Send proforma PDF by email
+    if (holdedProformaId && lead?.email) {
+      try {
+        const pdfBuffer = await getDocumentPdf("proform", holdedProformaId);
+        const bookingUrl = process.env.BOOKING_URL || "https://prototipalo.com";
+
+        await sendEmail({
+          to: lead.email,
+          subject: "Proforma — Prototipalo",
+          signature: false,
+          text: `Hola ${lead.full_name},\n\nGracias por confirmar tu proyecto. Adjuntamos la proforma para proceder al pago y arrancar con la producción lo antes posible.\n\n${isFullPayment ? "Se ha aplicado un 5% de descuento por pago único." : "El pago se divide en dos plazos: 50% ahora y 50% a la entrega."}\n\nSi quieres, puedes reservar una reunión para poner todo en marcha:\n${bookingUrl}\n\nGracias,\nEl equipo de Prototipalo`,
+          html: `
+            <p>Hola ${lead.full_name},</p>
+            <p>Gracias por confirmar tu proyecto. Adjuntamos la proforma para proceder al pago y arrancar con la producción lo antes posible.</p>
+            <p style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:13px;color:#52525b;">
+              ${isFullPayment
+                ? "💰 Se ha aplicado un <strong>5% de descuento</strong> por pago único."
+                : "💰 El pago se divide en dos plazos: <strong>50% ahora</strong> y <strong>50% a la entrega</strong>."}
+            </p>
+            <p>¿Quieres que hablemos sobre los detalles del proyecto? Reserva una reunión y lo ponemos todo en marcha:</p>
+            <p>
+              <a href="${bookingUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">
+                Reservar reunión
+              </a>
+            </p>
+            <p style="font-size:12px;color:#a1a1aa;margin-top:24px;">La proforma va adjunta a este email en formato PDF.</p>
+            <br>
+            <table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#333333;line-height:1.6;">
+              <tr><td style="padding-bottom:10px;"><strong style="font-size:12px;color:#1a1a1a;">El equipo de Prototipalo</strong></td></tr>
+              <tr><td style="padding-bottom:2px;">Viriato 27 &bull; 28010 Madrid</td></tr>
+              <tr><td style="padding-bottom:11px;"><a href="https://prototipalo.com" style="color:#2563eb;text-decoration:underline;">Prototipalo.com</a></td></tr>
+              <tr><td style="padding-top:11px;"><a href="https://prototipalo.com" style="text-decoration:none;"><img src="https://rqqwvgdmbmgdbegpcvmz.supabase.co/storage/v1/object/public/assets/logo-email.png" alt="prototipalo — better in 3d" width="224" height="auto" style="display:block;" /></a></td></tr>
+            </table>
+          `,
+          attachments: [{
+            filename: "Proforma-Prototipalo.pdf",
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          }],
+        });
+      } catch {
+        // PDF/email failure should not block the submission
+      }
+    }
 
     return { success: true };
   } catch {
@@ -180,8 +254,15 @@ export async function submitBillingData(
       .update({
         status: "submitted",
         submitted_at: new Date().toISOString(),
+        payment_option: data.payment_option,
       })
       .eq("id", qr.id);
+
+    // Still update lead to won
+    await supabase
+      .from("leads")
+      .update({ status: "won" })
+      .eq("id", qr.lead_id);
 
     return { success: true };
   }
