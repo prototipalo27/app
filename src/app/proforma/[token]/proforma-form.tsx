@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { acceptProforma } from "./actions";
+import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
 
 interface ProformaLine {
   name: string;
@@ -28,6 +29,28 @@ export default function ProformaForm({
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const billingPostalRef = useRef<HTMLInputElement>(null);
+  const billingCityRef = useRef<HTMLInputElement>(null);
+  const billingProvinceRef = useRef<HTMLInputElement>(null);
+  const billingCountryRef = useRef<HTMLInputElement>(null);
+  const shippingPostalRef = useRef<HTMLInputElement>(null);
+  const shippingCityRef = useRef<HTMLInputElement>(null);
+  const shippingProvinceRef = useRef<HTMLInputElement>(null);
+  const shippingCountryRef = useRef<HTMLInputElement>(null);
+
+  const fillBillingAddress = (c: AddressComponents) => {
+    if (billingPostalRef.current) billingPostalRef.current.value = c.postalCode;
+    if (billingCityRef.current) billingCityRef.current.value = c.city;
+    if (billingProvinceRef.current) billingProvinceRef.current.value = c.province;
+    if (billingCountryRef.current) billingCountryRef.current.value = c.country;
+  };
+
+  const fillShippingAddress = (c: AddressComponents) => {
+    if (shippingPostalRef.current) shippingPostalRef.current.value = c.postalCode;
+    if (shippingCityRef.current) shippingCityRef.current.value = c.city;
+    if (shippingProvinceRef.current) shippingProvinceRef.current.value = c.province;
+    if (shippingCountryRef.current) shippingCountryRef.current.value = c.country;
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -157,20 +180,20 @@ export default function ProformaForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Dirección fiscal *
             </label>
-            <input name="billing_address" type="text" required className={inputClass} placeholder="Calle Mayor, 1" />
+            <AddressAutocomplete name="billing_address" required className={inputClass} onAddressSelect={fillBillingAddress} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Código postal *
               </label>
-              <input name="billing_postal_code" type="text" required className={inputClass} placeholder="28001" />
+              <input ref={billingPostalRef} name="billing_postal_code" type="text" required className={inputClass} placeholder="28001" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Ciudad *
               </label>
-              <input name="billing_city" type="text" required className={inputClass} placeholder="Madrid" />
+              <input ref={billingCityRef} name="billing_city" type="text" required className={inputClass} placeholder="Madrid" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -178,13 +201,13 @@ export default function ProformaForm({
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Provincia *
               </label>
-              <input name="billing_province" type="text" required className={inputClass} placeholder="Madrid" />
+              <input ref={billingProvinceRef} name="billing_province" type="text" required className={inputClass} placeholder="Madrid" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 País
               </label>
-              <input name="billing_country" type="text" defaultValue="España" className={inputClass} />
+              <input ref={billingCountryRef} name="billing_country" type="text" defaultValue="España" className={inputClass} />
             </div>
           </div>
         </div>
@@ -214,20 +237,20 @@ export default function ProformaForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Dirección (calle y número) *
             </label>
-            <input name="shipping_address" type="text" required className={inputClass} placeholder="Calle Mayor, 1" />
+            <AddressAutocomplete name="shipping_address" required className={inputClass} onAddressSelect={fillShippingAddress} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Código postal *
               </label>
-              <input name="shipping_postal_code" type="text" required className={inputClass} placeholder="28001" />
+              <input ref={shippingPostalRef} name="shipping_postal_code" type="text" required className={inputClass} placeholder="28001" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Ciudad *
               </label>
-              <input name="shipping_city" type="text" required className={inputClass} placeholder="Madrid" />
+              <input ref={shippingCityRef} name="shipping_city" type="text" required className={inputClass} placeholder="Madrid" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -235,13 +258,13 @@ export default function ProformaForm({
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Provincia *
               </label>
-              <input name="shipping_province" type="text" required className={inputClass} placeholder="Madrid" />
+              <input ref={shippingProvinceRef} name="shipping_province" type="text" required className={inputClass} placeholder="Madrid" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 País
               </label>
-              <input name="shipping_country" type="text" defaultValue="España" className={inputClass} />
+              <input ref={shippingCountryRef} name="shipping_country" type="text" defaultValue="España" className={inputClass} />
             </div>
           </div>
         </div>
