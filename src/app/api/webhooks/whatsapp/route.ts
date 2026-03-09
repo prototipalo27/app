@@ -4,8 +4,8 @@ import { sendPushToAll } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
-// Gonzalo — default commercial owner for WhatsApp leads
-const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
+// Manu — commercial owner for WhatsApp presu leads (captación via WhatsApp is his)
+const MANU_USER_ID = "1acae8cc-e872-4513-8133-27cbbf05d6ba";
 
 export async function POST(request: NextRequest) {
   // Validate webhook secret
@@ -265,7 +265,7 @@ async function maybeCreateLeadFromPresu(
         message,
         source: "whatsapp",
         status: "new",
-        owned_by: GONZALO_USER_ID,
+        owned_by: MANU_USER_ID,
       })
       .select("id")
       .single();
