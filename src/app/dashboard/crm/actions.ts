@@ -313,6 +313,91 @@ export async function updateLeadOwner(
 
 // ── Commission Summary ───────────────────────────────────
 
+// ── Commission Config Types ─────────────────────────────
+
+export type CommissionTier = { min: number; max: number | null; rate: number };
+
+export type CommissionConfig = {
+  id: string;
+  user_id: string;
+  type: "flat" | "tiered";
+  new_rate: number;
+  returning_rate: number;
+  tiers: CommissionTier[];
+};
+
+export async function getCommissionConfigs(): Promise<CommissionConfig[]> {
+  await requireRole("manager");
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("commission_configs")
+    .select("*");
+  return (data || []).map((c: any) => ({
+    id: c.id,
+    user_id: c.user_id,
+    type: c.type as "flat" | "tiered",
+    new_rate: Number(c.new_rate),
+    returning_rate: Number(c.returning_rate),
+    tiers: (c.tiers || []) as CommissionTier[],
+  }));
+}
+
+export async function saveCommissionConfig(
+  userId: string,
+  config: { type: "flat" | "tiered"; new_rate: number; returning_rate: number; tiers: CommissionTier[] }
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await (supabase as any)
+    .from("commission_configs")
+    .upsert({
+      user_id: userId,
+      type: config.type,
+      new_rate: config.new_rate,
+      returning_rate: config.returning_rate,
+      tiers: config.tiers,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/crm/comisiones");
+}
+
+/**
+ * Calculate commission for a tiered config.
+ * Each tier's rate applies to the slice of revenue in that bracket.
+ * E.g. tiers [{min:0,max:3000,rate:0.05},{min:3000,max:null,rate:0.10}]
+ * For accumulatedBefore=2000, quoteTotal=2000:
+ *   - 1000 at 5% (fills 0-3000 bracket) + 1000 at 10% = 150€
+ */
+function calcTieredCommission(
+  tiers: CommissionTier[],
+  accumulatedBefore: number,
+  quoteTotal: number
+): { commission: number; effectiveRate: number } {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  let remaining = quoteTotal;
+  let commission = 0;
+  let cursor = accumulatedBefore;
+
+  for (const tier of sorted) {
+    if (remaining <= 0) break;
+    const tierMax = tier.max ?? Infinity;
+    if (cursor >= tierMax) continue;
+    const start = Math.max(cursor, tier.min);
+    const end = tierMax;
+    const slotAvailable = end - start;
+    const slice = Math.min(remaining, slotAvailable);
+    commission += slice * tier.rate;
+    remaining -= slice;
+    cursor += slice;
+  }
+
+  const effectiveRate = quoteTotal > 0 ? commission / quoteTotal : 0;
+  return { commission, effectiveRate };
+}
+
 export async function getCommissionSummary(leadId: string): Promise<{
   isReturning: boolean;
   rate: number;
@@ -322,19 +407,14 @@ export async function getCommissionSummary(leadId: string): Promise<{
   await requireRole("manager");
   const supabase = await createClient();
 
-  // Get lead info
   const { data: lead } = await supabase
     .from("leads")
-    .select("id, email, status, created_at")
+    .select("id, email, status, created_at, owned_by, updated_at")
     .eq("id", leadId)
     .single();
 
-  if (!lead) return null;
+  if (!lead || lead.status !== "won") return null;
 
-  // Commission only applies to won leads
-  if (lead.status !== "won") return null;
-
-  // Get quote total from items
   const { data: qr } = await supabase
     .from("quote_requests")
     .select("items")
@@ -345,10 +425,9 @@ export async function getCommissionSummary(leadId: string): Promise<{
 
   const items = (qr?.items || []) as unknown as ProformaLineItem[];
   const quoteTotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
-
   if (quoteTotal === 0) return null;
 
-  // Check if returning client: other won leads with the same email created before this one
+  // Check if returning client
   let isReturning = false;
   if (lead.email) {
     const { count } = await supabase
@@ -358,14 +437,59 @@ export async function getCommissionSummary(leadId: string): Promise<{
       .eq("status", "won")
       .neq("id", lead.id)
       .lt("created_at", lead.created_at);
-
     isReturning = (count ?? 0) > 0;
   }
 
-  const rate = isReturning ? 0.075 : 0.15;
-  const commission = quoteTotal * rate;
+  // Get commission config for this commercial
+  if (lead.owned_by) {
+    const { data: config } = await (supabase as any)
+      .from("commission_configs")
+      .select("*")
+      .eq("user_id", lead.owned_by)
+      .single();
 
-  return { isReturning, rate, quoteTotal, commission };
+    if (config && config.type === "tiered") {
+      const tiers = (config.tiers || []) as CommissionTier[];
+      // Calculate accumulated billing this month BEFORE this lead
+      const wonDate = new Date(lead.updated_at);
+      const monthStart = new Date(wonDate.getFullYear(), wonDate.getMonth(), 1).toISOString();
+      const monthEnd = new Date(wonDate.getFullYear(), wonDate.getMonth() + 1, 1).toISOString();
+
+      const { data: otherWon } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("status", "won")
+        .eq("owned_by", lead.owned_by)
+        .neq("id", lead.id)
+        .gte("updated_at", monthStart)
+        .lt("updated_at", monthEnd);
+
+      let accBefore = 0;
+      if (otherWon && otherWon.length > 0) {
+        const otherIds = otherWon.map((l) => l.id);
+        const { data: otherQuotes } = await supabase
+          .from("quote_requests")
+          .select("lead_id, items")
+          .in("lead_id", otherIds);
+        for (const q of otherQuotes || []) {
+          const qItems = (q.items || []) as unknown as ProformaLineItem[];
+          accBefore += qItems.reduce((s, i) => s + i.price * i.units, 0);
+        }
+      }
+
+      const { commission, effectiveRate } = calcTieredCommission(tiers, accBefore, quoteTotal);
+      return { isReturning, rate: effectiveRate, quoteTotal, commission };
+    }
+
+    if (config && config.type === "flat") {
+      const rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+      return { isReturning, rate, quoteTotal, commission: quoteTotal * rate };
+    }
+  }
+
+  // Fallback: default flat rates
+  const rate = isReturning ? 0.075 : 0.15;
+  return { isReturning, rate, quoteTotal, commission: quoteTotal * rate };
 }
 
 // ── Add Note ─────────────────────────────────────────────

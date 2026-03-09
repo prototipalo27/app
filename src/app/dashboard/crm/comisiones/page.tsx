@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import type { ProformaLineItem } from "../actions";
+import type { ProformaLineItem, CommissionTier } from "../actions";
+import { getCommissionConfigs } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -15,6 +16,34 @@ import {
   TableCell,
   TableFooter,
 } from "@/components/ui/table";
+import { CommissionSettings } from "./commission-settings";
+
+function calcTieredCommission(
+  tiers: CommissionTier[],
+  accumulatedBefore: number,
+  quoteTotal: number
+): { commission: number; effectiveRate: number } {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  let remaining = quoteTotal;
+  let commission = 0;
+  let cursor = accumulatedBefore;
+
+  for (const tier of sorted) {
+    if (remaining <= 0) break;
+    const tierMax = tier.max ?? Infinity;
+    if (cursor >= tierMax) continue;
+    const start = Math.max(cursor, tier.min);
+    const end = tierMax;
+    const slotAvailable = end - start;
+    const slice = Math.min(remaining, slotAvailable);
+    commission += slice * tier.rate;
+    remaining -= slice;
+    cursor += slice;
+  }
+
+  const effectiveRate = quoteTotal > 0 ? commission / quoteTotal : 0;
+  return { commission, effectiveRate };
+}
 
 export default async function ComisionesPage({
   searchParams,
@@ -42,7 +71,7 @@ export default async function ComisionesPage({
     .not("owned_by", "is", null)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: true });
 
   const leadIds = (wonLeads || []).map((l) => l.id);
   let quoteMap = new Map<string, number>();
@@ -69,6 +98,22 @@ export default async function ComisionesPage({
     ownerMap = new Map(owners?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
 
+  // Load commission configs
+  const commissionConfigs = await getCommissionConfigs();
+  const configMap = new Map(commissionConfigs.map((c) => [c.user_id, c]));
+
+  // Load all managers for settings dropdown
+  const { data: allManagers } = await supabase
+    .from("user_profiles")
+    .select("id, email")
+    .in("role", ["manager", "super_admin", "employee"])
+    .eq("is_active", true);
+
+  const managersForSettings = (allManagers || []).map((m) => ({
+    id: m.id,
+    name: m.email.split("@")[0],
+  }));
+
   type LeadCommission = {
     id: string;
     fullName: string;
@@ -79,9 +124,13 @@ export default async function ComisionesPage({
     isReturning: boolean;
     rate: number;
     commission: number;
+    configType: "flat" | "tiered";
   };
 
   const leadCommissions: LeadCommission[] = [];
+
+  // Track accumulated billing per owner for tiered calculation (ordered by updated_at ASC)
+  const ownerAccumulated = new Map<string, number>();
 
   for (const lead of wonLeads || []) {
     const quoteTotal = quoteMap.get(lead.id) ?? 0;
@@ -100,7 +149,26 @@ export default async function ComisionesPage({
       isReturning = (count ?? 0) > 0;
     }
 
-    const rate = isReturning ? 0.075 : 0.15;
+    const config = configMap.get(lead.owned_by!);
+    let rate: number;
+    let commission: number;
+    let configType: "flat" | "tiered" = "flat";
+
+    if (config?.type === "tiered") {
+      configType = "tiered";
+      const accBefore = ownerAccumulated.get(lead.owned_by!) ?? 0;
+      const result = calcTieredCommission(config.tiers, accBefore, quoteTotal);
+      commission = result.commission;
+      rate = result.effectiveRate;
+      ownerAccumulated.set(lead.owned_by!, accBefore + quoteTotal);
+    } else if (config?.type === "flat") {
+      rate = isReturning ? config.returning_rate : config.new_rate;
+      commission = quoteTotal * rate;
+    } else {
+      rate = isReturning ? 0.075 : 0.15;
+      commission = quoteTotal * rate;
+    }
+
     leadCommissions.push({
       id: lead.id,
       fullName: lead.full_name,
@@ -110,14 +178,15 @@ export default async function ComisionesPage({
       quoteTotal,
       isReturning,
       rate,
-      commission: quoteTotal * rate,
+      commission,
+      configType,
     });
   }
 
-  const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number }>();
+  const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number; configType: "flat" | "tiered" }>();
   for (const lc of leadCommissions) {
     if (!byOwner.has(lc.ownerId)) {
-      byOwner.set(lc.ownerId, { name: lc.ownerName, leads: [], total: 0, commission: 0 });
+      byOwner.set(lc.ownerId, { name: lc.ownerName, leads: [], total: 0, commission: 0, configType: lc.configType });
     }
     const entry = byOwner.get(lc.ownerId)!;
     entry.leads.push(lc);
@@ -191,32 +260,42 @@ export default async function ComisionesPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Comercial</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Leads ganados</TableHead>
                     <TableHead className="text-right">Total facturado</TableHead>
                     <TableHead className="text-right">Comision total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...byOwner.values()].map((owner) => (
-                    <TableRow key={owner.name}>
+                  {[...byOwner.entries()].map(([ownerId, owner]) => (
+                    <TableRow key={ownerId}>
                       <TableCell className="font-medium">{owner.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={
+                          owner.configType === "tiered"
+                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        }>
+                          {owner.configType === "tiered" ? "Tramos" : "Plano"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{owner.leads.length}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.total.toFixed(2)} €</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">{owner.commission.toFixed(2)} €</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.total.toFixed(2)} &euro;</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">{owner.commission.toFixed(2)} &euro;</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-semibold">Total</TableCell>
+                    <TableCell className="font-semibold" colSpan={2}>Total</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">
                       {leadCommissions.length}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">
-                      {leadCommissions.reduce((s, l) => s + l.quoteTotal, 0).toFixed(2)} €
+                      {leadCommissions.reduce((s, l) => s + l.quoteTotal, 0).toFixed(2)} &euro;
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                      {leadCommissions.reduce((s, l) => s + l.commission, 0).toFixed(2)} €
+                      {leadCommissions.reduce((s, l) => s + l.commission, 0).toFixed(2)} &euro;
                     </TableCell>
                   </TableRow>
                 </TableFooter>
@@ -257,25 +336,31 @@ export default async function ComisionesPage({
                       </TableCell>
                       <TableCell className="text-muted-foreground">{lc.ownerName}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            lc.isReturning
-                              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          }
-                        >
-                          {lc.isReturning ? "Recurrente" : "Nuevo"}
-                        </Badge>
+                        {lc.configType === "tiered" ? (
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                            Tramos
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className={
+                              lc.isReturning
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                            }
+                          >
+                            {lc.isReturning ? "Recurrente" : "Nuevo"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {lc.quoteTotal.toFixed(2)} €
+                        {lc.quoteTotal.toFixed(2)} &euro;
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
                         {(lc.rate * 100).toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        {lc.commission.toFixed(2)} €
+                        {lc.commission.toFixed(2)} &euro;
                       </TableCell>
                     </TableRow>
                   ))}
@@ -285,6 +370,14 @@ export default async function ComisionesPage({
           </Card>
         </div>
       )}
+
+      {/* Commission settings */}
+      <div className="mt-8">
+        <CommissionSettings
+          configs={commissionConfigs}
+          users={managersForSettings}
+        />
+      </div>
     </div>
   );
 }
