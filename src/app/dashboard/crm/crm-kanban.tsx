@@ -418,7 +418,7 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
       })()}
 
       {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3">
+      <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:gap-3">
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Comercial" />
@@ -488,13 +488,12 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         </Select>
 
         {filterTime === "custom" && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-              placeholder="Desde"
             />
             <span className="text-xs text-muted-foreground">—</span>
             <input
@@ -502,7 +501,6 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-              placeholder="Hasta"
             />
           </div>
         )}
