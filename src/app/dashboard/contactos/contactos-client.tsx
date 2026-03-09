@@ -1,39 +1,37 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { searchContactos, updateContacto, refreshContactCache, type CachedContact } from "./actions";
+import { useState, useMemo } from "react";
+import { updateContacto, refreshContactCache, type CachedContact } from "./actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@/components/ui/table";
 
-export default function ContactosClient() {
+export default function ContactosClient({ initialContacts }: { initialContacts: CachedContact[] }) {
+  const [contacts, setContacts] = useState(initialContacts);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<CachedContact[]>([]);
-  const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<CachedContact | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (q.length < 2) { setResults([]); return; }
-    setSearching(true);
-    try {
-      const data = await searchContactos(q);
-      setResults(data);
-    } catch {
-      setResults([]);
-    }
-    setSearching(false);
-  }, []);
-
-  function handleQueryChange(q: string) {
-    setQuery(q);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(q), 300);
-  }
+  const filtered = useMemo(() => {
+    if (!query.trim()) return contacts;
+    const q = query.toLowerCase();
+    return contacts.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.trade_name?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.code?.toLowerCase().includes(q) ||
+      c.phone?.includes(q) ||
+      c.mobile?.includes(q) ||
+      c.captador?.toLowerCase().includes(q) ||
+      c.owner?.toLowerCase().includes(q)
+    );
+  }, [contacts, query]);
 
   function selectContact(c: CachedContact) {
     setSelected(c);
@@ -78,10 +76,9 @@ export default function ContactosClient() {
 
     const result = await updateContacto(selected.holded_id, fields);
     if (result.success) {
-      // Update local state
       const updated = { ...selected, ...fields } as CachedContact;
       setSelected(updated);
-      setResults((prev) => prev.map((r) => r.holded_id === updated.holded_id ? updated : r));
+      setContacts((prev) => prev.map((r) => r.holded_id === updated.holded_id ? updated : r));
       setEditing(false);
       setMessage({ type: "ok", text: "Guardado en Holded" });
     } else {
@@ -96,7 +93,8 @@ export default function ContactosClient() {
     const result = await refreshContactCache();
     if (result.success) {
       setMessage({ type: "ok", text: `Cache actualizada: ${result.count} contactos` });
-      if (query.length >= 2) doSearch(query);
+      // Reload page to get fresh data
+      window.location.reload();
     } else {
       setMessage({ type: "err", text: result.error || "Error al sincronizar" });
     }
@@ -107,9 +105,12 @@ export default function ContactosClient() {
     "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Contactos Holded</h1>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Contactos</h1>
+          <p className="text-sm text-muted-foreground">{contacts.length} contactos en Holded</p>
+        </div>
         <Button
           variant="ghost"
           size="sm"
@@ -117,7 +118,7 @@ export default function ContactosClient() {
           disabled={syncing}
           className="text-xs"
         >
-          {syncing ? "Sincronizando..." : "Sincronizar cache"}
+          {syncing ? "Sincronizando..." : "Sincronizar"}
         </Button>
       </div>
 
@@ -126,8 +127,8 @@ export default function ContactosClient() {
         <input
           type="text"
           value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Buscar por nombre, email, NIF, teléfono..."
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filtrar por nombre, email, NIF, teléfono..."
           className="h-10 w-full rounded-lg border border-input bg-background px-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
@@ -138,36 +139,67 @@ export default function ContactosClient() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[1fr,1.2fr]">
-        {/* Results list */}
-        <Card className="h-fit">
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">
-              {searching ? "Buscando..." : results.length > 0 ? `${results.length} resultados` : query.length >= 2 ? "Sin resultados" : "Escribe para buscar"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="max-h-[60vh] overflow-y-auto p-0">
-            {results.map((c) => (
-              <button
-                key={c.holded_id}
-                type="button"
-                onClick={() => selectContact(c)}
-                className={`w-full border-b border-input px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/50 ${selected?.holded_id === c.holded_id ? "bg-brand/5" : ""}`}
-              >
-                <div className="text-sm font-medium text-foreground">{c.name}</div>
-                <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                  {c.code && <span>{c.code}</span>}
-                  {c.email && <span>{c.email}</span>}
-                  {(c.phone || c.mobile) && <span>{c.phone || c.mobile}</span>}
-                </div>
-              </button>
-            ))}
+      <div className="grid gap-4 lg:grid-cols-[1fr,380px]">
+        {/* Table */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="max-h-[75vh] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead className="hidden sm:table-cell">NIF</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead className="hidden md:table-cell">Teléfono</TableHead>
+                    <TableHead className="hidden lg:table-cell">Captador</TableHead>
+                    <TableHead className="hidden lg:table-cell">Owner</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                        {query ? "Sin resultados" : "No hay contactos en cache"}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filtered.map((c) => (
+                      <TableRow
+                        key={c.holded_id}
+                        onClick={() => selectContact(c)}
+                        className={`cursor-pointer ${selected?.holded_id === c.holded_id ? "bg-brand/5" : ""}`}
+                      >
+                        <TableCell>
+                          <div className="font-medium text-foreground">{c.name}</div>
+                          {c.trade_name && c.trade_name !== c.name && (
+                            <div className="text-xs text-muted-foreground">{c.trade_name}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden text-muted-foreground sm:table-cell">{c.code || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{c.email || "—"}</TableCell>
+                        <TableCell className="hidden text-muted-foreground md:table-cell">{c.phone || c.mobile || "—"}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {c.captador ? (
+                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">{c.captador}</span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {c.owner ? (
+                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">{c.owner}</span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Detail / Edit panel */}
+        {/* Detail panel */}
         {selected && (
-          <Card>
+          <Card className="h-fit lg:sticky lg:top-4">
             <CardHeader className="border-b">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{selected.name}</CardTitle>
@@ -187,7 +219,7 @@ export default function ContactosClient() {
                         disabled={saving}
                         className="bg-brand text-white hover:bg-brand-dark"
                       >
-                        {saving ? "Guardando..." : "Guardar"}
+                        {saving ? "..." : "Guardar"}
                       </Button>
                     </>
                   )}
@@ -199,7 +231,7 @@ export default function ContactosClient() {
                 </span>
               )}
             </CardHeader>
-            <CardContent className="space-y-4 pt-4">
+            <CardContent className="space-y-3 pt-4">
               {editing ? (
                 <>
                   <Field label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} inputClass={inputClass} />
@@ -225,6 +257,22 @@ export default function ContactosClient() {
                   <InfoRow label="Email" value={selected.email} />
                   <InfoRow label="Teléfono" value={selected.phone} />
                   <InfoRow label="Móvil" value={selected.mobile} />
+                  {(selected.captador || selected.owner) && (
+                    <div className="flex items-center gap-3 border-t border-input pt-3">
+                      {selected.captador && (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Captador</span>
+                          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{selected.captador}</p>
+                        </div>
+                      )}
+                      {selected.owner && (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Owner</span>
+                          <p className="text-sm font-medium text-blue-700 dark:text-blue-400">{selected.owner}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {(selected.address || selected.city || selected.postal_code || selected.province) && (
                     <div className="border-t border-input pt-3">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dirección</p>

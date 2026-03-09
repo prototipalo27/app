@@ -20,22 +20,71 @@ export type CachedContact = {
   province: string | null;
   country: string | null;
   note: string | null;
+  captador: string | null;
+  owner: string | null;
 };
 
-export async function searchContactos(query: string): Promise<CachedContact[]> {
+export async function getAllContactos(): Promise<CachedContact[]> {
   await requireRole("manager");
   const supabase = createServiceClient();
-  const pattern = `%${query}%`;
 
-  const { data, error } = await supabase
+  // 1. Load all cached contacts
+  const { data: contacts, error } = await supabase
     .from("holded_contacts")
     .select("holded_id, name, trade_name, code, email, phone, mobile, contact_type, address, city, postal_code, province, country, note")
-    .or(`name.ilike.${pattern},trade_name.ilike.${pattern},email.ilike.${pattern},code.ilike.${pattern},phone.ilike.${pattern},mobile.ilike.${pattern}`)
-    .order("name")
-    .limit(30);
+    .order("name");
 
   if (error) throw new Error(error.message);
-  return data || [];
+  if (!contacts || contacts.length === 0) return [];
+
+  // 2. Get holded_contact_id → lead owner mapping via quote_requests + leads
+  const { data: qrLinks } = await supabase
+    .from("quote_requests")
+    .select("holded_contact_id, lead_id, leads(owned_by, created_at)")
+    .not("holded_contact_id", "is", null);
+
+  // 3. Load user names for owners
+  const ownerIds = new Set<string>();
+  for (const qr of qrLinks || []) {
+    const lead = qr.leads as any;
+    if (lead?.owned_by) ownerIds.add(lead.owned_by);
+  }
+
+  const ownerMap = new Map<string, string>();
+  if (ownerIds.size > 0) {
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("id, email")
+      .in("id", [...ownerIds]);
+    for (const p of profiles || []) {
+      ownerMap.set(p.id, p.email.split("@")[0]);
+    }
+  }
+
+  // 4. Build per-holded_contact: earliest lead owner = captador, latest = owner
+  const contactLeads = new Map<string, { owned_by: string; created_at: string }[]>();
+  for (const qr of qrLinks || []) {
+    if (!qr.holded_contact_id) continue;
+    const lead = qr.leads as any;
+    if (!lead?.owned_by) continue;
+    if (!contactLeads.has(qr.holded_contact_id)) contactLeads.set(qr.holded_contact_id, []);
+    contactLeads.get(qr.holded_contact_id)!.push({ owned_by: lead.owned_by, created_at: lead.created_at });
+  }
+
+  // 5. Merge into contacts
+  return contacts.map((c) => {
+    const leads = contactLeads.get(c.holded_id);
+    let captador: string | null = null;
+    let owner: string | null = null;
+
+    if (leads && leads.length > 0) {
+      const sorted = leads.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      captador = ownerMap.get(sorted[0].owned_by) || null;
+      owner = ownerMap.get(sorted[sorted.length - 1].owned_by) || null;
+    }
+
+    return { ...c, captador, owner };
+  });
 }
 
 export async function getContactDetail(holdedId: string): Promise<CachedContact | null> {
@@ -48,7 +97,8 @@ export async function getContactDetail(holdedId: string): Promise<CachedContact 
     .eq("holded_id", holdedId)
     .maybeSingle();
 
-  return data || null;
+  if (!data) return null;
+  return { ...data, captador: null, owner: null };
 }
 
 export async function updateContacto(

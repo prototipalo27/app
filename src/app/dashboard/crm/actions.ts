@@ -77,7 +77,7 @@ export async function createLead(formData: FormData) {
   }
 
   const assignedTo = (formData.get("assigned_to") as string)?.trim() || profile.id;
-  const ownedBy = (formData.get("owned_by") as string)?.trim() || null;
+  const ownedBy = (formData.get("owned_by") as string)?.trim() || profile.id;
 
   const estimatedQuantity = (formData.get("estimated_quantity") as string)?.trim() || null;
   const estimatedComplexity = (formData.get("estimated_complexity") as string)?.trim() || null;

@@ -154,8 +154,7 @@ export default async function NewLeadPage() {
                 <label className="mb-1 block text-sm font-medium text-foreground">
                   Captado por
                 </label>
-                <select name="owned_by" className={selectClass}>
-                  <option value="">Sin asignar</option>
+                <select name="owned_by" defaultValue={profile.id} className={selectClass}>
                   {(managers || []).map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.email.split("@")[0]}
