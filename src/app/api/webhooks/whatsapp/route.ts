@@ -1,5 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { sendPushToAll } from "@/lib/push-notifications/server";
+import { generateAndSaveDraft } from "@/lib/ai-draft";
+import { detectProjectTypeTag } from "@/lib/lead-tagger";
+
+// Gonzalo — default commercial owner for WhatsApp leads
+const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
 
 export async function POST(request: NextRequest) {
   // Validate webhook secret
@@ -141,6 +147,11 @@ async function handleMessagesUpsert(
           .then(() => {}, () => {});
       });
     }
+
+    // Auto-create lead when an outgoing message starts with "presu"
+    if (fromMe && content && /^presu\b/i.test(content.trim())) {
+      await maybeCreateLeadFromPresu(supabase, content.trim(), contactPhone, contactName);
+    }
   }
 }
 
@@ -170,6 +181,114 @@ async function handleMessagesUpdate(
       .from("whatsapp_messages")
       .update({ status })
       .eq("whatsapp_message_id", messageId);
+  }
+}
+
+/**
+ * Parse a "presu" WhatsApp message and create a CRM lead.
+ *
+ * Supported formats:
+ *   presu Nombre del cliente
+ *   presu Nombre del cliente - Empresa
+ *   presu Nombre del cliente - Empresa
+ *   descripción del proyecto...
+ *
+ * Phone is taken from the WhatsApp contact (recipient).
+ */
+async function maybeCreateLeadFromPresu(
+  supabase: ReturnType<typeof createServiceClient>,
+  content: string,
+  contactPhone: string | undefined,
+  contactName: string | undefined
+) {
+  try {
+    // Remove the "presu" prefix (case-insensitive)
+    const body = content.replace(/^presu\s*/i, "").trim();
+    if (!body) return; // empty after prefix — ignore
+
+    // First line = name (and optionally "- Empresa"), rest = message
+    const lines = body.split("\n");
+    const firstLine = lines[0].trim();
+    const restLines = lines.slice(1).map((l) => l.trim()).filter(Boolean).join("\n");
+
+    let fullName = firstLine;
+    let company: string | null = null;
+
+    // If first line contains " - ", split into name and company
+    const dashIdx = firstLine.indexOf(" - ");
+    if (dashIdx > 0) {
+      fullName = firstLine.substring(0, dashIdx).trim();
+      company = firstLine.substring(dashIdx + 3).trim() || null;
+    }
+
+    if (!fullName) return;
+
+    // Normalize phone for dedup: strip leading + and spaces
+    const normalizedPhone = contactPhone?.replace(/[\s+\-]/g, "") || null;
+
+    // Dedup: check if a lead with same phone already exists and is not won/lost
+    if (normalizedPhone) {
+      const { data: existing } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("phone", normalizedPhone)
+        .not("status", "in", '("won","lost")')
+        .limit(1)
+        .single();
+
+      if (existing) {
+        console.log(`[WhatsApp presu] Lead already exists for phone ${normalizedPhone}: ${existing.id}`);
+        return;
+      }
+    }
+
+    const { data: lead, error } = await supabase
+      .from("leads")
+      .insert({
+        full_name: fullName,
+        company,
+        phone: normalizedPhone,
+        message: restLines || null,
+        source: "whatsapp",
+        status: "new",
+        owned_by: GONZALO_USER_ID,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[WhatsApp presu] Insert error:", error);
+      return;
+    }
+
+    console.log(`[WhatsApp presu] Created lead ${lead.id}: ${fullName}`);
+
+    // Auto-detect project type tag (background)
+    detectProjectTypeTag(restLines || null)
+      .then(async (tag) => {
+        if (tag) {
+          await supabase.from("leads").update({ project_type_tag: tag }).eq("id", lead.id);
+        }
+      })
+      .catch((err) => console.error("[WhatsApp presu] Tagger error:", err));
+
+    // Generate AI draft (background)
+    generateAndSaveDraft(lead.id, {
+      fullName,
+      company: company || undefined,
+      message: restLines || undefined,
+    }).catch((err) => console.error("[WhatsApp presu] AI draft error:", err));
+
+    // Notify all users
+    const titleParts = [fullName, company].filter(Boolean);
+    sendPushToAll({
+      title: `📩 WhatsApp presu: ${titleParts.join(" - ")}`,
+      body: restLines?.slice(0, 120) || "Nuevo lead desde WhatsApp",
+      url: `/dashboard/crm/${lead.id}`,
+      phone: normalizedPhone || undefined,
+    }).catch((err) => console.error("[WhatsApp presu] Push error:", err));
+  } catch (err) {
+    console.error("[WhatsApp presu] Unexpected error:", err);
   }
 }
 
