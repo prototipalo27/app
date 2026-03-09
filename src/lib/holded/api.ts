@@ -149,6 +149,9 @@ export async function updateContact(
   data: {
     name?: string;
     code?: string;
+    email?: string;
+    phone?: string;
+    mobile?: string;
     billAddress?: {
       address?: string;
       city?: string;

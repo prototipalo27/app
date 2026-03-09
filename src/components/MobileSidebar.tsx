@@ -120,6 +120,20 @@ export default function MobileSidebar({
                   Leads
                 </Link>
                 <Link
+                  href="/dashboard/contactos"
+                  onClick={handleNavClick}
+                  className={`flex items-center rounded-md p-2 ${
+                    pathname?.startsWith("/dashboard/contactos")
+                      ? "bg-brand/5 text-zinc-900 dark:text-white"
+                      : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
+                  }`}
+                  title="Contactos Holded"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </Link>
+                <Link
                   href="/dashboard/settings/email-snippets"
                   onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
