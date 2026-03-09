@@ -70,6 +70,94 @@ export interface SendEmailOptions {
   attachments?: EmailAttachment[];
 }
 
+/** Allowed send window (Europe/Madrid). Outside this → queued to next 8:00. */
+const EMAIL_MIN_HOUR = 8;
+const EMAIL_MAX_HOUR = 20; // 8pm
+
+function getMadridHour(): number {
+  const now = new Date();
+  const madrid = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Madrid" }));
+  return madrid.getHours();
+}
+
+/**
+ * Serialize email options to a JSON-safe payload (attachments → base64).
+ */
+function serializeEmailPayload(options: SendEmailOptions): Record<string, unknown> {
+  const { attachments, smtpConfig, ...rest } = options;
+  return {
+    ...rest,
+    smtpConfig: smtpConfig ? { user: smtpConfig.user, pass: smtpConfig.pass, displayName: smtpConfig.displayName, signatureHtml: smtpConfig.signatureHtml } : undefined,
+    attachments: attachments?.map((a) => ({
+      filename: a.filename,
+      contentBase64: a.content.toString("base64"),
+      contentType: a.contentType,
+    })),
+  };
+}
+
+/**
+ * Deserialize a stored payload back into SendEmailOptions.
+ */
+export function deserializeEmailPayload(payload: Record<string, unknown>): SendEmailOptions {
+  const { attachments, smtpConfig, ...rest } = payload as Record<string, any>;
+  return {
+    ...rest,
+    smtpConfig: smtpConfig || undefined,
+    attachments: attachments?.map((a: any) => ({
+      filename: a.filename,
+      content: Buffer.from(a.contentBase64, "base64"),
+      contentType: a.contentType,
+    })),
+  } as SendEmailOptions;
+}
+
+/**
+ * Send email now, or schedule it for 8:00 AM Madrid time if it's night hours.
+ * Returns { scheduled: true } if queued, or the nodemailer result if sent.
+ */
+export async function sendEmailOrSchedule(
+  options: SendEmailOptions,
+  meta?: { createdBy?: string; leadId?: string }
+): Promise<{ scheduled: boolean; messageId?: string }> {
+  const hour = getMadridHour();
+
+  if (hour >= EMAIL_MIN_HOUR && hour < EMAIL_MAX_HOUR) {
+    // During allowed hours (8:00–19:59) → send immediately
+    const result = await sendEmail(options);
+    return { scheduled: false, messageId: result.messageId };
+  }
+
+  // Outside window → schedule for next 8:00 AM Madrid
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const supabase = createServiceClient();
+
+  // Calculate next 8:00 AM Madrid time
+  const now = new Date();
+  const madridStr = now.toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+  const madridNow = new Date(madridStr);
+  const sendAt = new Date(madridNow);
+  sendAt.setHours(EMAIL_MIN_HOUR, 0, 0, 0);
+  // If somehow it's already past 8am in Madrid (shouldn't happen given the check), push to tomorrow
+  if (sendAt <= madridNow) {
+    sendAt.setDate(sendAt.getDate() + 1);
+  }
+
+  // Convert back to UTC for storage: calculate the offset
+  const offsetMs = now.getTime() - madridNow.getTime();
+  const sendAtUtc = new Date(sendAt.getTime() + offsetMs);
+
+  const payload = serializeEmailPayload(options);
+
+  await (supabase as any).from("scheduled_emails").insert({
+    send_at: sendAtUtc.toISOString(),
+    payload,
+    created_by: meta?.createdBy || null,
+  });
+
+  return { scheduled: true };
+}
+
 export async function sendEmail(options: SendEmailOptions) {
   const config = options.smtpConfig;
 

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
-import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
+import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
 import { createProforma, createEstimate, createContact, getContact, searchContacts, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
@@ -704,7 +704,7 @@ export async function sendLeadEmail(
   replyToMessageId?: string,
   threadId?: string,
   attachProforma?: boolean
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; scheduled?: boolean }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
@@ -757,7 +757,7 @@ export async function sendLeadEmail(
   }
 
   try {
-    const result = await sendEmail({
+    const result = await sendEmailOrSchedule({
       to: to.trim(),
       subject: subject.trim(),
       text: body.trim(),
@@ -766,7 +766,7 @@ export async function sendLeadEmail(
       references,
       smtpConfig,
       attachments,
-    });
+    }, { createdBy: profile.id, leadId: id });
 
     // Determine thread_id for this sent email
     const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;
@@ -774,7 +774,7 @@ export async function sendLeadEmail(
     // Log email activity
     await supabase.from("lead_activities").insert({
       lead_id: id,
-      activity_type: "email_sent",
+      activity_type: result.scheduled ? "email_scheduled" : "email_sent",
       content: body.trim(),
       thread_id: finalThreadId,
       metadata: {
@@ -782,6 +782,7 @@ export async function sendLeadEmail(
         email_subject: subject.trim(),
         message_id: result.messageId || null,
         in_reply_to: inReplyTo || null,
+        scheduled: result.scheduled || false,
       },
       created_by: profile.id,
     });
@@ -820,7 +821,7 @@ export async function sendLeadEmail(
 
     revalidatePath(`/dashboard/crm/${id}`);
     revalidatePath("/dashboard/crm");
-    return { success: true };
+    return { success: true, scheduled: result.scheduled };
   } catch (e) {
     return {
       success: false,
@@ -979,15 +980,15 @@ export async function sendQuoteToClient(
   // Get per-user SMTP config
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
-  // Send email
+  // Send email (or schedule if night hours)
   try {
-    await sendEmail({
+    await sendEmailOrSchedule({
       to: lead.email,
       subject: "Presupuesto — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
       smtpConfig,
-    });
+    }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
   }
@@ -1116,15 +1117,15 @@ export async function createQuoteRequest(
   // Get per-user SMTP config
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
-  // Send email
+  // Send email (or schedule if night hours)
   try {
-    await sendEmail({
+    await sendEmailOrSchedule({
       to: lead.email,
       subject: "Datos de facturación — Prototipalo",
       text: `Hola ${lead.full_name},\n\nPara preparar tu presupuesto necesitamos tus datos de facturación.\n\nPor favor, rellena el siguiente formulario:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Para preparar tu presupuesto necesitamos tus datos de facturación.</p><p>Por favor, rellena el siguiente formulario:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Rellenar datos de facturación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
       smtpConfig,
-    });
+    }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
   }
@@ -1471,8 +1472,8 @@ export async function sendLeadProforma(
     // Get per-user SMTP config
     const smtpConfig = await getUserSmtpConfig(profile.id);
 
-    // Send email with PDF attachment
-    await sendEmail({
+    // Send email with PDF attachment (or schedule if night hours)
+    await sendEmailOrSchedule({
       to: lead.email,
       subject: `Presupuesto — Prototipalo`,
       text: `Hola ${lead.full_name},\n\nAdjuntamos el presupuesto para tu proyecto.\n\nSi tienes alguna duda, no dudes en contestar a este email.\n\nGracias,\nEl equipo de Prototipalo`,
@@ -1485,7 +1486,7 @@ export async function sendLeadProforma(
           contentType: "application/pdf",
         },
       ],
-    });
+    }, { createdBy: profile.id });
 
     // Log activity
     await supabase.from("lead_activities").insert({

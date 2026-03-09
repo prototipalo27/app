@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getImpersonatedUserId } from "./impersonate";
 
-export type UserRole = "super_admin" | "manager" | "employee";
+export type UserRole = "super_admin" | "manager" | "comercial" | "employee";
 
 export type UserProfile = {
   id: string;
@@ -13,8 +13,9 @@ export type UserProfile = {
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   employee: 0,
-  manager: 1,
-  super_admin: 2,
+  comercial: 1,
+  manager: 2,
+  super_admin: 3,
 };
 
 const ALLOWED_DOMAIN = "prototipalo.com";

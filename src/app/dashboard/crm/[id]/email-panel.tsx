@@ -53,7 +53,7 @@ function normalizeSubject(subject: string): string {
 
 function groupIntoThreads(activities: Activity[]): EmailThread[] {
   const emailActivities = activities.filter(
-    (a) => a.activity_type === "email_sent" || a.activity_type === "email_received"
+    (a) => a.activity_type === "email_sent" || a.activity_type === "email_received" || a.activity_type === "email_scheduled"
   );
 
   const threadMap = new Map<string, Activity[]>();
@@ -225,6 +225,10 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
       if (result.success) {
         cancelReply();
         setAttachProforma(false);
+        if (result.scheduled) {
+          setSendError(null);
+          alert("Email programado para las 8:00 AM");
+        }
         router.refresh();
       } else {
         setSendError(result.error || "Error al enviar el email");
@@ -251,7 +255,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         <Card>
           <CardHeader className="border-b">
             <h3 className="text-sm font-semibold text-card-foreground">
-              Emails ({activities.filter((a) => a.activity_type === "email_sent" || a.activity_type === "email_received").length})
+              Emails ({activities.filter((a) => a.activity_type === "email_sent" || a.activity_type === "email_received" || a.activity_type === "email_scheduled").length})
             </h3>
           </CardHeader>
 
@@ -309,7 +313,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                     <div className="border-t bg-muted/30 px-4 py-4">
                       <div className="space-y-3">
                         {thread.emails.map((email) => {
-                          const isSent = email.activity_type === "email_sent";
+                          const isSent = email.activity_type === "email_sent" || email.activity_type === "email_scheduled";
                           const meta = email.metadata;
 
                           return (

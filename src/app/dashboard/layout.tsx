@@ -17,6 +17,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: "Admin",
   manager: "Manager",
   employee: "Empleado",
+  comercial: "Comercial",
 };
 
 export default async function DashboardLayout({
