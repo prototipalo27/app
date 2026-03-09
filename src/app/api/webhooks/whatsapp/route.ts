@@ -223,21 +223,24 @@ async function maybeCreateLeadFromPresu(
 
     if (!fullName) return;
 
-    // Normalize phone for dedup: strip leading + and spaces
+    // Normalize phone: strip leading + and spaces
     const normalizedPhone = contactPhone?.replace(/[\s+\-]/g, "") || null;
 
-    // Dedup: check if a lead with same phone already exists and is not won/lost
+    // Only dedup within 5 minutes to prevent accidental double-sends
+    // (recurring clients can have multiple leads for different projects)
     if (normalizedPhone) {
-      const { data: existing } = await supabase
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recent } = await supabase
         .from("leads")
         .select("id")
         .eq("phone", normalizedPhone)
-        .not("status", "in", '("won","lost")')
+        .eq("source", "whatsapp")
+        .gte("created_at", fiveMinAgo)
         .limit(1)
         .single();
 
-      if (existing) {
-        console.log(`[WhatsApp presu] Lead already exists for phone ${normalizedPhone}: ${existing.id}`);
+      if (recent) {
+        console.log(`[WhatsApp presu] Duplicate within 5min for ${normalizedPhone}, skipping`);
         return;
       }
     }
