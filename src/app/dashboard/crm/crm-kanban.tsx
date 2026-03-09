@@ -389,14 +389,16 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
       {/* Pipeline summary */}
       {(() => {
-        const phases = LEAD_COLUMNS.map((col) => {
-          const phaseLeads = filteredLeads.filter((l) => l.status === col.id);
-          const total = phaseLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
-          return { ...col, count: phaseLeads.length, total };
-        });
+        const phases = LEAD_COLUMNS
+          .filter((col) => col.id !== "lost")
+          .map((col) => {
+            const phaseLeads = filteredLeads.filter((l) => l.status === col.id);
+            const total = phaseLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+            return { ...col, count: phaseLeads.length, total };
+          });
         const grandTotal = phases.reduce((s, p) => s + p.total, 0);
         return (
-          <div className="mb-4 grid grid-cols-5 gap-1.5 md:gap-3">
+          <div className="mb-4 grid grid-cols-4 gap-1.5 md:gap-3">
             {phases.map((p) => (
               <div key={p.id} className="rounded-lg bg-muted/60 px-2 py-2 text-center md:px-3 md:py-2.5">
                 <div className="flex items-center justify-center gap-1.5">
