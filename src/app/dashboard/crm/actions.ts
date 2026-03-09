@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, createEstimate, createContact, searchContacts, getDocumentPdf, getDocument } from "@/lib/holded/api";
+import { createProforma, createEstimate, createContact, getContact, searchContacts, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
@@ -523,6 +523,69 @@ export async function searchLeadsForLink(query: string): Promise<{
     .limit(10);
 
   return data || [];
+}
+
+export async function searchHoldedContacts(query: string): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  code: string;
+}[]> {
+  await requireRole("manager");
+  const results = await searchContacts(query);
+  return results.slice(0, 10).map((c) => ({
+    id: c.id,
+    name: c.name,
+    email: c.email || "",
+    phone: c.phone || c.mobile || "",
+    code: c.code || "",
+  }));
+}
+
+export async function linkLeadToHoldedContact(
+  leadId: string,
+  holdedContactId: string
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Fetch the Holded contact details
+  let contact;
+  try {
+    contact = await getContact(holdedContactId);
+  } catch {
+    return { success: false, error: "No se pudo obtener el contacto de Holded" };
+  }
+
+  // Update lead with Holded contact info
+  const updateFields: Record<string, unknown> = {};
+  if (contact.email) updateFields.email = contact.email;
+  if (contact.phone || contact.mobile) updateFields.phone = contact.phone || contact.mobile;
+  if (contact.name) updateFields.company = contact.name;
+
+  if (Object.keys(updateFields).length > 0) {
+    await supabase.from("leads").update(updateFields).eq("id", leadId);
+  }
+
+  // Link holded_contact_id to the lead's quote_request
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .limit(1)
+    .maybeSingle();
+
+  if (qr) {
+    await supabase
+      .from("quote_requests")
+      .update({ holded_contact_id: holdedContactId })
+      .eq("id", qr.id);
+  }
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
 }
 
 export async function linkLeadToClient(
