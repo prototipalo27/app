@@ -540,6 +540,7 @@ export async function linkLeadToClient(
 
   if (!client) return { success: false, error: "Cliente no encontrado" };
 
+  // Update lead contact info
   const { error } = await supabase
     .from("leads")
     .update({
@@ -550,6 +551,59 @@ export async function linkLeadToClient(
     .eq("id", leadId);
 
   if (error) return { success: false, error: error.message };
+
+  // Try to link Holded contact: look for holded_contact_id from the client's quote_request
+  try {
+    let holdedContactId: string | null = null;
+
+    // Check if the matched client lead already has a holded contact
+    const { data: clientQr } = await supabase
+      .from("quote_requests")
+      .select("holded_contact_id")
+      .eq("lead_id", clientLeadId)
+      .not("holded_contact_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (clientQr?.holded_contact_id) {
+      holdedContactId = clientQr.holded_contact_id;
+    } else if (client.email) {
+      // Search Holded by email
+      const existing = await searchContacts(client.email);
+      if (existing.length > 0) {
+        holdedContactId = existing[0].id;
+      }
+    }
+
+    if (!holdedContactId && (client.email || client.company)) {
+      // Create contact in Holded
+      const newContact = await createContact({
+        name: client.company || client.full_name,
+        email: client.email || undefined,
+        phone: client.phone || undefined,
+      });
+      holdedContactId = newContact.id;
+    }
+
+    // If we found/created a holded contact, link it to this lead's quote_request
+    if (holdedContactId) {
+      const { data: currentQr } = await supabase
+        .from("quote_requests")
+        .select("id")
+        .eq("lead_id", leadId)
+        .limit(1)
+        .maybeSingle();
+
+      if (currentQr) {
+        await supabase
+          .from("quote_requests")
+          .update({ holded_contact_id: holdedContactId })
+          .eq("id", currentQr.id);
+      }
+    }
+  } catch {
+    // Holded failure should not block the link
+  }
 
   revalidatePath(`/dashboard/crm/${leadId}`);
   revalidatePath("/dashboard/crm");
