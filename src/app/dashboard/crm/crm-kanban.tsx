@@ -405,8 +405,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                   <span className={`h-2 w-2 rounded-full ${p.accent}`} />
                   <span className="text-[11px] font-medium text-muted-foreground md:text-xs">{p.label}</span>
                 </div>
-                <p className="mt-1 whitespace-nowrap text-lg font-bold tabular-nums text-green-600 dark:text-green-400 md:text-xl">
-                  {p.total > 0 ? `${p.total.toLocaleString("es-ES")}\u00A0€` : "—"}
+                <p className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-green-600 dark:text-green-400 md:text-xl">
+                  {p.total > 0 ? `${Math.round(p.total).toLocaleString("es-ES")}\u00A0€` : "—"}
                 </p>
                 <p className="text-[11px] font-medium tabular-nums text-muted-foreground md:text-xs">
                   {p.count} {p.count === 1 ? "lead" : "leads"}
