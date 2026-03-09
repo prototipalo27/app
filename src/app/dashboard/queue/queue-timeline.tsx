@@ -90,11 +90,15 @@ function JobTooltip({
   jobStart,
   jobEnd,
   anchorRect,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   job: JobInfo;
   jobStart: Date;
   jobEnd: Date;
   anchorRect: DOMRect;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -126,6 +130,8 @@ function JobTooltip({
       ref={tooltipRef}
       className="fixed z-50 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
       style={{ top: `${pos.top}px`, left: `${pos.left}px` }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-zinc-900 dark:text-white">
@@ -177,6 +183,7 @@ export function QueueTimeline({ printers, jobs, startTime, launchSettings }: Que
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useMemo(() => new Date(startTime), [startTime]);
 
   // Calculate timeline duration: max(48h, latest job end)
@@ -216,11 +223,29 @@ export function QueueTimeline({ printers, jobs, startTime, launchSettings }: Que
   const unassignedJobs = jobs.filter((j) => !j.printer_id);
 
   const handleJobHover = useCallback((jobId: string, el: HTMLElement) => {
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
     setHoveredJob(jobId);
     setHoveredRect(el.getBoundingClientRect());
   }, []);
 
   const handleJobLeave = useCallback(() => {
+    leaveTimeoutRef.current = setTimeout(() => {
+      setHoveredJob(null);
+      setHoveredRect(null);
+    }, 150);
+  }, []);
+
+  const handleTooltipEnter = useCallback(() => {
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleTooltipLeave = useCallback(() => {
     setHoveredJob(null);
     setHoveredRect(null);
   }, []);
@@ -464,6 +489,8 @@ export function QueueTimeline({ printers, jobs, startTime, launchSettings }: Que
             hoveredJobData.estimated_minutes
           )}
           anchorRect={hoveredRect}
+          onMouseEnter={handleTooltipEnter}
+          onMouseLeave={handleTooltipLeave}
         />
       )}
 

@@ -7,7 +7,6 @@ import { requireRole, getUserProfile } from "@/lib/rbac";
 import { sendPushToUser } from "@/lib/push-notifications/server";
 
 const PATH = "/dashboard/purchases";
-const IAN_USER_ID = "cd95b109-3af7-4658-b782-cb0f2f3419c3";
 
 // ── Add item (any employee) ───────────────────────────────
 
@@ -38,11 +37,24 @@ export async function addPurchaseItem(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  // Auto-create task assigned to Ian for every purchase request
+  // Auto-create task and notify all managers about the purchase request
   const taskTitle = `Compra solicitada: ${description.trim()}`;
   const qty = quantity ? parseInt(quantity, 10) : 1;
   const priceInfo = estimatedPrice ? ` · Precio est. ${parseFloat(estimatedPrice).toFixed(2)}€` : "";
   const taskDescription = `Solicitud de compra de ${profile.email.split("@")[0]}.\n\nItem: ${description.trim()} (x${qty})${priceInfo}`;
+
+  // Get all managers and super_admins
+  const { data: managers } = await supabase
+    .from("user_profiles")
+    .select("id")
+    .in("role", ["manager", "super_admin"])
+    .eq("is_active", true)
+    .neq("id", profile.id);
+
+  // Create task assigned to first manager (Ian if available, else first manager)
+  const assignTo = managers?.find((m) => m.id === "cd95b109-3af7-4658-b782-cb0f2f3419c3")?.id
+    ?? managers?.[0]?.id
+    ?? profile.id;
 
   const { data: task } = await supabase
     .from("tasks")
@@ -50,19 +62,22 @@ export async function addPurchaseItem(formData: FormData) {
       title: taskTitle,
       description: taskDescription,
       priority: "medium",
-      assigned_to: IAN_USER_ID,
+      assigned_to: assignTo,
       project_id: projectId || null,
       created_by: profile.id,
     })
     .select("id")
     .single();
 
-  if (task) {
-    sendPushToUser(IAN_USER_ID, {
-      title: "Nueva solicitud de compra",
-      body: taskTitle,
-      url: `/dashboard/purchases`,
-    }).catch(() => {});
+  // Notify ALL managers (not just the task assignee)
+  if (task && managers?.length) {
+    for (const mgr of managers) {
+      sendPushToUser(mgr.id, {
+        title: "Nueva solicitud de compra",
+        body: taskTitle,
+        url: `/dashboard/purchases`,
+      }).catch(() => {});
+    }
   }
 
   revalidatePath(PATH);
@@ -176,6 +191,55 @@ export async function markAsReceived(itemId: string) {
 
   revalidatePath(PATH);
   revalidatePath("/dashboard/suppliers/products");
+}
+
+// ── Edit item (creator while pending, or manager) ────────
+
+export async function editPurchaseItem(
+  itemId: string,
+  data: {
+    description: string;
+    link: string | null;
+    quantity: number;
+    estimated_price: number | null;
+    project_id: string | null;
+  }
+) {
+  const profile = await getUserProfile();
+  if (!profile || !profile.is_active) redirect("/login");
+
+  const supabase = await createClient();
+
+  // Verify item exists and is editable
+  const { data: item } = await supabase
+    .from("purchase_items")
+    .select("created_by, status")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw new Error("Item no encontrado");
+
+  // Only pending items can be edited; managers can edit any pending, employees only their own
+  if (item.status !== "pending") {
+    throw new Error("Solo se pueden editar items pendientes");
+  }
+  if (profile.role === "employee" && item.created_by !== profile.id) {
+    throw new Error("No tienes permiso para editar este item");
+  }
+
+  const { error } = await supabase
+    .from("purchase_items")
+    .update({
+      description: data.description.trim(),
+      link: data.link?.trim() || null,
+      quantity: data.quantity,
+      estimated_price: data.estimated_price,
+      project_id: data.project_id || null,
+    })
+    .eq("id", itemId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(PATH);
 }
 
 // ── Delete item (creator or manager) ──────────────────────

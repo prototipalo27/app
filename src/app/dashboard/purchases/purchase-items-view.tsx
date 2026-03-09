@@ -7,6 +7,7 @@ import {
   rejectItem,
   markAsReceived,
   deletePurchaseItem,
+  editPurchaseItem,
 } from "./actions";
 
 interface PurchaseItem {
@@ -58,6 +59,7 @@ const STATUS_COLORS: Record<string, string> = {
 type ActivePrompt =
   | { type: "purchase"; itemId: string }
   | { type: "reject"; itemId: string }
+  | { type: "edit"; itemId: string }
   | null;
 
 export default function PurchaseItemsView({
@@ -79,6 +81,11 @@ export default function PurchaseItemsView({
   const [purchaseDelivery, setPurchaseDelivery] = useState("");
   const [purchaseSupplier, setPurchaseSupplier] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editQty, setEditQty] = useState("1");
+  const [editPrice, setEditPrice] = useState("");
+  const [editProject, setEditProject] = useState("");
 
   // Sort: pending first, then purchased, then received/rejected
   const statusOrder: Record<string, number> = {
@@ -118,6 +125,26 @@ export default function PurchaseItemsView({
   async function handleDelete(itemId: string) {
     if (!confirm("Eliminar este item?")) return;
     await deletePurchaseItem(itemId);
+  }
+
+  function startEdit(item: PurchaseItem) {
+    setActivePrompt({ type: "edit", itemId: item.id });
+    setEditDesc(item.description);
+    setEditLink(item.link || "");
+    setEditQty(String(item.quantity || 1));
+    setEditPrice(item.estimated_price != null ? String(item.estimated_price) : "");
+    setEditProject(item.project_id || "");
+  }
+
+  async function handleConfirmEdit(itemId: string) {
+    await editPurchaseItem(itemId, {
+      description: editDesc,
+      link: editLink || null,
+      quantity: parseInt(editQty, 10) || 1,
+      estimated_price: editPrice ? parseFloat(editPrice) : null,
+      project_id: editProject || null,
+    });
+    setActivePrompt(null);
   }
 
   return (
@@ -457,6 +484,71 @@ export default function PurchaseItemsView({
                               </button>
                             </div>
                           </div>
+                        ) : activePrompt?.type === "edit" &&
+                          activePrompt.itemId === item.id ? (
+                          /* Edit prompt */
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="text"
+                              value={editDesc}
+                              onChange={(e) => setEditDesc(e.target.value)}
+                              placeholder="Descripcion"
+                              className="w-40 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                            />
+                            <input
+                              type="url"
+                              value={editLink}
+                              onChange={(e) => setEditLink(e.target.value)}
+                              placeholder="Link (opcional)"
+                              className="w-40 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={editQty}
+                                onChange={(e) => setEditQty(e.target.value)}
+                                min={1}
+                                placeholder="Cant."
+                                className="w-14 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editPrice}
+                                onChange={(e) => setEditPrice(e.target.value)}
+                                placeholder="Precio est."
+                                className="w-20 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                              />
+                            </div>
+                            <select
+                              value={editProject}
+                              onChange={(e) => setEditProject(e.target.value)}
+                              className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                            >
+                              <option value="">Sin proyecto</option>
+                              {projects.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleConfirmEdit(item.id)}
+                                className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActivePrompt(null)}
+                                className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+                              >
+                                X
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           /* Normal actions */
                           <div className="flex items-center gap-2">
@@ -504,13 +596,22 @@ export default function PurchaseItemsView({
                             {(isManager ||
                               item.created_by === userId) &&
                               status === "pending" && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(item.id)}
-                                  className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
-                                >
-                                  Eliminar
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEdit(item)}
+                                    className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(item.id)}
+                                    className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </>
                               )}
                           </div>
                         )}
