@@ -324,6 +324,7 @@ export type CommissionConfig = {
   new_rate: number;
   returning_rate: number;
   tiers: CommissionTier[];
+  prepaid_bonus: number;
 };
 
 export async function getCommissionConfigs(): Promise<CommissionConfig[]> {
@@ -339,12 +340,13 @@ export async function getCommissionConfigs(): Promise<CommissionConfig[]> {
     new_rate: Number(c.new_rate),
     returning_rate: Number(c.returning_rate),
     tiers: (c.tiers || []) as CommissionTier[],
+    prepaid_bonus: Number(c.prepaid_bonus ?? 0.01),
   }));
 }
 
 export async function saveCommissionConfig(
   userId: string,
-  config: { type: "flat" | "tiered"; new_rate: number; returning_rate: number; tiers: CommissionTier[] }
+  config: { type: "flat" | "tiered"; new_rate: number; returning_rate: number; tiers: CommissionTier[]; prepaid_bonus: number }
 ) {
   await requireRole("manager");
   const supabase = await createClient();
@@ -357,6 +359,7 @@ export async function saveCommissionConfig(
       new_rate: config.new_rate,
       returning_rate: config.returning_rate,
       tiers: config.tiers,
+      prepaid_bonus: config.prepaid_bonus,
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
 
@@ -403,13 +406,14 @@ export async function getCommissionSummary(leadId: string): Promise<{
   rate: number;
   quoteTotal: number;
   commission: number;
+  prepaidBonus: number;
 } | null> {
   await requireRole("manager");
   const supabase = await createClient();
 
   const { data: lead } = await supabase
     .from("leads")
-    .select("id, email, status, created_at, owned_by, updated_at")
+    .select("id, email, status, created_at, owned_by, updated_at, payment_condition")
     .eq("id", leadId)
     .single();
 
@@ -440,6 +444,9 @@ export async function getCommissionSummary(leadId: string): Promise<{
     isReturning = (count ?? 0) > 0;
   }
 
+  // Prepaid bonus: extra % if payment_condition is "100-5" (100% upfront)
+  const isPrepaid = lead.payment_condition === "100-5";
+
   // Get commission config for this commercial
   if (lead.owned_by) {
     const { data: config } = await (supabase as any)
@@ -448,9 +455,11 @@ export async function getCommissionSummary(leadId: string): Promise<{
       .eq("user_id", lead.owned_by)
       .single();
 
+    const bonusRate = (isPrepaid && config) ? Number(config.prepaid_bonus ?? 0.01) : 0;
+    const prepaidBonus = quoteTotal * bonusRate;
+
     if (config && config.type === "tiered") {
       const tiers = (config.tiers || []) as CommissionTier[];
-      // Calculate accumulated billing this month BEFORE this lead
       const wonDate = new Date(lead.updated_at);
       const monthStart = new Date(wonDate.getFullYear(), wonDate.getMonth(), 1).toISOString();
       const monthEnd = new Date(wonDate.getFullYear(), wonDate.getMonth() + 1, 1).toISOString();
@@ -478,18 +487,20 @@ export async function getCommissionSummary(leadId: string): Promise<{
       }
 
       const { commission, effectiveRate } = calcTieredCommission(tiers, accBefore, quoteTotal);
-      return { isReturning, rate: effectiveRate, quoteTotal, commission };
+      return { isReturning, rate: effectiveRate, quoteTotal, commission: commission + prepaidBonus, prepaidBonus };
     }
 
     if (config && config.type === "flat") {
       const rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
-      return { isReturning, rate, quoteTotal, commission: quoteTotal * rate };
+      return { isReturning, rate, quoteTotal, commission: quoteTotal * rate + prepaidBonus, prepaidBonus };
     }
   }
 
   // Fallback: default flat rates
+  const bonusRate = isPrepaid ? 0.01 : 0;
+  const prepaidBonus = quoteTotal * bonusRate;
   const rate = isReturning ? 0.075 : 0.15;
-  return { isReturning, rate, quoteTotal, commission: quoteTotal * rate };
+  return { isReturning, rate, quoteTotal, commission: quoteTotal * rate + prepaidBonus, prepaidBonus };
 }
 
 // ── Link existing client ─────────────────────────────────

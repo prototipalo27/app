@@ -55,6 +55,7 @@ interface LeadActionsProps {
     rate: number;
     quoteTotal: number;
     commission: number;
+    prepaidBonus: number;
   } | null;
 }
 
@@ -290,6 +291,11 @@ export default function LeadActions({
               Comision: <span className="font-semibold text-foreground">{commission.commission.toFixed(2)} €</span>
               <span className="ml-1 text-muted-foreground/70">(sobre {commission.quoteTotal.toFixed(2)} €)</span>
             </p>
+            {commission.prepaidBonus > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Incluye +{commission.prepaidBonus.toFixed(2)} € bonus pago 100%
+              </p>
+            )}
           </div>
         )}
       </div>

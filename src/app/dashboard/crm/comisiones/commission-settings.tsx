@@ -19,6 +19,7 @@ export function CommissionSettings({
   const [newRate, setNewRate] = useState("15");
   const [returningRate, setReturningRate] = useState("7.5");
   const [tiers, setTiers] = useState<CommissionTier[]>([]);
+  const [prepaidBonus, setPrepaidBonus] = useState("1");
   const [saving, setSaving] = useState(false);
 
   const configMap = new Map(configs.map((c) => [c.user_id, c]));
@@ -30,11 +31,13 @@ export function CommissionSettings({
       setNewRate(String(existing.new_rate * 100));
       setReturningRate(String(existing.returning_rate * 100));
       setTiers(existing.tiers.length > 0 ? existing.tiers : [{ min: 0, max: null, rate: 0.1 }]);
+      setPrepaidBonus(String(existing.prepaid_bonus * 100));
     } else {
       setType("flat");
       setNewRate("15");
       setReturningRate("7.5");
       setTiers([{ min: 0, max: null, rate: 0.1 }]);
+      setPrepaidBonus("1");
     }
     setEditUserId(userId);
   }
@@ -68,6 +71,7 @@ export function CommissionSettings({
         new_rate: parseFloat(newRate) / 100 || 0.15,
         returning_rate: parseFloat(returningRate) / 100 || 0.075,
         tiers: type === "tiered" ? tiers : [],
+        prepaid_bonus: parseFloat(prepaidBonus) / 100 || 0.01,
       });
       setEditUserId(null);
     } catch (e) {
@@ -104,16 +108,23 @@ export function CommissionSettings({
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{user.name}</span>
                       {config ? (
-                        <Badge variant="secondary" className={
-                          config.type === "tiered"
-                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                        }>
-                          {config.type === "tiered"
-                            ? `Tramos (${config.tiers.length})`
-                            : `${(config.new_rate * 100).toFixed(1)}% / ${(config.returning_rate * 100).toFixed(1)}%`
-                          }
-                        </Badge>
+                        <>
+                          <Badge variant="secondary" className={
+                            config.type === "tiered"
+                              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                              : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                          }>
+                            {config.type === "tiered"
+                              ? `Tramos (${config.tiers.length})`
+                              : `${(config.new_rate * 100).toFixed(1)}% / ${(config.returning_rate * 100).toFixed(1)}%`
+                            }
+                          </Badge>
+                          {config.prepaid_bonus > 0 && (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              +{(config.prepaid_bonus * 100).toFixed(1)}% 100%
+                            </Badge>
+                          )}
+                        </>
                       ) : (
                         <Badge variant="secondary">Sin config</Badge>
                       )}
@@ -215,6 +226,19 @@ export function CommissionSettings({
                           </Button>
                         </div>
                       )}
+
+                      {/* Prepaid bonus - common to both flat and tiered */}
+                      <div className="flex items-center gap-1.5 border-t border-input pt-3">
+                        <label className="text-xs text-muted-foreground">Bonus pago 100%:</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={prepaidBonus}
+                          onChange={(e) => setPrepaidBonus(e.target.value)}
+                          className={inputClass}
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
 
                       <div className="flex justify-end">
                         <Button

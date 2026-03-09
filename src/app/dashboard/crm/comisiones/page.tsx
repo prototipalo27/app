@@ -66,7 +66,7 @@ export default async function ComisionesPage({
 
   const { data: wonLeads } = await supabase
     .from("leads")
-    .select("id, full_name, company, email, owned_by, created_at, updated_at")
+    .select("id, full_name, company, email, owned_by, created_at, updated_at, payment_condition")
     .eq("status", "won")
     .not("owned_by", "is", null)
     .gte("updated_at", startDate)
@@ -125,6 +125,7 @@ export default async function ComisionesPage({
     rate: number;
     commission: number;
     configType: "flat" | "tiered";
+    prepaidBonus: number;
   };
 
   const leadCommissions: LeadCommission[] = [];
@@ -154,19 +155,24 @@ export default async function ComisionesPage({
     let commission: number;
     let configType: "flat" | "tiered" = "flat";
 
+    // Prepaid bonus: extra % if 100% upfront payment
+    const isPrepaid = lead.payment_condition === "100-5";
+    const bonusRate = (isPrepaid && config) ? config.prepaid_bonus : isPrepaid ? 0.01 : 0;
+    const prepaidBonus = quoteTotal * bonusRate;
+
     if (config?.type === "tiered") {
       configType = "tiered";
       const accBefore = ownerAccumulated.get(lead.owned_by!) ?? 0;
       const result = calcTieredCommission(config.tiers, accBefore, quoteTotal);
-      commission = result.commission;
+      commission = result.commission + prepaidBonus;
       rate = result.effectiveRate;
       ownerAccumulated.set(lead.owned_by!, accBefore + quoteTotal);
     } else if (config?.type === "flat") {
       rate = isReturning ? config.returning_rate : config.new_rate;
-      commission = quoteTotal * rate;
+      commission = quoteTotal * rate + prepaidBonus;
     } else {
       rate = isReturning ? 0.075 : 0.15;
-      commission = quoteTotal * rate;
+      commission = quoteTotal * rate + prepaidBonus;
     }
 
     leadCommissions.push({
@@ -180,6 +186,7 @@ export default async function ComisionesPage({
       rate,
       commission,
       configType,
+      prepaidBonus,
     });
   }
 
