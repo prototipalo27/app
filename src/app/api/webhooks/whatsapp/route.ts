@@ -148,9 +148,16 @@ async function handleMessagesUpsert(
       });
     }
 
-    // Auto-create lead when an outgoing message starts with "presu"
-    if (fromMe && content && /^presu\b/i.test(content.trim())) {
-      await maybeCreateLeadFromPresu(supabase, content.trim(), contactPhone, contactName);
+    // Auto-create lead when Manu (606685878) sends a message starting with "presu"
+    // He messages the Prototipalo instance, so fromMe=false and remoteJid=34606685878
+    const PRESU_AUTHORIZED_PHONES = ["34606685878"];
+    if (
+      !fromMe &&
+      content &&
+      /^presu\b/i.test(content.trim()) &&
+      PRESU_AUTHORIZED_PHONES.includes(contactPhone || "")
+    ) {
+      await maybeCreateLeadFromPresu(supabase, content.trim());
     }
   }
 }
@@ -197,24 +204,19 @@ async function handleMessagesUpdate(
  */
 async function maybeCreateLeadFromPresu(
   supabase: ReturnType<typeof createServiceClient>,
-  content: string,
-  contactPhone: string | undefined,
-  contactName: string | undefined
+  content: string
 ) {
   try {
-    // Remove the "presu" prefix (case-insensitive)
     const body = content.replace(/^presu\s*/i, "").trim();
-    if (!body) return; // empty after prefix — ignore
+    if (!body) return;
 
-    // First line = name (and optionally "- Empresa"), rest = message
-    const lines = body.split("\n");
-    const firstLine = lines[0].trim();
-    const restLines = lines.slice(1).map((l) => l.trim()).filter(Boolean).join("\n");
+    const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    const firstLine = lines[0];
 
     let fullName = firstLine;
     let company: string | null = null;
 
-    // If first line contains " - ", split into name and company
+    // Split "Name - Company" on first line
     const dashIdx = firstLine.indexOf(" - ");
     if (dashIdx > 0) {
       fullName = firstLine.substring(0, dashIdx).trim();
@@ -223,26 +225,35 @@ async function maybeCreateLeadFromPresu(
 
     if (!fullName) return;
 
-    // Normalize phone: strip leading + and spaces
-    const normalizedPhone = contactPhone?.replace(/[\s+\-]/g, "") || null;
+    // Parse remaining lines: detect phone number, rest is message
+    let phone: string | null = null;
+    const messageParts: string[] = [];
 
-    // Only dedup within 5 minutes to prevent accidental double-sends
-    // (recurring clients can have multiple leads for different projects)
-    if (normalizedPhone) {
-      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { data: recent } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("phone", normalizedPhone)
-        .eq("source", "whatsapp")
-        .gte("created_at", fiveMinAgo)
-        .limit(1)
-        .single();
-
-      if (recent) {
-        console.log(`[WhatsApp presu] Duplicate within 5min for ${normalizedPhone}, skipping`);
-        return;
+    for (const line of lines.slice(1)) {
+      const cleaned = line.replace(/[\s\-\+\(\)]/g, "");
+      if (/^\d{6,15}$/.test(cleaned) && !phone) {
+        phone = cleaned;
+      } else {
+        messageParts.push(line);
       }
+    }
+
+    const message = messageParts.join("\n") || null;
+
+    // Dedup: prevent accidental double-sends within 5 minutes (same name)
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: recent } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("full_name", fullName)
+      .eq("source", "whatsapp")
+      .gte("created_at", fiveMinAgo)
+      .limit(1)
+      .single();
+
+    if (recent) {
+      console.log(`[WhatsApp presu] Duplicate within 5min for "${fullName}", skipping`);
+      return;
     }
 
     const { data: lead, error } = await supabase
@@ -250,8 +261,8 @@ async function maybeCreateLeadFromPresu(
       .insert({
         full_name: fullName,
         company,
-        phone: normalizedPhone,
-        message: restLines || null,
+        phone,
+        message,
         source: "whatsapp",
         status: "new",
         owned_by: GONZALO_USER_ID,
@@ -267,7 +278,7 @@ async function maybeCreateLeadFromPresu(
     console.log(`[WhatsApp presu] Created lead ${lead.id}: ${fullName}`);
 
     // Auto-detect project type tag (background)
-    detectProjectTypeTag(restLines || null)
+    detectProjectTypeTag(message)
       .then(async (tag) => {
         if (tag) {
           await supabase.from("leads").update({ project_type_tag: tag }).eq("id", lead.id);
@@ -279,16 +290,16 @@ async function maybeCreateLeadFromPresu(
     generateAndSaveDraft(lead.id, {
       fullName,
       company: company || undefined,
-      message: restLines || undefined,
+      message: message || undefined,
     }).catch((err) => console.error("[WhatsApp presu] AI draft error:", err));
 
     // Notify all users
     const titleParts = [fullName, company].filter(Boolean);
     sendPushToAll({
       title: `📩 WhatsApp presu: ${titleParts.join(" - ")}`,
-      body: restLines?.slice(0, 120) || "Nuevo lead desde WhatsApp",
+      body: message?.slice(0, 120) || "Nuevo lead desde WhatsApp",
       url: `/dashboard/crm/${lead.id}`,
-      phone: normalizedPhone || undefined,
+      phone: phone || undefined,
     }).catch((err) => console.error("[WhatsApp presu] Push error:", err));
   } catch (err) {
     console.error("[WhatsApp presu] Unexpected error:", err);
