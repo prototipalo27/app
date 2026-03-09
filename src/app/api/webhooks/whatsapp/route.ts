@@ -194,13 +194,16 @@ async function handleMessagesUpdate(
 /**
  * Parse a "presu" WhatsApp message and create a CRM lead.
  *
- * Supported formats:
- *   presu Nombre del cliente
- *   presu Nombre del cliente - Empresa
- *   presu Nombre del cliente - Empresa
+ * Formats:
+ *   presu Nombre                    → new client
+ *   presu Nombre 06                 → match existing client "Nombre" by 2nd+3rd digits of phone
+ *   presu Nombre - Empresa          → new client with company
+ *   presu Nombre 06 - Empresa       → match + company override
+ *   presu Nombre
+ *   612345678                        → explicit phone on next line
  *   descripción del proyecto...
  *
- * Phone is taken from the WhatsApp contact (recipient).
+ * If name + phone hint matches exactly one existing lead, auto-fills email/phone/company.
  */
 async function maybeCreateLeadFromPresu(
   supabase: ReturnType<typeof createServiceClient>,
@@ -213,15 +216,25 @@ async function maybeCreateLeadFromPresu(
     const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
     const firstLine = lines[0];
 
-    let fullName = firstLine;
+    // Parse first line: "Name [digits] [- Company]"
+    let namePart = firstLine;
     let company: string | null = null;
 
-    // Split "Name - Company" on first line
     const dashIdx = firstLine.indexOf(" - ");
     if (dashIdx > 0) {
-      fullName = firstLine.substring(0, dashIdx).trim();
+      namePart = firstLine.substring(0, dashIdx).trim();
       company = firstLine.substring(dashIdx + 3).trim() || null;
     }
+
+    // Check if last word is 2-4 digits (phone hint for disambiguation)
+    let phoneHint: string | null = null;
+    const nameWords = namePart.split(/\s+/);
+    const lastWord = nameWords[nameWords.length - 1];
+    if (/^\d{2,4}$/.test(lastWord) && nameWords.length > 1) {
+      phoneHint = lastWord;
+      nameWords.pop();
+    }
+    const fullName = nameWords.join(" ");
 
     if (!fullName) return;
 
@@ -240,7 +253,48 @@ async function maybeCreateLeadFromPresu(
 
     const message = messageParts.join("\n") || null;
 
-    // Dedup: prevent accidental double-sends within 5 minutes (same name)
+    // Try to match existing client by name + optional phone hint
+    let matchedClient: { full_name: string; email: string | null; phone: string | null; company: string | null } | null = null;
+
+    const { data: candidates } = await supabase
+      .from("leads")
+      .select("full_name, email, phone, company")
+      .ilike("full_name", `%${fullName}%`)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (candidates && candidates.length > 0) {
+      let matches = candidates;
+
+      if (phoneHint) {
+        // Match 2nd+3rd digits of phone (strip country code prefix like "34")
+        matches = candidates.filter((c) => {
+          if (!c.phone) return false;
+          // Normalize: remove non-digits, strip leading "34" country code
+          let digits = c.phone.replace(/\D/g, "");
+          if (digits.startsWith("34") && digits.length > 9) digits = digits.slice(2);
+          // Compare 2nd and 3rd digits (index 1,2) with the hint
+          return digits.length >= 3 && digits.slice(1, 1 + phoneHint!.length) === phoneHint;
+        });
+      }
+
+      if (matches.length === 1) {
+        matchedClient = matches[0];
+        console.log(`[WhatsApp presu] Matched client: ${matchedClient.full_name} (${matchedClient.phone})`);
+      } else if (matches.length > 1 && !phoneHint) {
+        console.log(`[WhatsApp presu] ${matches.length} matches for "${fullName}", add phone digits to disambiguate`);
+      } else if (matches.length > 1 && phoneHint) {
+        console.log(`[WhatsApp presu] ${matches.length} matches for "${fullName}" + "${phoneHint}", using most recent`);
+        matchedClient = matches[0];
+      }
+    }
+
+    // Matched data as defaults (explicit values take priority)
+    const finalPhone = phone || matchedClient?.phone || null;
+    const finalCompany = company || matchedClient?.company || null;
+    const finalEmail = matchedClient?.email || null;
+
+    // Dedup: prevent accidental double-sends within 5 minutes
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: recent } = await supabase
       .from("leads")
@@ -260,8 +314,9 @@ async function maybeCreateLeadFromPresu(
       .from("leads")
       .insert({
         full_name: fullName,
-        company,
-        phone,
+        company: finalCompany,
+        phone: finalPhone,
+        email: finalEmail,
         message,
         source: "whatsapp",
         status: "new",

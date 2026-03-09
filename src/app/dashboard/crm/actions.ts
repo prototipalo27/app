@@ -492,6 +492,59 @@ export async function getCommissionSummary(leadId: string): Promise<{
   return { isReturning, rate, quoteTotal, commission: quoteTotal * rate };
 }
 
+// ── Link existing client ─────────────────────────────────
+
+export async function searchLeadsForLink(query: string): Promise<{
+  id: string;
+  full_name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+}[]> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("leads")
+    .select("id, full_name, company, email, phone")
+    .or(`full_name.ilike.%${query}%,company.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  return data || [];
+}
+
+export async function linkLeadToClient(
+  leadId: string,
+  clientLeadId: string
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: client } = await supabase
+    .from("leads")
+    .select("full_name, company, email, phone")
+    .eq("id", clientLeadId)
+    .single();
+
+  if (!client) return { success: false, error: "Cliente no encontrado" };
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      company: client.company,
+      email: client.email,
+      phone: client.phone,
+    })
+    .eq("id", leadId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
 // ── Add Note ─────────────────────────────────────────────
 
 export async function addNote(id: string, content: string): Promise<{ success: boolean; error?: string }> {

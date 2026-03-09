@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
 import LeadNav from "./lead-nav";
+import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
 import ProformaEditor from "./proforma-editor";
@@ -216,6 +217,8 @@ export default async function LeadDetailPage({
                   </div>
                 )}
               </div>
+
+              <LinkClient leadId={lead.id} />
 
               {lead.message && (
                 <div className="mt-4 rounded-lg bg-muted p-4">
