@@ -152,13 +152,28 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     if (typeof window === "undefined") return "newest";
     return localStorage.getItem("crm_sortBy") || "newest";
   });
+  const [filterTime, setFilterTime] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    return localStorage.getItem("crm_filterTime") || "all";
+  });
+  const [customFrom, setCustomFrom] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("crm_customFrom") || "";
+  });
+  const [customTo, setCustomTo] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("crm_customTo") || "";
+  });
 
   useEffect(() => {
     localStorage.setItem("crm_filterManager", filterManager);
     localStorage.setItem("crm_filterType", filterType);
     localStorage.setItem("crm_filterLevel", filterLevel);
     localStorage.setItem("crm_sortBy", sortBy);
-  }, [filterManager, filterType, filterLevel, sortBy]);
+    localStorage.setItem("crm_filterTime", filterTime);
+    localStorage.setItem("crm_customFrom", customFrom);
+    localStorage.setItem("crm_customTo", customTo);
+  }, [filterManager, filterType, filterLevel, sortBy, filterTime, customFrom, customTo]);
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -292,6 +307,31 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
   const uniqueTags = [...new Set(leads.map((l) => l.project_type_tag).filter(Boolean))] as string[];
 
+  const getTimeFilterRange = useCallback((): { from: Date; to: Date } | null => {
+    const now = new Date();
+    if (filterTime === "today") {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return { from, to: now };
+    }
+    if (filterTime === "week") {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 7);
+      return { from, to: now };
+    }
+    if (filterTime === "month") {
+      const from = new Date(now);
+      from.setMonth(from.getMonth() - 1);
+      return { from, to: now };
+    }
+    if (filterTime === "custom") {
+      if (!customFrom && !customTo) return null;
+      const from = customFrom ? new Date(customFrom) : new Date(0);
+      const to = customTo ? new Date(customTo + "T23:59:59") : now;
+      return { from, to };
+    }
+    return null;
+  }, [filterTime, customFrom, customTo]);
+
   const filteredLeads = leads.filter((l) => {
     if (filterManager !== "all") {
       if (filterManager === "unassigned" && l.assigned_to) return false;
@@ -304,6 +344,11 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     if (filterLevel !== "all") {
       const lvl = Number(filterLevel);
       if (l.qualification_level !== lvl) return false;
+    }
+    const range = getTimeFilterRange();
+    if (range) {
+      const created = new Date(l.created_at);
+      if (created < range.from || created > range.to) return false;
     }
     return true;
   });
@@ -414,6 +459,19 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
           </SelectContent>
         </Select>
 
+        <Select value={filterTime} onValueChange={(v) => { if (v) { setFilterTime(v); if (v !== "custom") { setCustomFrom(""); setCustomTo(""); } } }}>
+          <SelectTrigger size="sm">
+            <SelectValue placeholder="Periodo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo el tiempo</SelectItem>
+            <SelectItem value="today">Hoy</SelectItem>
+            <SelectItem value="week">Ultima semana</SelectItem>
+            <SelectItem value="month">Ultimo mes</SelectItem>
+            <SelectItem value="custom">Personalizado</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={sortBy} onValueChange={(v) => v && setSortBy(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Ordenar" />
@@ -426,6 +484,26 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
             <SelectItem value="oldest">Mas antiguos</SelectItem>
           </SelectContent>
         </Select>
+
+        {filterTime === "custom" && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              placeholder="Desde"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              placeholder="Hasta"
+            />
+          </div>
+        )}
       </div>
 
       {/* New leads strip */}
