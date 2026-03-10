@@ -259,6 +259,50 @@ export type Database = {
           },
         ]
       }
+      commission_configs: {
+        Row: {
+          created_at: string | null
+          id: string
+          new_rate: number
+          prepaid_bonus: number
+          returning_rate: number
+          tiers: Json | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          new_rate?: number
+          prepaid_bonus?: number
+          returning_rate?: number
+          tiers?: Json | null
+          type?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          new_rate?: number
+          prepaid_bonus?: number
+          returning_rate?: number
+          tiers?: Json | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_configs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_snippets: {
         Row: {
           category: string
@@ -456,6 +500,7 @@ export type Database = {
       holded_contacts: {
         Row: {
           address: string | null
+          captador: string | null
           city: string | null
           code: string | null
           contact_type: string | null
@@ -466,6 +511,7 @@ export type Database = {
           mobile: string | null
           name: string
           note: string | null
+          owner: string | null
           phone: string | null
           postal_code: string | null
           province: string | null
@@ -474,6 +520,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          captador?: string | null
           city?: string | null
           code?: string | null
           contact_type?: string | null
@@ -484,6 +531,7 @@ export type Database = {
           mobile?: string | null
           name: string
           note?: string | null
+          owner?: string | null
           phone?: string | null
           postal_code?: string | null
           province?: string | null
@@ -492,6 +540,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          captador?: string | null
           city?: string | null
           code?: string | null
           contact_type?: string | null
@@ -502,6 +551,7 @@ export type Database = {
           mobile?: string | null
           name?: string
           note?: string | null
+          owner?: string | null
           phone?: string | null
           postal_code?: string | null
           province?: string | null
@@ -1695,6 +1745,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scheduled_emails: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          payload: Json
+          send_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          payload: Json
+          send_at: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          payload?: Json
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       shipping_info: {
         Row: {
