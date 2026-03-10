@@ -704,7 +704,8 @@ export async function sendLeadEmail(
   replyToMessageId?: string,
   threadId?: string,
   attachProforma?: boolean,
-  resourceAttachments?: { title: string; url: string }[]
+  resourceAttachments?: { title: string; url: string }[],
+  forceNow?: boolean
 ): Promise<{ success: boolean; error?: string; scheduled?: boolean }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -800,7 +801,7 @@ export async function sendLeadEmail(
       references,
       smtpConfig,
       attachments,
-    }, { createdBy: profile.id, leadId: id });
+    }, { createdBy: profile.id, leadId: id, forceNow });
 
     // Determine thread_id for this sent email
     const finalThreadId = threadId || result.messageId || `sent-${Date.now()}`;

@@ -123,6 +123,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
 
   const [attachProforma, setAttachProforma] = useState(false);
   const [attachedResources, setAttachedResources] = useState<Set<string>>(new Set());
+  const [forceNow, setForceNow] = useState(false);
   const [emailTo, setEmailTo] = useState(leadEmail || "");
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("");
@@ -235,12 +236,14 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         replyToMessageId || undefined,
         replyThreadId || undefined,
         attachProforma || undefined,
-        resAttachments.length > 0 ? resAttachments : undefined
+        resAttachments.length > 0 ? resAttachments : undefined,
+        forceNow || undefined
       );
       if (result.success) {
         cancelReply();
         setAttachProforma(false);
         setAttachedResources(new Set());
+        setForceNow(false);
         if (result.scheduled) {
           setSendError(null);
           alert("Email programado para las 8:00 AM");
@@ -603,13 +606,24 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                   </label>
                 ))}
               </div>
-              <Button
-                onClick={handleSend}
-                disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
-                className="bg-blue-600 text-white hover:bg-blue-700"
-              >
-                {isPending ? "Enviando..." : "Enviar"}
-              </Button>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={forceNow}
+                    onChange={(e) => setForceNow(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-input text-orange-600 focus:ring-orange-500"
+                  />
+                  Enviar ya
+                </label>
+                <Button
+                  onClick={handleSend}
+                  disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {isPending ? "Enviando..." : "Enviar"}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
