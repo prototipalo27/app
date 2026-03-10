@@ -88,23 +88,32 @@ export default function PurchaseItemsView({
   const [editPrice, setEditPrice] = useState("");
   const [editProject, setEditProject] = useState("");
 
-  // Sort: pending first, then purchased, then received/rejected
-  const statusOrder: Record<string, number> = {
-    pending: 0,
-    purchased: 1,
-    received: 2,
-    rejected: 2,
-  };
-  const sorted = [...items].sort(
-    (a, b) =>
-      (statusOrder[a.status || "pending"] ?? 9) -
-      (statusOrder[b.status || "pending"] ?? 9)
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Split active vs finished
+  const active = items.filter(
+    (i) => i.status === "pending" || i.status === "purchased"
+  );
+  const history = items.filter(
+    (i) => i.status === "received" || i.status === "rejected"
   );
 
-  const pending = items.filter((i) => i.status === "pending").length;
-  const purchased = items.filter((i) => i.status === "purchased").length;
-  const received = items.filter((i) => i.status === "received").length;
-  const rejected = items.filter((i) => i.status === "rejected").length;
+  // Sort active: pending first, then purchased
+  const sorted = [...active].sort((a, b) =>
+    a.status === "pending" && b.status !== "pending" ? -1 :
+    a.status !== "pending" && b.status === "pending" ? 1 : 0
+  );
+
+  // Sort history: most recent first
+  const sortedHistory = [...history].sort((a, b) =>
+    new Date(b.received_at || b.created_at || "").getTime() -
+    new Date(a.received_at || a.created_at || "").getTime()
+  );
+
+  const pending = active.filter((i) => i.status === "pending").length;
+  const purchased = active.filter((i) => i.status === "purchased").length;
+  const received = history.filter((i) => i.status === "received").length;
+  const rejected = history.filter((i) => i.status === "rejected").length;
 
   async function handleConfirmPurchase(itemId: string) {
     const price = purchasePrice ? parseFloat(purchasePrice) : null;
@@ -635,13 +644,121 @@ export default function PurchaseItemsView({
                   colSpan={6}
                   className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
                 >
-                  No hay items. Añade el primero.
+                  No hay solicitudes activas.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* History toggle */}
+      {(received > 0 || rejected > 0) && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            <svg
+              className={`h-4 w-4 transition-transform ${showHistory ? "rotate-90" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Historial ({received} recibido{received !== 1 ? "s" : ""}{rejected > 0 ? `, ${rejected} rechazado${rejected !== 1 ? "s" : ""}` : ""})
+          </button>
+
+          {showHistory && (
+            <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <tr>
+                    <th className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">
+                      Descripcion
+                    </th>
+                    <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
+                      Cant.
+                    </th>
+                    <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
+                      Precio
+                    </th>
+                    <th className="hidden px-4 py-3 font-medium text-zinc-700 md:table-cell dark:text-zinc-300">
+                      Pedido por
+                    </th>
+                    <th className="px-4 py-3 font-medium text-zinc-700 dark:text-zinc-300">
+                      Estado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {sortedHistory.map((item) => {
+                    const status = item.status || "received";
+                    return (
+                      <tr key={item.id} className="opacity-60">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="text-zinc-900 dark:text-white">
+                              {item.description}
+                            </span>
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              >
+                                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                Link
+                              </a>
+                            )}
+                            {item.project_name && (
+                              <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                {item.project_name}
+                              </span>
+                            )}
+                            {status === "rejected" && item.rejection_reason && (
+                              <span className="mt-1 text-xs text-red-500 dark:text-red-400">
+                                Motivo: {item.rejection_reason}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
+                          {item.quantity || 1}
+                        </td>
+                        <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
+                          {item.actual_price != null ? (
+                            <span>{item.actual_price.toFixed(2)}&euro;</span>
+                          ) : item.estimated_price != null ? (
+                            <span>~{item.estimated_price.toFixed(2)}&euro;</span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="hidden px-4 py-3 text-zinc-500 md:table-cell dark:text-zinc-400">
+                          {item.creator_name}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[status]}`}
+                          >
+                            {STATUS_LABELS[status]}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
