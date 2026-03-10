@@ -46,6 +46,7 @@ export default async function ProductCatalogPage() {
       <ProductCatalogSearch
         products={products || []}
         categories={categories}
+        isManager={isManager}
       />
     </div>
   );

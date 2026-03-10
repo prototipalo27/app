@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { addPurchaseItem } from "@/app/dashboard/purchases/actions";
 
 interface Product {
   id: string;
@@ -16,12 +17,17 @@ interface Product {
 export default function ProductCatalogSearch({
   products,
   categories,
+  isManager,
 }: {
   products: Product[];
   categories: string[];
+  isManager: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   const filtered = products.filter((p) => {
     const matchesSearch =
@@ -41,6 +47,25 @@ export default function ProductCatalogSearch({
     acc[cat].push(p);
     return acc;
   }, {});
+
+  async function handleRequestPurchase(product: Product) {
+    setRequestingId(product.id);
+    try {
+      const formData = new FormData();
+      formData.set("description", product.name);
+      if (product.url) formData.set("link", product.url);
+      const qty = quantities[product.id] || 1;
+      formData.set("quantity", String(qty));
+      if (product.price != null)
+        formData.set("estimated_price", String(product.price));
+      await addPurchaseItem(formData);
+      setRequestedIds((prev) => new Set(prev).add(product.id));
+    } catch {
+      // ignore
+    } finally {
+      setRequestingId(null);
+    }
+  }
 
   return (
     <div>
@@ -93,17 +118,20 @@ export default function ProductCatalogSearch({
                   {category}
                 </h2>
                 <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                  <table className="w-full text-left text-sm">
+                  <table className="w-full text-sm">
                     <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
                       <tr>
-                        <th className="px-4 py-2 font-medium text-zinc-700 dark:text-zinc-300">
+                        <th className="px-4 py-2 text-left font-medium text-zinc-700 dark:text-zinc-300">
                           Producto
                         </th>
-                        <th className="px-4 py-2 font-medium text-zinc-700 dark:text-zinc-300">
+                        <th className="px-4 py-2 text-center font-medium text-zinc-700 dark:text-zinc-300">
                           Proveedor
                         </th>
-                        <th className="hidden px-4 py-2 text-right font-medium text-zinc-700 sm:table-cell dark:text-zinc-300">
+                        <th className="hidden px-4 py-2 text-center font-medium text-zinc-700 sm:table-cell dark:text-zinc-300">
                           Precio
+                        </th>
+                        <th className="px-4 py-2 text-center font-medium text-zinc-700 dark:text-zinc-300">
+                          Accion
                         </th>
                       </tr>
                     </thead>
@@ -113,7 +141,7 @@ export default function ProductCatalogSearch({
                           key={product.id}
                           className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                         >
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 text-left">
                             <div className="font-medium text-zinc-900 dark:text-white">
                               {product.url ? (
                                 <a
@@ -134,25 +162,66 @@ export default function ProductCatalogSearch({
                               </p>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 text-center">
                             {product.suppliers ? (
-                              <Link
-                                href={`/dashboard/suppliers/${product.suppliers.id}`}
-                                className="text-zinc-700 hover:text-green-600 dark:text-zinc-300 dark:hover:text-green-400"
-                              >
-                                {product.suppliers.name}
-                              </Link>
+                              isManager ? (
+                                <Link
+                                  href={`/dashboard/suppliers/${product.suppliers.id}`}
+                                  className="text-zinc-700 hover:text-green-600 dark:text-zinc-300 dark:hover:text-green-400"
+                                >
+                                  {product.suppliers.name}
+                                </Link>
+                              ) : (
+                                <span className="text-zinc-700 dark:text-zinc-300">
+                                  {product.suppliers.name}
+                                </span>
+                              )
                             ) : (
                               <span className="text-zinc-400">—</span>
                             )}
                           </td>
-                          <td className="hidden px-4 py-3 text-right whitespace-nowrap sm:table-cell">
+                          <td className="hidden px-4 py-3 text-center whitespace-nowrap sm:table-cell">
                             {product.price != null ? (
                               <span className="text-zinc-600 dark:text-zinc-300">
                                 {product.price.toFixed(2)}&euro;
                               </span>
                             ) : (
                               <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {requestedIds.has(product.id) ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Solicitado
+                              </span>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={quantities[product.id] || 1}
+                                  onChange={(e) =>
+                                    setQuantities((prev) => ({
+                                      ...prev,
+                                      [product.id]: Math.max(1, parseInt(e.target.value, 10) || 1),
+                                    }))
+                                  }
+                                  className="w-14 rounded-lg border border-zinc-300 px-2 py-1.5 text-center text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={requestingId === product.id}
+                                  onClick={() => handleRequestPurchase(product)}
+                                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white whitespace-nowrap hover:bg-brand-dark disabled:opacity-50"
+                                >
+                                  {requestingId === product.id
+                                    ? "..."
+                                    : "Solicitar"}
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
