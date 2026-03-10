@@ -2,7 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { updateContact as holdedUpdateContact } from "@/lib/holded/api";
+import { updateContact as holdedUpdateContact, deleteContact as holdedDeleteContact } from "@/lib/holded/api";
 import { syncContactsToCache } from "@/lib/holded/cache";
 
 export type CachedContact = {
@@ -118,6 +118,28 @@ export async function updateContacto(
     await supabase
       .from("holded_contacts")
       .update(cacheUpdate)
+      .eq("holded_id", holdedId);
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Error desconocido" };
+  }
+}
+
+export async function deleteContacto(
+  holdedId: string
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+
+  try {
+    // Delete from Holded
+    await holdedDeleteContact(holdedId);
+
+    // Delete from local cache
+    const supabase = createServiceClient();
+    await supabase
+      .from("holded_contacts")
+      .delete()
       .eq("holded_id", holdedId);
 
     return { success: true };
