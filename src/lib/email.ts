@@ -118,11 +118,11 @@ export function deserializeEmailPayload(payload: Record<string, unknown>): SendE
  */
 export async function sendEmailOrSchedule(
   options: SendEmailOptions,
-  meta?: { createdBy?: string; leadId?: string }
+  meta?: { createdBy?: string; leadId?: string; forceNow?: boolean }
 ): Promise<{ scheduled: boolean; messageId?: string }> {
   const hour = getMadridHour();
 
-  if (hour >= EMAIL_MIN_HOUR && hour < EMAIL_MAX_HOUR) {
+  if (meta?.forceNow || (hour >= EMAIL_MIN_HOUR && hour < EMAIL_MAX_HOUR)) {
     // During allowed hours (8:00–19:59) → send immediately
     const result = await sendEmail(options);
     return { scheduled: false, messageId: result.messageId };
