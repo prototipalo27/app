@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// Force Madrid timezone for all server-side date formatting
+process.env.TZ = "Europe/Madrid";
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,

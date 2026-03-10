@@ -150,7 +150,7 @@ export default async function LeadDetailPage({
                 <Badge variant="secondary">
                   {lead.source}
                 </Badge>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
                   {new Date(lead.created_at).toLocaleDateString("es-ES", {
                     day: "numeric",
                     month: "short",
@@ -158,6 +158,23 @@ export default async function LeadDetailPage({
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                  {(() => {
+                    const days = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / 86400000);
+                    return (
+                      <Badge
+                        variant="secondary"
+                        className={
+                          days <= 3
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : days <= 7
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }
+                      >
+                        {days === 0 ? "hoy" : days === 1 ? "hace 1 dia" : `hace ${days} dias`}
+                      </Badge>
+                    );
+                  })()}
                 </span>
               </div>
 
