@@ -104,6 +104,13 @@ export default async function LeadDetailPage({
     .order("category")
     .order("sort_order", { ascending: true });
 
+  const { data: emailResources } = await supabase
+    .from("tools_resources")
+    .select("id, title, type, content, category")
+    .in("type", ["imagen", "archivo"])
+    .order("category")
+    .order("title");
+
   const { data: projectTemplates } = await supabase
     .from("project_templates")
     .select("name")
@@ -336,6 +343,7 @@ export default async function LeadDetailPage({
             leadNumber={lead.lead_number}
             holdedProformaId={quoteRequest?.holded_proforma_id || null}
             snippets={snippets || []}
+            emailResources={emailResources || []}
             leadMessage={lead.message}
             aiDraft={lead.ai_draft}
           />

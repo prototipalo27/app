@@ -33,6 +33,14 @@ interface Snippet {
   content: string;
 }
 
+interface EmailResource {
+  id: string;
+  title: string;
+  type: string;
+  content: string | null;
+  category: string | null;
+}
+
 interface EmailPanelProps {
   activities: Activity[];
   leadId: string;
@@ -43,6 +51,7 @@ interface EmailPanelProps {
   leadNumber: number | null;
   holdedProformaId: string | null;
   snippets?: Snippet[];
+  emailResources?: EmailResource[];
   leadMessage?: string | null;
   aiDraft?: string | null;
 }
@@ -106,7 +115,7 @@ const SNIPPET_CATEGORIES = [
   { id: "cierre", label: "Cierre", color: "bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50" },
 ] as const;
 
-export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [], leadMessage, aiDraft }: EmailPanelProps) {
+export default function EmailPanel({ activities, leadId, leadEmail, leadName, leadCompany, emailSubjectTag, leadNumber, holdedProformaId, snippets = [], emailResources = [], leadMessage, aiDraft }: EmailPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -449,6 +458,69 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
                     </div>
                   </div>
                 ))}
+              </>
+            )}
+            {emailResources.length > 0 && (
+              <>
+                <span className="text-border">|</span>
+                <div className="group relative">
+                  <button
+                    type="button"
+                    className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+                  >
+                    Recursos
+                  </button>
+                  <div className="invisible absolute right-0 top-full z-20 pt-1 opacity-0 transition-all group-hover:visible group-hover:opacity-100">
+                    <div className="max-h-64 min-w-64 max-w-80 overflow-y-auto rounded-lg border bg-popover py-1 shadow-lg">
+                      {(() => {
+                        const grouped: Record<string, EmailResource[]> = {};
+                        for (const r of emailResources) {
+                          const cat = r.category || "General";
+                          if (!grouped[cat]) grouped[cat] = [];
+                          grouped[cat].push(r);
+                        }
+                        return Object.entries(grouped)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([cat, items]) => (
+                            <div key={cat}>
+                              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                {cat}
+                              </div>
+                              {items.map((r) => (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!r.content) return;
+                                    const insert = r.type === "imagen"
+                                      ? `<img src="${r.content}" alt="${r.title}" style="max-width:100%;height:auto;" />`
+                                      : r.content;
+                                    setEmailBody((prev) =>
+                                      prev ? prev + "\n\n" + insert : insert
+                                    );
+                                  }}
+                                  className="block w-full px-3 py-2 text-left hover:bg-muted"
+                                >
+                                  <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                                    {r.type === "imagen" ? (
+                                      <svg className="h-3 w-3 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="h-3 w-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                      </svg>
+                                    )}
+                                    {r.title}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </div>
