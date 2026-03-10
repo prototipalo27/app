@@ -758,33 +758,32 @@ export async function sendLeadEmail(
     }
   }
 
-  // Attach resource files (from URLs)
+  // Attach resource files (from URLs — use Drive API for Google Drive files)
   if (resourceAttachments?.length) {
     if (!attachments) attachments = [];
+    const { downloadFile } = await import("@/lib/google-drive/client");
     for (const res of resourceAttachments) {
       try {
-        // For Google Drive links, convert to direct download URL
-        let downloadUrl = res.url;
-        const driveMatch = downloadUrl.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+        const driveMatch = res.url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
         if (driveMatch) {
-          downloadUrl = `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
+          // Use authenticated Drive API for proper binary download
+          const file = await downloadFile(driveMatch[1]);
+          const filename = file.name || res.title.replace(/[^a-zA-Z0-9._\- ]/g, "");
+          attachments.push({ filename, content: file.buffer, contentType: file.mimeType });
+        } else {
+          // Non-Drive URL: fetch directly
+          const response = await fetch(res.url);
+          if (!response.ok) continue;
+          const buffer = Buffer.from(await response.arrayBuffer());
+          const contentType = response.headers.get("content-type") || "application/octet-stream";
+          const ext = contentType.includes("pdf") ? ".pdf"
+            : contentType.includes("png") ? ".png"
+            : contentType.includes("jpeg") || contentType.includes("jpg") ? ".jpg"
+            : contentType.includes("svg") ? ".svg"
+            : "";
+          const filename = res.title.replace(/[^a-zA-Z0-9._\- ]/g, "") + ext;
+          attachments.push({ filename, content: buffer, contentType });
         }
-
-        const response = await fetch(downloadUrl);
-        if (!response.ok) continue;
-
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const contentType = response.headers.get("content-type") || "application/octet-stream";
-
-        // Derive filename from title
-        const ext = contentType.includes("pdf") ? ".pdf"
-          : contentType.includes("png") ? ".png"
-          : contentType.includes("jpeg") || contentType.includes("jpg") ? ".jpg"
-          : contentType.includes("svg") ? ".svg"
-          : "";
-        const filename = res.title.replace(/[^a-zA-Z0-9._\- ]/g, "") + ext;
-
-        attachments.push({ filename, content: buffer, contentType });
       } catch {
         // Non-fatal: skip failed downloads
       }
