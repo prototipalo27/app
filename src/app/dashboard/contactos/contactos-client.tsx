@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useCallback } from "react";
-import { updateContacto, refreshContactCache, type CachedContact, type TeamMember } from "./actions";
+import { updateContacto, deleteContacto, refreshContactCache, type CachedContact, type TeamMember } from "./actions";
 import { Button } from "@/components/ui/button";
 
 const COLUMNS = [
@@ -171,6 +171,21 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
       setMessage({ type: "err", text: result.error || "Error al sincronizar" });
     }
     setSyncing(false);
+  }
+
+  async function handleDelete() {
+    if (!selected) return;
+    if (!confirm(`Eliminar "${selected.name}" de Holded? Esta acción no se puede deshacer.`)) return;
+    setSaving(true);
+    const result = await deleteContacto(selected.holded_id);
+    if (result.success) {
+      setContacts((prev) => prev.filter((c) => c.holded_id !== selected.holded_id));
+      setSelected(null);
+      setMessage({ type: "ok", text: "Contacto eliminado" });
+    } else {
+      setMessage({ type: "err", text: result.error || "Error al eliminar" });
+    }
+    setSaving(false);
   }
 
   const inputClass =
@@ -417,7 +432,7 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
                       <p className="whitespace-pre-wrap text-xs text-muted-foreground">{selected.note}</p>
                     </div>
                   )}
-                  <div className="border-t border-input pt-2.5">
+                  <div className="border-t border-input pt-2.5 flex items-center justify-between">
                     <a
                       href={`https://app.holded.com/contacts/${selected.holded_id}`}
                       target="_blank"
@@ -426,6 +441,14 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
                     >
                       Ver en Holded &rarr;
                     </a>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={saving}
+                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      Eliminar
+                    </button>
                   </div>
                 </>
               )}
