@@ -75,4 +75,5 @@ export interface HoldedContact {
   socialNetworks: Record<string, string>;
   tags: string[];
   customFields: unknown[];
+  createdAt?: number; // unix timestamp
 }

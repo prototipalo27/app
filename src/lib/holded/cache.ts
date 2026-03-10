@@ -28,6 +28,9 @@ export async function syncContactsToCache(): Promise<number> {
     country: c.billAddress?.country || null,
     country_code: c.billAddress?.countryCode || null,
     note: c.note || null,
+    created_at: c.createdAt
+      ? new Date(c.createdAt * 1000).toISOString()
+      : null,
     updated_at: new Date().toISOString(),
   }));
 
@@ -41,6 +44,18 @@ export async function syncContactsToCache(): Promise<number> {
     if (error) {
       throw new Error(`Failed to upsert contacts batch: ${error.message}`);
     }
+  }
+
+  // Assign captador/owner = "manu" to contacts created before Gonzalo (1 Sept 2025)
+  // Only for contacts that don't have a captador yet
+  const { error: bulkError } = await supabase
+    .from("holded_contacts")
+    .update({ captador: "manu", owner: "manu" })
+    .lt("created_at", "2025-09-01T00:00:00Z")
+    .is("captador", null);
+
+  if (bulkError) {
+    console.error("Failed to bulk-assign manu:", bulkError.message);
   }
 
   return rows.length;
