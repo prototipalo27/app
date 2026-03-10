@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
-import { createResource, updateResource, deleteResource, uploadResourceFile } from "../actions";
+import { useState, useTransition } from "react";
+import { createResource, updateResource, deleteResource } from "../actions";
 
 type Resource = {
   id: string;
@@ -32,6 +32,14 @@ const TYPE_COLORS: Record<string, string> = {
   archivo: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
 };
 
+const CONTENT_PLACEHOLDERS: Record<string, string> = {
+  tutorial: "Texto del tutorial...",
+  video: "URL del vídeo (YouTube, Vimeo...)",
+  parametros: "Parámetros técnicos...",
+  imagen: "URL de la imagen (Drive, enlace directo...)",
+  archivo: "URL del archivo (Drive, enlace directo...)",
+};
+
 function getYouTubeEmbedUrl(url: string): string | null {
   const match = url.match(
     /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/
@@ -58,12 +66,11 @@ export default function ResourceList({
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
   const [editing, setEditing] = useState<Resource | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [copied, setCopied] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [modalType, setModalType] = useState("tutorial");
 
   const filtered = resources.filter((r) => {
     if (filter !== "all" && r.type !== filter) return false;
@@ -73,7 +80,6 @@ export default function ResourceList({
 
   const categories = [...new Set(resources.map((r) => r.category).filter(Boolean))];
 
-  // Get types that exist in resources
   const activeTypes = new Set(resources.map((r) => r.type));
   const allTypes = ["tutorial", "video", "parametros", "imagen", "archivo"];
   const filterTypes = allTypes.filter((t) => activeTypes.has(t));
@@ -90,16 +96,6 @@ export default function ResourceList({
     });
   }
 
-  function handleUpload(formData: FormData) {
-    startTransition(async () => {
-      const result = await uploadResourceFile(formData);
-      if (result.success) {
-        setShowUpload(false);
-        if (fileRef.current) fileRef.current.value = "";
-      }
-    });
-  }
-
   function handleDelete(id: string) {
     if (!confirm("¿Eliminar este recurso?")) return;
     startTransition(async () => {
@@ -107,16 +103,9 @@ export default function ResourceList({
     });
   }
 
-  async function copyUrl(url: string, id: string) {
-    await navigator.clipboard.writeText(url);
+  async function copyToClipboard(text: string, id: string) {
+    await navigator.clipboard.writeText(text);
     setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  }
-
-  function copyHtmlImg(url: string, title: string, id: string) {
-    const html = `<img src="${url}" alt="${title}" style="max-width:100%;height:auto;" />`;
-    navigator.clipboard.writeText(html);
-    setCopied(id + "-html");
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -157,23 +146,16 @@ export default function ResourceList({
           className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
         />
         {isManager && (
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={() => setShowUpload(true)}
-              className="rounded-lg border border-green-600 px-4 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20"
-            >
-              Subir archivo
-            </button>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setShowModal(true);
-              }}
-              className="rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-            >
-              + Añadir recurso
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              setEditing(null);
+              setModalType("tutorial");
+              setShowModal(true);
+            }}
+            className="ml-auto rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+          >
+            + Añadir recurso
+          </button>
         )}
       </div>
 
@@ -236,33 +218,29 @@ export default function ResourceList({
                       />
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
-                          onClick={() => copyUrl(resource.content!, resource.id)}
+                          onClick={() => copyToClipboard(resource.content!, resource.id)}
                           className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
                         >
                           {copied === resource.id ? "Copiado!" : "Copiar URL"}
                         </button>
                         <button
-                          onClick={() => copyHtmlImg(resource.content!, resource.title, resource.id)}
+                          onClick={() => copyToClipboard(
+                            `<img src="${resource.content}" alt="${resource.title}" style="max-width:100%;height:auto;" />`,
+                            resource.id + "-html"
+                          )}
                           className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
                         >
                           {copied === resource.id + "-html" ? "Copiado!" : "Copiar HTML (email)"}
                         </button>
-                        <a
-                          href={resource.content}
-                          download
-                          className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                        >
-                          Descargar
-                        </a>
                       </div>
                     </div>
                   )}
 
-                  {/* File (non-image) */}
+                  {/* File link */}
                   {resource.type === "archivo" && resource.content && (
                     <div className="mb-3 flex flex-wrap gap-2">
                       <button
-                        onClick={() => copyUrl(resource.content!, resource.id)}
+                        onClick={() => copyToClipboard(resource.content!, resource.id)}
                         className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         {copied === resource.id ? "Copiado!" : "Copiar URL"}
@@ -274,13 +252,6 @@ export default function ResourceList({
                         className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         Abrir
-                      </a>
-                      <a
-                        href={resource.content}
-                        download
-                        className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      >
-                        Descargar
                       </a>
                     </div>
                   )}
@@ -328,6 +299,7 @@ export default function ResourceList({
                       <button
                         onClick={() => {
                           setEditing(resource);
+                          setModalType(resource.type);
                           setShowModal(true);
                         }}
                         className="rounded-lg px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -350,91 +322,6 @@ export default function ResourceList({
         </div>
       )}
 
-      {/* Upload File Modal */}
-      {showUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-            <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
-              Subir archivo
-            </h3>
-            <form action={handleUpload} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Archivo *
-                </label>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  name="file"
-                  required
-                  accept="image/*,.pdf,.zip,.ai,.eps,.svg"
-                  className="mt-1 w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-green-700 hover:file:bg-green-100 dark:text-zinc-300 dark:file:bg-green-900/30 dark:file:text-green-400"
-                />
-                <p className="mt-1 text-xs text-zinc-500">Logos, portfolio, PDFs, vectores...</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Título *
-                </label>
-                <input
-                  name="title"
-                  required
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                  placeholder="ej: Logo Prototipalo PNG"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Descripción
-                </label>
-                <input
-                  name="description"
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Categoría
-                </label>
-                <input
-                  name="category"
-                  list="upload-categories"
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                  placeholder="ej: Logos, Portfolio, Branding"
-                />
-                {categories.length > 0 && (
-                  <datalist id="upload-categories">
-                    {categories.map((c) => (
-                      <option key={c} value={c!} />
-                    ))}
-                  </datalist>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowUpload(false)}
-                  className="rounded-lg px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                >
-                  {isPending ? "Subiendo..." : "Subir"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -451,12 +338,15 @@ export default function ResourceList({
                 </label>
                 <select
                   name="type"
-                  defaultValue={editing?.type || "tutorial"}
+                  value={modalType}
+                  onChange={(e) => setModalType(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="tutorial">Tutorial</option>
                   <option value="video">Vídeo</option>
                   <option value="parametros">Parámetros</option>
+                  <option value="imagen">Imagen (URL)</option>
+                  <option value="archivo">Archivo (URL)</option>
                 </select>
               </div>
 
@@ -469,6 +359,7 @@ export default function ResourceList({
                   required
                   defaultValue={editing?.title || ""}
                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  placeholder="ej: Logo Prototipalo, Portfolio 2025..."
                 />
               </div>
 
@@ -492,7 +383,7 @@ export default function ResourceList({
                   defaultValue={editing?.category || ""}
                   list="categories"
                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                  placeholder="ej: Impresoras, Corte, Procesos"
+                  placeholder="ej: Comercial, Branding, Impresoras"
                 />
                 {categories.length > 0 && (
                   <datalist id="categories">
@@ -505,15 +396,30 @@ export default function ResourceList({
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Contenido
+                  {modalType === "imagen" || modalType === "archivo" ? "URL" : "Contenido"}
                 </label>
-                <textarea
-                  name="content"
-                  rows={5}
-                  defaultValue={editing?.content || ""}
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                  placeholder="Texto/markdown para tutoriales, URL para vídeos"
-                />
+                {(modalType === "imagen" || modalType === "archivo") ? (
+                  <input
+                    name="content"
+                    type="url"
+                    defaultValue={editing?.content || ""}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                    placeholder={CONTENT_PLACEHOLDERS[modalType]}
+                  />
+                ) : (
+                  <textarea
+                    name="content"
+                    rows={5}
+                    defaultValue={editing?.content || ""}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                    placeholder={CONTENT_PLACEHOLDERS[modalType]}
+                  />
+                )}
+                {(modalType === "imagen" || modalType === "archivo") && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Pega un enlace de Google Drive (compartido), o cualquier URL pública
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2">
