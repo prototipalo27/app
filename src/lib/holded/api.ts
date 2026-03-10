@@ -175,6 +175,18 @@ export async function updateContact(
   return (await res.json()) as { id: string };
 }
 
+/** Delete a contact by ID */
+export async function deleteContact(id: string): Promise<void> {
+  const res = await fetch(`${HOLDED_API_BASE}/contacts/${id}`, {
+    method: "DELETE",
+    headers: { key: getApiKey() },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+}
+
 // ── Documents (write) ─────────────────────────────────────
 
 /** Create a proforma for a contact, optionally with line items */
