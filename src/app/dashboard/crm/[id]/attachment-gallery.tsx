@@ -39,8 +39,9 @@ export default function AttachmentGallery({ attachments }: AttachmentGalleryProp
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`${fileUrl}-/preview/400x400/-/quality/lighter/`}
+                src={fileUrl}
                 alt={`Adjunto ${i + 1}`}
+                loading="lazy"
                 className="h-32 w-full object-cover transition group-hover:scale-105"
               />
               <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
@@ -90,7 +91,7 @@ export default function AttachmentGallery({ attachments }: AttachmentGalleryProp
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`${fileUrls[lightboxIndex]}-/preview/1600x1600/-/quality/normal/`}
+                src={fileUrls[lightboxIndex]}
                 alt={`Adjunto ${lightboxIndex + 1}`}
                 className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain"
               />
