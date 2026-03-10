@@ -11,8 +11,17 @@ export async function syncContactsToCache(): Promise<number> {
 
   const supabase = createServiceClient();
 
-  // Map Holded contacts to cache rows
-  const rows = contacts.map((c) => ({
+  // Load exclusion list (contacts hidden by user)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: excluded } = await (supabase as any)
+    .from("holded_contacts_excluded")
+    .select("holded_id");
+  const excludedIds = new Set(
+    ((excluded || []) as { holded_id: string }[]).map((e) => e.holded_id)
+  );
+
+  // Map Holded contacts to cache rows, skipping excluded
+  const rows = contacts.filter((c) => !excludedIds.has(c.id)).map((c) => ({
     holded_id: c.id,
     name: c.name,
     trade_name: c.tradeName || null,

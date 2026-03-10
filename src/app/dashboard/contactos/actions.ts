@@ -2,7 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { updateContact as holdedUpdateContact, deleteContact as holdedDeleteContact } from "@/lib/holded/api";
+import { updateContact as holdedUpdateContact } from "@/lib/holded/api";
 import { syncContactsToCache } from "@/lib/holded/cache";
 
 export type CachedContact = {
@@ -127,16 +127,21 @@ export async function updateContacto(
 }
 
 export async function deleteContacto(
-  holdedId: string
+  holdedId: string,
+  name: string
 ): Promise<{ success: boolean; error?: string }> {
   await requireRole("manager");
 
   try {
-    // Delete from Holded
-    await holdedDeleteContact(holdedId);
-
-    // Delete from local cache
     const supabase = createServiceClient();
+
+    // Add to exclusion list so it doesn't reappear on next sync
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("holded_contacts_excluded")
+      .upsert({ holded_id: holdedId, name });
+
+    // Remove from local cache
     await supabase
       .from("holded_contacts")
       .delete()
