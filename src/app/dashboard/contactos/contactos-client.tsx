@@ -16,6 +16,9 @@ const COLUMNS = [
 export default function ContactosClient({ initialContacts, teamMembers }: { initialContacts: CachedContact[]; teamMembers: TeamMember[] }) {
   const [contacts, setContacts] = useState(initialContacts);
   const [query, setQuery] = useState("");
+  const [filterType, setFilterType] = useState<string>("");
+  const [filterCaptador, setFilterCaptador] = useState<string>("");
+  const [filterOwner, setFilterOwner] = useState<string>("");
   const [selected, setSelected] = useState<CachedContact | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -51,20 +54,43 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
     document.addEventListener("mouseup", onUp);
   }, [colWidths]);
 
+  // Unique filter options
+  const contactTypes = useMemo(() =>
+    [...new Set(contacts.map((c) => c.contact_type).filter(Boolean))].sort() as string[],
+    [contacts]
+  );
+  const captadores = useMemo(() =>
+    [...new Set(contacts.map((c) => c.captador).filter(Boolean))].sort() as string[],
+    [contacts]
+  );
+  const owners = useMemo(() =>
+    [...new Set(contacts.map((c) => c.owner).filter(Boolean))].sort() as string[],
+    [contacts]
+  );
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return contacts;
-    const q = query.toLowerCase();
-    return contacts.filter((c) =>
-      c.name.toLowerCase().includes(q) ||
-      c.trade_name?.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.code?.toLowerCase().includes(q) ||
-      c.phone?.includes(q) ||
-      c.mobile?.includes(q) ||
-      c.captador?.toLowerCase().includes(q) ||
-      c.owner?.toLowerCase().includes(q)
-    );
-  }, [contacts, query]);
+    return contacts.filter((c) => {
+      if (filterType && c.contact_type !== filterType) return false;
+      if (filterCaptador === "__none__" && c.captador) return false;
+      if (filterCaptador && filterCaptador !== "__none__" && c.captador !== filterCaptador) return false;
+      if (filterOwner === "__none__" && c.owner) return false;
+      if (filterOwner && filterOwner !== "__none__" && c.owner !== filterOwner) return false;
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.trade_name?.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.code?.toLowerCase().includes(q) ||
+          c.phone?.includes(q) ||
+          c.mobile?.includes(q) ||
+          c.captador?.toLowerCase().includes(q) ||
+          c.owner?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [contacts, query, filterType, filterCaptador, filterOwner]);
 
   function selectContact(c: CachedContact) {
     setSelected(c);
@@ -165,8 +191,8 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="mb-2 shrink-0">
+      {/* Search + Filters */}
+      <div className="mb-2 flex shrink-0 flex-col gap-2">
         <input
           type="text"
           value={query}
@@ -174,6 +200,50 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
           placeholder="Filtrar por nombre, email, NIF, teléfono..."
           className="h-8 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">Tipo: todos</option>
+            {contactTypes.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <select
+            value={filterCaptador}
+            onChange={(e) => setFilterCaptador(e.target.value)}
+            className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">Captador: todos</option>
+            <option value="__none__">Sin captador</option>
+            {captadores.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select
+            value={filterOwner}
+            onChange={(e) => setFilterOwner(e.target.value)}
+            className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">Owner: todos</option>
+            <option value="__none__">Sin owner</option>
+            {owners.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          {(filterType || filterCaptador || filterOwner) && (
+            <button
+              type="button"
+              onClick={() => { setFilterType(""); setFilterCaptador(""); setFilterOwner(""); }}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Limpiar filtros
+            </button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">{filtered.length} resultado{filtered.length !== 1 ? "s" : ""}</span>
+        </div>
       </div>
 
       {message && (
