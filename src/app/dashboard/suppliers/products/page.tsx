@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { requireRole } from "@/lib/rbac";
+import { getUserProfile, hasRole } from "@/lib/rbac";
+import { redirect } from "next/navigation";
 import ProductCatalogSearch from "./product-catalog-search";
 
 export default async function ProductCatalogPage() {
-  await requireRole("manager");
+  const profile = await getUserProfile();
+  if (!profile || !profile.is_active) redirect("/login");
+
+  const isManager = hasRole(profile.role, "manager");
 
   const supabase = await createClient();
 
@@ -28,10 +32,10 @@ export default async function ProductCatalogPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <Link
-            href="/dashboard/suppliers"
+            href={isManager ? "/dashboard/suppliers" : "/dashboard/purchases"}
             className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            &larr; Proveedores
+            &larr; {isManager ? "Proveedores" : "Compras"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
             Catalogo de productos

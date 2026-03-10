@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   addPurchaseItem,
   markAsPurchased,
@@ -156,13 +157,21 @@ export default function PurchaseItemsView({
           {received} recibido(s)
           {rejected > 0 && <> &middot; {rejected} rechazado(s)</>}
         </p>
-        <button
-          type="button"
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
-        >
-          {showForm ? "Cancelar" : "+ Añadir item"}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/suppliers/products"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Ver catálogo
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+          >
+            {showForm ? "Cancelar" : "+ Añadir item"}
+          </button>
+        </div>
       </div>
 
       {/* Add item form */}
