@@ -136,6 +136,8 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     };
   }, [refreshing, pullDistance, router]);
 
+  const [search, setSearch] = useState("");
+
   const [filterManager, setFilterManager] = useState<string>(() => {
     if (typeof window === "undefined") return "all";
     return localStorage.getItem("crm_filterManager") || "all";
@@ -333,6 +335,14 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
   }, [filterTime, customFrom, customTo]);
 
   const filteredLeads = leads.filter((l) => {
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const searchable = [l.full_name, l.company, l.email, l.phone, l.message, l.project_type_tag, l.assignee_email]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!searchable.includes(q)) return false;
+    }
     if (filterManager !== "all") {
       if (filterManager === "unassigned" && l.assigned_to) return false;
       if (filterManager !== "unassigned" && l.assigned_to !== filterManager) return false;
@@ -417,8 +427,16 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
         );
       })()}
 
-      {/* Filters */}
+      {/* Search + Filters */}
       <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar lead..."
+          className="h-8 w-40 shrink-0 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring md:w-52"
+        />
+
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Comercial" />
