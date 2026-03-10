@@ -30,14 +30,26 @@ export async function getAllContactos(): Promise<CachedContact[]> {
   await requireRole("manager");
   const supabase = createServiceClient();
 
-  const { data: contacts, error } = await supabase
-    .from("holded_contacts")
-    .select("holded_id, name, trade_name, code, email, phone, mobile, contact_type, address, city, postal_code, province, country, note, captador, owner")
-    .order("name")
-    .range(0, 4999);
+  const PAGE_SIZE = 1000;
+  let all: CachedContact[] = [];
+  let from = 0;
 
-  if (error) throw new Error(error.message);
-  return contacts || [];
+  while (true) {
+    const { data, error } = await supabase
+      .from("holded_contacts")
+      .select("holded_id, name, trade_name, code, email, phone, mobile, contact_type, address, city, postal_code, province, country, note, captador, owner")
+      .order("name")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+
+    all = all.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return all;
 }
 
 export async function getTeamMembers(): Promise<TeamMember[]> {
