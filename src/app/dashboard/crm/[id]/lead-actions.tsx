@@ -9,6 +9,7 @@ import {
   deleteLead,
   blockEmailAndDeleteLead,
   updatePaymentCondition,
+  updateDesiredDeliveryDate,
   updateLeadTag,
   updateQualificationLevel,
   updateEstimationField,
@@ -48,6 +49,7 @@ interface LeadActionsProps {
   estimatedUrgency: string | null;
   estimatedValue: number | null;
   qualificationLevel: number | null;
+  desiredDeliveryDate: string | null;
   nextId: string | null;
   ownedBy: string | null;
   commission: {
@@ -74,6 +76,7 @@ export default function LeadActions({
   estimatedUrgency,
   estimatedValue,
   qualificationLevel,
+  desiredDeliveryDate,
   nextId,
   ownedBy,
   commission,
@@ -321,6 +324,26 @@ export default function LeadActions({
           <option value="50-50">50-50 (dos plazos)</option>
           <option value="100-5">100% (-5% dto)</option>
         </select>
+      </div>
+
+      {/* Desired delivery date */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
+          Fecha de entrega deseada
+        </h3>
+        <input
+          type="date"
+          value={desiredDeliveryDate || ""}
+          onChange={(e) => {
+            const value = e.target.value || null;
+            startTransition(async () => {
+              await updateDesiredDeliveryDate(leadId, value);
+              router.refresh();
+            });
+          }}
+          disabled={isPending}
+          className={selectClass}
+        />
       </div>
 
       {/* Project type tag */}

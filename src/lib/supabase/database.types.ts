@@ -796,6 +796,7 @@ export type Database = {
           attachments: string | null
           company: string | null
           created_at: string
+          desired_delivery_date: string | null
           email: string | null
           email_subject_tag: string | null
           estimated_complexity: string | null
@@ -826,6 +827,7 @@ export type Database = {
           attachments?: string | null
           company?: string | null
           created_at?: string
+          desired_delivery_date?: string | null
           email?: string | null
           email_subject_tag?: string | null
           estimated_complexity?: string | null
@@ -856,6 +858,7 @@ export type Database = {
           attachments?: string | null
           company?: string | null
           created_at?: string
+          desired_delivery_date?: string | null
           email?: string | null
           email_subject_tag?: string | null
           estimated_complexity?: string | null
@@ -2809,3 +2812,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

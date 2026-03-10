@@ -1279,6 +1279,24 @@ export async function updatePaymentCondition(
   return { success: true };
 }
 
+export async function updateDesiredDeliveryDate(
+  id: string,
+  date: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ desired_delivery_date: date || null })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  return { success: true };
+}
+
 // ── Dismiss Lead (block email if exists + delete, no redirect) ──
 
 // ── Get Proforma Details from Holded ─────────────────────

@@ -150,6 +150,15 @@ export default async function LeadDetailPage({
                 <Badge variant="secondary">
                   {lead.source}
                 </Badge>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {new Date(lead.created_at).toLocaleDateString("es-ES", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -246,16 +255,6 @@ export default async function LeadDetailPage({
                 </div>
               )}
 
-              <p className="mt-4 text-xs text-muted-foreground">
-                Creado el{" "}
-                {new Date(lead.created_at).toLocaleDateString("es-ES", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
             </CardContent>
           </Card>
 
@@ -425,6 +424,7 @@ export default async function LeadDetailPage({
               assignedTo={lead.assigned_to}
               quoteRequest={quoteRequest}
               paymentCondition={lead.payment_condition}
+              desiredDeliveryDate={lead.desired_delivery_date}
               projectTypeTag={lead.project_type_tag}
               projectTemplateTags={projectTemplateTags}
               estimatedQuantity={lead.estimated_quantity}
