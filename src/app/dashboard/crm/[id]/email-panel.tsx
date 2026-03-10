@@ -122,6 +122,7 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
   const defaultSubject = buildDefaultSubject(emailSubjectTag, leadCompany, leadName, leadNumber);
 
   const [attachProforma, setAttachProforma] = useState(false);
+  const [attachedResources, setAttachedResources] = useState<Set<string>>(new Set());
   const [emailTo, setEmailTo] = useState(leadEmail || "");
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("");
@@ -222,6 +223,10 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
     if (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return;
     setSendError(null);
     startTransition(async () => {
+      const resAttachments = emailResources
+        .filter((r) => attachedResources.has(r.id) && r.content)
+        .map((r) => ({ title: r.title, url: r.content! }));
+
       const result = await sendLeadEmail(
         leadId,
         emailTo,
@@ -229,11 +234,13 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
         emailBody,
         replyToMessageId || undefined,
         replyThreadId || undefined,
-        attachProforma || undefined
+        attachProforma || undefined,
+        resAttachments.length > 0 ? resAttachments : undefined
       );
       if (result.success) {
         cancelReply();
         setAttachProforma(false);
+        setAttachedResources(new Set());
         if (result.scheduled) {
           setSendError(null);
           alert("Email programado para las 8:00 AM");
@@ -564,20 +571,38 @@ export default function EmailPanel({ activities, leadId, leadEmail, leadName, le
             {sendError && (
               <p className="text-xs text-destructive">{sendError}</p>
             )}
-            <div className="flex items-center justify-between">
-              {holdedProformaId ? (
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={attachProforma}
-                    onChange={(e) => setAttachProforma(e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-blue-600 focus:ring-blue-500"
-                  />
-                  Adjuntar presupuesto PDF
-                </label>
-              ) : (
-                <div />
-              )}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {holdedProformaId && (
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={attachProforma}
+                      onChange={(e) => setAttachProforma(e.target.checked)}
+                      className="h-4 w-4 rounded border-input text-blue-600 focus:ring-blue-500"
+                    />
+                    Presupuesto PDF
+                  </label>
+                )}
+                {emailResources.filter((r) => r.type === "archivo").map((r) => (
+                  <label key={r.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={attachedResources.has(r.id)}
+                      onChange={(e) => {
+                        setAttachedResources((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(r.id);
+                          else next.delete(r.id);
+                          return next;
+                        });
+                      }}
+                      className="h-4 w-4 rounded border-input text-emerald-600 focus:ring-emerald-500"
+                    />
+                    {r.title}
+                  </label>
+                ))}
+              </div>
               <Button
                 onClick={handleSend}
                 disabled={isPending || !emailTo.trim() || !emailSubject.trim() || !emailBody.trim()}

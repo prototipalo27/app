@@ -703,7 +703,8 @@ export async function sendLeadEmail(
   body: string,
   replyToMessageId?: string,
   threadId?: string,
-  attachProforma?: boolean
+  attachProforma?: boolean,
+  resourceAttachments?: { title: string; url: string }[]
 ): Promise<{ success: boolean; error?: string; scheduled?: boolean }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -752,6 +753,39 @@ export async function sendLeadEmail(
         attachments = [{ filename: "Presupuesto-Prototipalo.pdf", content: pdf, contentType: "application/pdf" }];
       } catch {
         // Non-fatal: send without attachment if PDF download fails
+      }
+    }
+  }
+
+  // Attach resource files (from URLs)
+  if (resourceAttachments?.length) {
+    if (!attachments) attachments = [];
+    for (const res of resourceAttachments) {
+      try {
+        // For Google Drive links, convert to direct download URL
+        let downloadUrl = res.url;
+        const driveMatch = downloadUrl.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+        if (driveMatch) {
+          downloadUrl = `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
+        }
+
+        const response = await fetch(downloadUrl);
+        if (!response.ok) continue;
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get("content-type") || "application/octet-stream";
+
+        // Derive filename from title
+        const ext = contentType.includes("pdf") ? ".pdf"
+          : contentType.includes("png") ? ".png"
+          : contentType.includes("jpeg") || contentType.includes("jpg") ? ".jpg"
+          : contentType.includes("svg") ? ".svg"
+          : "";
+        const filename = res.title.replace(/[^a-zA-Z0-9._\- ]/g, "") + ext;
+
+        attachments.push({ filename, content: buffer, contentType });
+      } catch {
+        // Non-fatal: skip failed downloads
       }
     }
   }
