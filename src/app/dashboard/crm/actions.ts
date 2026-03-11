@@ -768,7 +768,18 @@ export async function sendLeadEmail(
         if (driveMatch) {
           // Use authenticated Drive API for proper binary download
           const file = await downloadFile(driveMatch[1]);
-          const filename = file.name || res.title.replace(/[^a-zA-Z0-9._\- ]/g, "");
+          let filename = file.name || res.title.replace(/[^a-zA-Z0-9._\- ]/g, "");
+          // Ensure filename has correct extension for Gmail preview
+          const mimeToExt: Record<string, string> = {
+            "application/pdf": ".pdf",
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/svg+xml": ".svg",
+          };
+          const expectedExt = mimeToExt[file.mimeType];
+          if (expectedExt && !filename.toLowerCase().endsWith(expectedExt)) {
+            filename += expectedExt;
+          }
           attachments.push({ filename, content: file.buffer, contentType: file.mimeType });
         } else {
           // Non-Drive URL: fetch directly
