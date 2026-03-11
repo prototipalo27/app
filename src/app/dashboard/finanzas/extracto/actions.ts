@@ -163,20 +163,28 @@ export async function saveStatement(
   await requireRole("manager");
   const supabase = await createClient();
 
+  // Check if a placeholder row exists (to preserve drive_folder_id)
+  const { data: existing } = await supabase
+    .from("bank_statements")
+    .select("drive_folder_id")
+    .eq("month", month)
+    .eq("year", year)
+    .maybeSingle();
+
+  const row = {
+    month,
+    year,
+    file_name: fileName,
+    transactions: JSON.parse(JSON.stringify(transactions)),
+    total_count: totalCount,
+    pending_count: pendingCount,
+    updated_at: new Date().toISOString(),
+    ...(existing?.drive_folder_id ? { drive_folder_id: existing.drive_folder_id } : {}),
+  };
+
   const { error } = await supabase
     .from("bank_statements")
-    .upsert(
-      {
-        month,
-        year,
-        file_name: fileName,
-        transactions: JSON.parse(JSON.stringify(transactions)),
-        total_count: totalCount,
-        pending_count: pendingCount,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "month,year" }
-    );
+    .upsert(row, { onConflict: "month,year" });
 
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard/finanzas/extracto");
@@ -245,7 +253,7 @@ export async function getOrCreateMonthFolder(month: number, year: number): Promi
       .select("drive_folder_id")
       .eq("month", month)
       .eq("year", year)
-      .single();
+      .maybeSingle();
 
     if (existing?.drive_folder_id) {
       return { success: true, folderId: existing.drive_folder_id };
@@ -256,12 +264,19 @@ export async function getOrCreateMonthFolder(month: number, year: number): Promi
     const monthFolderName = MONTH_NAMES_ES[month - 1];
     const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
 
-    // Cache the folder ID
-    await supabase
-      .from("bank_statements")
-      .update({ drive_folder_id: monthFolderId })
-      .eq("month", month)
-      .eq("year", year);
+    if (existing) {
+      // Row exists but no drive_folder_id — just update
+      await supabase
+        .from("bank_statements")
+        .update({ drive_folder_id: monthFolderId })
+        .eq("month", month)
+        .eq("year", year);
+    } else {
+      // No row — create placeholder
+      await supabase
+        .from("bank_statements")
+        .insert({ month, year, drive_folder_id: monthFolderId, total_count: 0, pending_count: 0, transactions: [] });
+    }
 
     return { success: true, folderId: monthFolderId };
   } catch (err) {

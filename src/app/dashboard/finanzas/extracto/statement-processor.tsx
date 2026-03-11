@@ -90,13 +90,14 @@ interface ClaimHistoryItem {
 }
 
 export interface StatementSummary {
-  id: string;
+  id?: string;
   month: number;
   year: number;
   file_name: string | null;
   total_count: number;
   pending_count: number;
   drive_folder_id: string | null;
+  checked_vendors?: unknown[];
   created_at: string | null;
   updated_at: string | null;
 }
@@ -385,14 +386,18 @@ export default function StatementProcessor({
         setError(result.error);
         return;
       }
-      // Update local cache
-      setStatements((prev) =>
-        prev.map((s) =>
-          s.month === month && s.year === selectedYear
-            ? { ...s, drive_folder_id: result.folderId }
-            : s
-        )
-      );
+      // Update local cache (add placeholder if needed)
+      setStatements((prev) => {
+        const exists = prev.some((s) => s.month === month && s.year === selectedYear);
+        if (exists) {
+          return prev.map((s) =>
+            s.month === month && s.year === selectedYear
+              ? { ...s, drive_folder_id: result.folderId }
+              : s
+          );
+        }
+        return [...prev, { month, year: selectedYear, file_name: null, total_count: 0, pending_count: 0, drive_folder_id: result.folderId, checked_vendors: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+      });
       window.open(`https://drive.google.com/drive/folders/${result.folderId}`, "_blank");
     },
     [selectedYear]
@@ -494,25 +499,30 @@ export default function StatementProcessor({
   const driveFileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFilesToDrive = useCallback(
-    async (files: File[]) => {
-      if (!activeMonth || files.length === 0) return;
+    async (files: File[], targetMonth?: number) => {
+      const month = targetMonth ?? activeMonth;
+      if (!month || files.length === 0) return;
 
       // Get or create Drive folder
-      const folderResult = await getOrCreateMonthFolder(activeMonth, selectedYear);
+      const folderResult = await getOrCreateMonthFolder(month, selectedYear);
       if (!folderResult.success) {
         setError(folderResult.error);
         return;
       }
       const folderId = folderResult.folderId;
 
-      // Update local cache
-      setStatements((prev) =>
-        prev.map((s) =>
-          s.month === activeMonth && s.year === selectedYear
-            ? { ...s, drive_folder_id: folderId }
-            : s
-        )
-      );
+      // Update local cache (add placeholder if needed)
+      setStatements((prev) => {
+        const exists = prev.some((s) => s.month === month && s.year === selectedYear);
+        if (exists) {
+          return prev.map((s) =>
+            s.month === month && s.year === selectedYear
+              ? { ...s, drive_folder_id: folderId }
+              : s
+          );
+        }
+        return [...prev, { month, year: selectedYear, file_name: null, total_count: 0, pending_count: 0, drive_folder_id: folderId, checked_vendors: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+      });
 
       const newUploads: DriveUpload[] = files.map((f) => ({ name: f.name, status: "uploading" as const }));
       setDriveUploads(newUploads);
@@ -740,19 +750,23 @@ export default function StatementProcessor({
             {MONTH_NAMES.map((name, i) => {
               const month = i + 1;
               const stmt = getMonthStatement(month);
+              const hasStatement = stmt && stmt.total_count > 0;
+              const hasDriveFolder = stmt?.drive_folder_id;
 
               return (
                 <div
                   key={month}
                   className={`group relative rounded-xl border p-4 transition-colors ${
-                    stmt
+                    hasStatement
                       ? "border-green-200 bg-green-50/50 dark:border-green-800/50 dark:bg-green-900/10"
-                      : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                      : hasDriveFolder
+                        ? "border-blue-200 bg-blue-50/50 dark:border-blue-800/50 dark:bg-blue-900/10"
+                        : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
                   }`}
                 >
                   <p className="text-sm font-semibold text-zinc-900 dark:text-white">{name}</p>
 
-                  {stmt ? (
+                  {hasStatement ? (
                     <>
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                         {stmt.total_count} mov.
@@ -804,9 +818,12 @@ export default function StatementProcessor({
                       </div>
                     </>
                   ) : (
-                    <div className="mt-3">
+                    <div className="mt-3 flex flex-col gap-1.5">
+                      {hasDriveFolder && (
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400">Carpeta creada</p>
+                      )}
                       <label className="block cursor-pointer rounded-lg border border-dashed border-zinc-300 px-2 py-3 text-center text-xs text-zinc-400 hover:border-green-400 hover:text-green-600 dark:border-zinc-700 dark:hover:border-green-600 dark:hover:text-green-400">
-                        Subir
+                        Subir extracto
                         <input
                           type="file"
                           accept=".xlsx,.xls"
@@ -815,6 +832,34 @@ export default function StatementProcessor({
                           disabled={loading}
                         />
                       </label>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleOpenDriveFolder(month)}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                          </svg>
+                          Carpeta
+                        </button>
+                        <label className="flex cursor-pointer items-center justify-center gap-1 rounded-lg border border-blue-300 px-2 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20">
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          PDF
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            multiple
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              if (files.length > 0) uploadFilesToDrive(files, month);
+                              e.target.value = "";
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
