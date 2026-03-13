@@ -4,6 +4,7 @@ import { useState } from "react";
 import SheetCalculator from "./calculators/sheet-calculator";
 import MaterialCalculator from "./calculators/material-calculator";
 import MrwCalculator from "./calculators/mrw-calculator";
+import MoldCalculator from "./calculators/mold-calculator";
 
 const CALCULATORS = [
   {
@@ -38,6 +39,17 @@ const CALCULATORS = [
       </svg>
     ),
     component: MrwCalculator,
+  },
+  {
+    id: "mold",
+    title: "Moldes y Material",
+    description: "Calcula silicona y yeso necesarios según dimensiones de la pieza",
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+    component: MoldCalculator,
   },
 ];
 
