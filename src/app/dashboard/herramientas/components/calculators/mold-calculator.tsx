@@ -4,21 +4,21 @@ import { useState } from "react";
 
 // Densidades típicas (g/cm³)
 const SILICONE_DENSITY = 1.15; // Silicona de moldeo (RTV)
-const PLASTER_DENSITY = 1.6; // Yeso de moldeo mezclado
+const PLASTER_DENSITY = 1.44; // Yeso de moldeo (calibrado: 14.5×8×1.5 cm → 250 g)
 
 export default function MoldCalculator() {
   const [length, setLength] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [siliconeWall, setSiliconeWall] = useState("15"); // mm
-  const [plasterWall, setPlasterWall] = useState("30"); // mm
+  const [quantity, setQuantity] = useState("1");
   const [margin, setMargin] = useState("10"); // %
 
   const l = parseFloat(length) || 0; // cm
   const w = parseFloat(width) || 0;  // cm
   const h = parseFloat(height) || 0; // cm
   const sw = (parseFloat(siliconeWall) || 0) / 10; // mm → cm
-  const pw = (parseFloat(plasterWall) || 0) / 10;  // mm → cm
+  const qty = parseInt(quantity) || 1;
   const m = parseFloat(margin) || 0;
 
   const pieceVolume = l * w * h; // cm³
@@ -31,17 +31,21 @@ export default function MoldCalculator() {
   const siliconeVolume = silOuterVol - pieceVolume;
   const siliconeWeight = siliconeVolume * SILICONE_DENSITY;
 
-  // Yeso: caja exterior - pieza (molde abierto por arriba)
-  const plaOuterL = l + pw * 2;
-  const plaOuterW = w + pw * 2;
-  const plaOuterH = h + pw; // fondo + laterales, abierto arriba
-  const plaOuterVol = plaOuterL * plaOuterW * plaOuterH;
-  const plasterVolume = plaOuterVol - pieceVolume;
-  const plasterWeight = plasterVolume * PLASTER_DENSITY;
+  // Yeso: bloque macizo del tamaño de la pieza (lo que rellena el molde)
+  const plasterWeight = pieceVolume * PLASTER_DENSITY;
 
   const hasDimensions = l > 0 && w > 0 && h > 0;
 
   const applyMargin = (val: number) => val * (1 + m / 100);
+
+  const formatWeight = (grams: number) =>
+    grams >= 1000
+      ? `${(grams / 1000).toFixed(2)} kg`
+      : `${grams.toFixed(0)} g`;
+
+  // Totales con cantidad y margen
+  const totalSilicone = applyMargin(siliconeWeight) * qty;
+  const totalPlaster = applyMargin(plasterWeight) * qty;
 
   return (
     <div className="space-y-4">
@@ -79,7 +83,7 @@ export default function MoldCalculator() {
         </div>
       )}
 
-      {/* Grosor de pared */}
+      {/* Pared silicona + Cantidad */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -97,16 +101,16 @@ export default function MoldCalculator() {
         </div>
         <div>
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Pared yeso (mm)
+            Cantidad (moldes/piezas)
           </label>
           <input
             type="number"
-            min="0"
+            min="1"
             step="1"
-            value={plasterWall}
-            onChange={(e) => setPlasterWall(e.target.value)}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-            placeholder="30"
+            placeholder="1"
           />
         </div>
       </div>
@@ -136,13 +140,11 @@ export default function MoldCalculator() {
               Silicona RTV
             </p>
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
-              {applyMargin(siliconeWeight) >= 1000
-                ? `${(applyMargin(siliconeWeight) / 1000).toFixed(2)} kg`
-                : `${applyMargin(siliconeWeight).toFixed(0)} g`}
+              {formatWeight(totalSilicone)}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Volumen molde: {siliconeVolume.toFixed(1)} cm³ ·
-              Densidad: {SILICONE_DENSITY} g/cm³
+              {formatWeight(applyMargin(siliconeWeight))}/molde
+              {qty > 1 && ` × ${qty} moldes`}
               {m > 0 && ` · +${m}% margen`}
             </p>
           </div>
@@ -150,16 +152,14 @@ export default function MoldCalculator() {
           {/* Yeso */}
           <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-              Yeso de moldeo
+              Yeso (macizo)
             </p>
             <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-              {applyMargin(plasterWeight) >= 1000
-                ? `${(applyMargin(plasterWeight) / 1000).toFixed(2)} kg`
-                : `${applyMargin(plasterWeight).toFixed(0)} g`}
+              {formatWeight(totalPlaster)}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Volumen molde: {plasterVolume.toFixed(1)} cm³ ·
-              Densidad: {PLASTER_DENSITY} g/cm³
+              {formatWeight(applyMargin(plasterWeight))}/pieza
+              {qty > 1 && ` × ${qty} piezas`}
               {m > 0 && ` · +${m}% margen`}
             </p>
           </div>
