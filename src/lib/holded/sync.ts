@@ -239,6 +239,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
 
     // Try to find matching invoice by contact + total
     let invoiceId: string | null = null;
+    let invoiceDocNum: string | null = null;
     try {
       if (project.holded_contact_id) {
         const invoices = await listDocuments("invoice", {
@@ -247,7 +248,10 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         const match = invoices.find(
           (inv) => Math.abs(inv.total - (project.price ?? 0)) < 0.01,
         );
-        if (match) invoiceId = match.id;
+        if (match) {
+          invoiceId = match.id;
+          invoiceDocNum = match.docNumber || null;
+        }
       }
     } catch {
       // Invoice lookup failed — still convert the project
@@ -258,6 +262,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
       .update({
         project_type: "confirmed",
         holded_invoice_id: invoiceId,
+        invoice_doc_number: invoiceDocNum,
         updated_at: new Date().toISOString(),
       })
       .eq("id", project.id);
@@ -301,6 +306,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         client_name: invoice.contactName,
         holded_contact_id: invoice.contact,
         holded_invoice_id: invoice.id,
+        invoice_doc_number: invoice.docNumber || null,
         invoice_date: invoice.date
           ? new Date(invoice.date * 1000).toISOString().slice(0, 10)
           : null,
@@ -414,16 +420,20 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
   }
   const invoiceDateMap = new Map<string, string>();
+  const invoiceDocNumMap = new Map<string, string>();
   for (const inv of allInvoices) {
     if (inv.date) {
       invoiceDateMap.set(inv.id, new Date(inv.date * 1000).toISOString().slice(0, 10));
+    }
+    if (inv.docNumber) {
+      invoiceDocNumMap.set(inv.id, inv.docNumber);
     }
   }
 
   const { data: missingDateProjects } = await supabase
     .from("projects")
-    .select("id, holded_proforma_id, holded_invoice_id")
-    .is("invoice_date", null)
+    .select("id, holded_proforma_id, holded_invoice_id, invoice_doc_number")
+    .or("invoice_date.is.null,invoice_doc_number.is.null")
     .or("holded_proforma_id.not.is.null,holded_invoice_id.not.is.null");
 
   for (const proj of missingDateProjects ?? []) {
@@ -434,11 +444,18 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
       ? proformaDateMap.get(proj.holded_proforma_id)
       : undefined;
     const resolvedDate = dateFromInvoice ?? dateFromProforma;
+    const resolvedDocNum = proj.holded_invoice_id
+      ? invoiceDocNumMap.get(proj.holded_invoice_id)
+      : undefined;
 
-    if (resolvedDate) {
+    const updates: Record<string, string> = {};
+    if (resolvedDate && !proj.invoice_doc_number) updates.invoice_date = resolvedDate;
+    if (resolvedDocNum && !proj.invoice_doc_number) updates.invoice_doc_number = resolvedDocNum;
+
+    if (Object.keys(updates).length > 0) {
       await supabase
         .from("projects")
-        .update({ invoice_date: resolvedDate })
+        .update(updates)
         .eq("id", proj.id);
     }
   }

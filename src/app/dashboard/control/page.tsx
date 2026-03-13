@@ -90,8 +90,6 @@ export default async function ControlPage() {
     { data: purchaseItems },
     { data: fixedExpenses },
     { data: taxPayments },
-    { data: curBillingProjects },
-    { data: prevBillingProjects },
     { data: leadsRaw },
   ] = await Promise.all([
     supabase
@@ -110,20 +108,6 @@ export default async function ControlPage() {
     supabase.from("fixed_expenses").select("id, amount, frequency").eq("is_active", true),
     supabase.from("tax_payments").select("model, period, due_date, status").order("due_date"),
     supabase
-      .from("projects")
-      .select("id, name, client_name, price, invoice_date")
-      .not("price", "is", null)
-      .not("invoice_date", "is", null)
-      .gte("invoice_date", curStart)
-      .lt("invoice_date", nextStart),
-    supabase
-      .from("projects")
-      .select("id, name, client_name, price, invoice_date")
-      .not("price", "is", null)
-      .not("invoice_date", "is", null)
-      .gte("invoice_date", prevStart)
-      .lt("invoice_date", curStart),
-    supabase
       .from("leads")
       .select("created_at")
       .gte("created_at", thirtyDaysAgo.toISOString())
@@ -131,6 +115,14 @@ export default async function ControlPage() {
   ]);
 
   const allProjects = projects ?? [];
+
+  // Derive billing projects from the single projects query (replaces 2 extra queries)
+  const curBillingProjects = allProjects.filter(
+    (p) => p.price != null && p.invoice_date != null && p.invoice_date >= curStart && p.invoice_date < nextStart
+  );
+  const prevBillingProjects = allProjects.filter(
+    (p) => p.price != null && p.invoice_date != null && p.invoice_date >= prevStart && p.invoice_date < curStart
+  );
   const allItems = projectItems ?? [];
   const allJobs = printJobs ?? [];
   const allPrinters = printers ?? [];
@@ -187,8 +179,8 @@ export default async function ControlPage() {
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
   ];
 
-  const curBillingList = curBillingProjects ?? [];
-  const prevBillingList = prevBillingProjects ?? [];
+  const curBillingList = curBillingProjects;
+  const prevBillingList = prevBillingProjects;
   const revenueThisMonth = curBillingList.reduce((s, p) => s + (p.price ?? 0), 0);
   const revenueLastMonth = prevBillingList.reduce((s, p) => s + (p.price ?? 0), 0);
   const revenueDelta =

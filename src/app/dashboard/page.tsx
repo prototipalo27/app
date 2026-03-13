@@ -6,7 +6,6 @@ import { UpcomingProjects } from "./upcoming-projects";
 import { RealtimeProjectsListener } from "./realtime-projects";
 import { SyncHoldedButton } from "./sync-holded-button";
 import { AutoSync } from "./auto-sync";
-import { listDocuments } from "@/lib/holded/api";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -59,15 +58,12 @@ export default async function DashboardPage() {
     pmNames[id] = name;
   }
 
-  // Build holded invoice id → docNumber map
+  // Build holded invoice id → docNumber map from persisted data
   const invoiceDocNumbers: Record<string, string> = {};
-  try {
-    const invoices = await listDocuments("invoice");
-    for (const inv of invoices) {
-      invoiceDocNumbers[inv.id] = inv.docNumber;
+  for (const p of [...(upcomingProjects ?? []), ...(confirmedProjects ?? [])]) {
+    if (p.holded_invoice_id && p.invoice_doc_number) {
+      invoiceDocNumbers[p.holded_invoice_id] = p.invoice_doc_number;
     }
-  } catch {
-    // Holded API error — continue without doc numbers
   }
 
   return (

@@ -232,9 +232,9 @@ export default function MobileSidebar({
             Envíos
           </Link>
 
-          {/* ── TAREAS ── */}
+          {/* ── EQUIPO ── */}
           <p className="mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
-            Tareas
+            Equipo
           </p>
           <Link
             href="/dashboard/tareas"
@@ -255,11 +255,6 @@ export default function MobileSidebar({
               </span>
             )}
           </Link>
-
-          {/* ── EQUIPO ── */}
-          <p className="mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
-            Equipo
-          </p>
           <Link
             href="/dashboard/equipo"
             onClick={handleNavClick}
@@ -273,6 +268,20 @@ export default function MobileSidebar({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
             Equipo
+          </Link>
+          <Link
+            href="/dashboard/requests"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/requests")
+                ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+                : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Solicitudes
           </Link>
 
           {/* ── COMPRAS ── */}
@@ -311,6 +320,20 @@ export default function MobileSidebar({
               </Link>
             )}
           </div>
+          <Link
+            href="/dashboard/herramientas"
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/herramientas")
+                ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+                : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+            </svg>
+            Herramientas
+          </Link>
 
           {/* ── FINANZAS ── */}
           {isManager && (
