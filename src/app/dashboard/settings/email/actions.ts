@@ -9,35 +9,40 @@ import nodemailer from "nodemailer";
 const PATH = "/dashboard/settings/email";
 
 export async function saveSmtpSettings(formData: FormData): Promise<{ success: boolean; error?: string }> {
-  const profile = await requireRole("manager");
-  const supabase = await createClient();
+  try {
+    const profile = await requireRole("manager");
+    const supabase = await createClient();
 
-  const smtpEmail = (formData.get("smtp_email") as string)?.trim();
-  const smtpPassword = (formData.get("smtp_password") as string)?.trim();
-  const displayName = (formData.get("display_name") as string)?.trim();
-  const signatureHtml = (formData.get("signature_html") as string)?.trim() || null;
+    const smtpEmail = (formData.get("smtp_email") as string)?.trim();
+    const smtpPassword = (formData.get("smtp_password") as string)?.trim();
+    const displayName = (formData.get("display_name") as string)?.trim();
+    const signatureHtml = (formData.get("signature_html") as string)?.trim() || null;
 
-  if (!smtpEmail || !smtpPassword || !displayName) {
-    return { success: false, error: "Email, contraseña y nombre son obligatorios" };
+    if (!smtpEmail || !smtpPassword || !displayName) {
+      return { success: false, error: "Email, contraseña y nombre son obligatorios" };
+    }
+
+    const encryptedPassword = encrypt(smtpPassword);
+
+    const { error } = await supabase
+      .from("user_smtp_settings")
+      .upsert({
+        user_id: profile.id,
+        smtp_email: smtpEmail,
+        smtp_password_encrypted: encryptedPassword,
+        display_name: displayName,
+        signature_html: signatureHtml,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath(PATH);
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error inesperado al guardar";
+    return { success: false, error: message };
   }
-
-  const encryptedPassword = encrypt(smtpPassword);
-
-  const { error } = await supabase
-    .from("user_smtp_settings")
-    .upsert({
-      user_id: profile.id,
-      smtp_email: smtpEmail,
-      smtp_password_encrypted: encryptedPassword,
-      display_name: displayName,
-      signature_html: signatureHtml,
-      updated_at: new Date().toISOString(),
-    });
-
-  if (error) return { success: false, error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true };
 }
 
 export async function testSmtpConnection(formData: FormData): Promise<{ success: boolean; error?: string }> {
