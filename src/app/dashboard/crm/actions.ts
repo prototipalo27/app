@@ -53,7 +53,7 @@ async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined
     .from("user_smtp_settings")
     .select("smtp_email, smtp_password_encrypted, display_name, signature_html")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
   if (!data) return undefined;
 
