@@ -120,42 +120,9 @@ export async function sendEmailOrSchedule(
   options: SendEmailOptions,
   meta?: { createdBy?: string; leadId?: string; forceNow?: boolean }
 ): Promise<{ scheduled: boolean; messageId?: string }> {
-  const hour = getMadridHour();
-
-  if (meta?.forceNow || (hour >= EMAIL_MIN_HOUR && hour < EMAIL_MAX_HOUR)) {
-    // During allowed hours (8:00–19:59) → send immediately
-    const result = await sendEmail(options);
-    return { scheduled: false, messageId: result.messageId };
-  }
-
-  // Outside window → schedule for next 8:00 AM Madrid
-  const { createServiceClient } = await import("@/lib/supabase/server");
-  const supabase = createServiceClient();
-
-  // Calculate next 8:00 AM Madrid time
-  const now = new Date();
-  const madridStr = now.toLocaleString("en-US", { timeZone: "Europe/Madrid" });
-  const madridNow = new Date(madridStr);
-  const sendAt = new Date(madridNow);
-  sendAt.setHours(EMAIL_MIN_HOUR, 0, 0, 0);
-  // If somehow it's already past 8am in Madrid (shouldn't happen given the check), push to tomorrow
-  if (sendAt <= madridNow) {
-    sendAt.setDate(sendAt.getDate() + 1);
-  }
-
-  // Convert back to UTC for storage: calculate the offset
-  const offsetMs = now.getTime() - madridNow.getTime();
-  const sendAtUtc = new Date(sendAt.getTime() + offsetMs);
-
-  const payload = serializeEmailPayload(options);
-
-  await (supabase as any).from("scheduled_emails").insert({
-    send_at: sendAtUtc.toISOString(),
-    payload,
-    created_by: meta?.createdBy || null,
-  });
-
-  return { scheduled: true };
+  // Always send immediately (time restrictions removed)
+  const result = await sendEmail(options);
+  return { scheduled: false, messageId: result.messageId };
 }
 
 export async function sendEmail(options: SendEmailOptions) {
