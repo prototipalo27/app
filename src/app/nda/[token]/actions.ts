@@ -133,8 +133,10 @@ interface NdaPdfData {
 }
 
 async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
-  const pdfMake = (await import("pdfmake/build/pdfmake")).default;
-  const pdfFonts = (await import("pdfmake/build/vfs_fonts")).default;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfMake = (await import("pdfmake/build/pdfmake")).default as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfFonts = (await import("pdfmake/build/vfs_fonts")).default as any;
   pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts.vfs;
 
   const signedDate = data.signedAt.toLocaleDateString("es-ES", {
@@ -288,11 +290,13 @@ async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   };
 
   return new Promise((resolve, reject) => {
-    const pdfDoc = pdfMake.createPdf(docDefinition as any);
-    pdfDoc.getBuffer((buffer: Buffer) => {
-      resolve(Buffer.from(buffer));
-    }, (error: unknown) => {
+    try {
+      const pdfDoc = pdfMake.createPdf(docDefinition);
+      pdfDoc.getBuffer((buffer: Uint8Array) => {
+        resolve(Buffer.from(buffer));
+      });
+    } catch (error) {
       reject(error);
-    });
+    }
   });
 }
