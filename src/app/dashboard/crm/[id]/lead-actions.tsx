@@ -18,6 +18,7 @@ import {
   createLeadProforma,
   updateLeadOwner,
   sendQuoteToClient,
+  sendNdaToClient,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { HoldedDocument } from "@/lib/holded/types";
@@ -59,6 +60,9 @@ interface LeadActionsProps {
     commission: number;
     prepaidBonus: number;
   } | null;
+  ndaStatus: "none" | "pending" | "signed";
+  ndaSignedAt?: string;
+  ndaSignerName?: string;
 }
 
 export default function LeadActions({
@@ -80,6 +84,9 @@ export default function LeadActions({
   nextId,
   ownedBy,
   commission,
+  ndaStatus,
+  ndaSignedAt,
+  ndaSignerName,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -96,6 +103,7 @@ export default function LeadActions({
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
+  const [ndaError, setNdaError] = useState<string | null>(null);
 
   const selectClass =
     "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
@@ -232,6 +240,66 @@ export default function LeadActions({
           </div>
         </div>
       )}
+
+      {/* NDA */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
+          Confidencialidad
+        </h3>
+        {ndaStatus === "signed" ? (
+          <div className="space-y-1">
+            <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              NDA firmado
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              {ndaSignerName && <>{ndaSignerName} — </>}
+              {ndaSignedAt && new Date(ndaSignedAt).toLocaleDateString("es-ES", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </p>
+          </div>
+        ) : ndaStatus === "pending" ? (
+          <div className="space-y-1">
+            <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+              NDA pendiente de firma
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              Enviado, esperando firma del cliente.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {leadEmail ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setNdaError(null);
+                  startTransition(async () => {
+                    const result = await sendNdaToClient(leadId);
+                    if (!result.success) {
+                      setNdaError(result.error || "Error al enviar el NDA");
+                    }
+                    router.refresh();
+                  });
+                }}
+                disabled={isPending}
+                className="block bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                {isPending ? "Enviando..." : "Enviar NDA al cliente"}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                El lead necesita un email para enviar el NDA.
+              </p>
+            )}
+          </div>
+        )}
+        {ndaError && (
+          <p className="mt-1 text-xs text-destructive">{ndaError}</p>
+        )}
+      </div>
 
       {/* Assign */}
       <div>

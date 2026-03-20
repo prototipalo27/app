@@ -16,7 +16,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
-import { getBasePrices, getCommissionSummary } from "../actions";
+import { getBasePrices, getCommissionSummary, getNdaStatus } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -71,7 +71,10 @@ export default async function LeadDetailPage({
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  const commission = await getCommissionSummary(id);
+  const [commission, ndaStatusResult] = await Promise.all([
+    getCommissionSummary(id),
+    getNdaStatus(id),
+  ]);
 
   const userIds = [
     ...new Set([
@@ -460,6 +463,9 @@ export default async function LeadDetailPage({
               nextId={nextId}
               ownedBy={lead.owned_by}
               commission={commission}
+              ndaStatus={ndaStatusResult.status}
+              ndaSignedAt={ndaStatusResult.signed_at}
+              ndaSignerName={ndaStatusResult.signer_name}
             />
           </CardContent>
         </Card>

@@ -175,6 +175,46 @@ export async function updateContact(
   return (await res.json()) as { id: string };
 }
 
+// ── Payment methods ───────────────────────────────────────
+
+/** List payment methods from Holded */
+export async function listPaymentMethods(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  const res = await fetch(`${HOLDED_API_BASE}/paymentmethods`, {
+    headers: { key: getApiKey() },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Holded API error: ${res.status} ${res.statusText}`);
+  }
+
+  return (await res.json()) as Array<{ id: string; name: string }>;
+}
+
+/** Get the payment method ID for "Transferencia bancaria" (cached per process) */
+let cachedTransferMethodId: string | null = null;
+
+export async function getTransferPaymentMethodId(): Promise<string | null> {
+  if (cachedTransferMethodId) return cachedTransferMethodId;
+
+  try {
+    const methods = await listPaymentMethods();
+    const transfer = methods.find((m) =>
+      m.name.toLowerCase().includes("transferencia"),
+    );
+    if (transfer) {
+      cachedTransferMethodId = transfer.id;
+      return transfer.id;
+    }
+  } catch {
+    // Silently fail — proforma will be created without payment method
+  }
+
+  return null;
+}
+
 // ── Documents (write) ─────────────────────────────────────
 
 /** Create a proforma for a contact, optionally with line items */
@@ -191,9 +231,13 @@ export async function createProforma(
     notes?: string;
   },
 ): Promise<{ id: string }> {
+  // Resolve payment method ID (Transferencia bancaria) before building body
+  const paymentMethodId = await getTransferPaymentMethodId();
+
   const body: Record<string, unknown> = {
     contactId,
     date: Math.floor(Date.now() / 1000),
+    ...(paymentMethodId && { paymentMethodId }),
   };
 
   if (options?.items && options.items.length > 0) {

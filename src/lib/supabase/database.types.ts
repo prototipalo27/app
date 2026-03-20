@@ -506,6 +506,7 @@ export type Database = {
           contact_type: string | null
           country: string | null
           country_code: string | null
+          created_at: string | null
           email: string | null
           holded_id: string
           mobile: string | null
@@ -526,6 +527,7 @@ export type Database = {
           contact_type?: string | null
           country?: string | null
           country_code?: string | null
+          created_at?: string | null
           email?: string | null
           holded_id: string
           mobile?: string | null
@@ -546,6 +548,7 @@ export type Database = {
           contact_type?: string | null
           country?: string | null
           country_code?: string | null
+          created_at?: string | null
           email?: string | null
           holded_id?: string
           mobile?: string | null
@@ -557,6 +560,24 @@ export type Database = {
           province?: string | null
           trade_name?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      holded_contacts_excluded: {
+        Row: {
+          excluded_at: string | null
+          holded_id: string
+          name: string | null
+        }
+        Insert: {
+          excluded_at?: string | null
+          holded_id: string
+          name?: string | null
+        }
+        Update: {
+          excluded_at?: string | null
+          holded_id?: string
+          name?: string | null
         }
         Relationships: []
       }
@@ -893,6 +914,78 @@ export type Database = {
           {
             foreignKeyName: "leads_owned_by_fkey"
             columns: ["owned_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nda_agreements: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string
+          sent_by: string | null
+          signature_data: string | null
+          signed_at: string | null
+          signer_address: string | null
+          signer_company: string | null
+          signer_email: string | null
+          signer_ip: string | null
+          signer_name: string | null
+          signer_nif: string | null
+          signer_user_agent: string | null
+          status: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id: string
+          sent_by?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signer_address?: string | null
+          signer_company?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_nif?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string
+          sent_by?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signer_address?: string | null
+          signer_company?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_nif?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nda_agreements_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_agreements_sent_by_fkey"
+            columns: ["sent_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
@@ -1393,8 +1486,8 @@ export type Database = {
           holded_invoice_id: string | null
           holded_proforma_id: string | null
           id: string
-          invoice_doc_number: string | null
           invoice_date: string | null
+          invoice_doc_number: string | null
           lead_id: string | null
           material: string | null
           name: string
@@ -1428,8 +1521,8 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
-          invoice_doc_number?: string | null
           invoice_date?: string | null
+          invoice_doc_number?: string | null
           lead_id?: string | null
           material?: string | null
           name: string
@@ -1463,8 +1556,8 @@ export type Database = {
           holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
-          invoice_doc_number?: string | null
           invoice_date?: string | null
+          invoice_doc_number?: string | null
           lead_id?: string | null
           material?: string | null
           name?: string
@@ -2665,6 +2758,13 @@ export type Database = {
         Returns: number
       }
       get_base_price: { Args: { tag: string }; Returns: number }
+      get_last_activity_per_lead: {
+        Args: { lead_ids: string[] }
+        Returns: {
+          last_at: string
+          lead_id: string
+        }[]
+      }
       get_quantity_midpoint: { Args: { q: string }; Returns: number }
       get_user_role: { Args: never; Returns: string }
       increment_printing_seconds: {
@@ -2815,4 +2915,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
