@@ -584,9 +584,9 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
                 <div className="min-w-0 shrink-0 basis-44">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {lead.full_name}
-                    <span className={`ml-1.5 text-[11px] font-normal ${agingClasses(lead.created_at)}`}>
+                    <span className={`ml-1.5 text-[11px] font-normal ${agingClasses(lead.last_activity_at || lead.created_at)}`}>
                       {(() => {
-                        const diff = Date.now() - new Date(lead.created_at).getTime();
+                        const diff = Date.now() - new Date(lead.last_activity_at || lead.created_at).getTime();
                         const mins = Math.floor(diff / 60000);
                         if (mins < 60) return `${mins}m`;
                         const hours = Math.floor(mins / 60);

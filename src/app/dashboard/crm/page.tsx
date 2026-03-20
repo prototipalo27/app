@@ -21,6 +21,25 @@ export default async function CrmPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
+  // Fetch last activity timestamp per lead for maturation tracking
+  const leadIds = (leads || []).map((l) => l.id);
+  let lastActivityMap = new Map<string, string>();
+  if (leadIds.length > 0) {
+    const { data: activities } = await supabase
+      .from("lead_activities")
+      .select("lead_id, created_at")
+      .in("lead_id", leadIds)
+      .order("created_at", { ascending: false });
+
+    if (activities) {
+      for (const a of activities) {
+        if (!lastActivityMap.has(a.lead_id)) {
+          lastActivityMap.set(a.lead_id, a.created_at);
+        }
+      }
+    }
+  }
+
   // Fetch managers for filter
   const { data: allManagers } = await supabase
     .from("user_profiles")
@@ -66,6 +85,7 @@ export default async function CrmPage() {
     ...l,
     assignee_email: l.assigned_to ? userEmailMap.get(l.assigned_to) || null : null,
     owner_email: l.owned_by ? userEmailMap.get(l.owned_by) || null : null,
+    last_activity_at: lastActivityMap.get(l.id) || null,
   }));
 
   return (
@@ -73,6 +93,12 @@ export default async function CrmPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/timeline" />}>
+            <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Maduración
+          </Button>
           <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/comisiones" />}>
             Comisiones
           </Button>

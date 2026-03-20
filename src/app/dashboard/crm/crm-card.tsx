@@ -11,6 +11,7 @@ export { tagClasses };
 export type LeadWithAssignee = Tables<"leads"> & {
   assignee_email?: string | null;
   owner_email?: string | null;
+  last_activity_at?: string | null;
 };
 
 interface CrmCardProps {
@@ -27,7 +28,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
-/** Returns Tailwind classes for lead aging badge based on time since last update */
+/** Returns Tailwind classes for lead aging badge based on time since last interaction */
 export function agingClasses(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const hours = diff / 3_600_000;
@@ -40,6 +41,19 @@ export function agingClasses(dateStr: string): string {
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
 }
 
+/** Maturation hint based on status + days since last interaction */
+function maturationHint(status: string, lastInteractionDate: string): { text: string; className: string } | null {
+  if (status === "new" || status === "won" || status === "lost") return null;
+  const days = (Date.now() - new Date(lastInteractionDate).getTime()) / 86_400_000;
+  if (days >= 7) {
+    return { text: "Buscar el no", className: "text-red-600 dark:text-red-400" };
+  }
+  if (days >= 3) {
+    return { text: "Enviar reminder", className: "text-amber-600 dark:text-amber-400" };
+  }
+  return null;
+}
+
 export function CrmCard({ lead }: CrmCardProps) {
   const router = useRouter();
   const { ref, isDragging } = useDraggable({
@@ -47,7 +61,10 @@ export function CrmCard({ lead }: CrmCardProps) {
     data: { status: lead.status },
   });
 
-  const age = timeAgo(lead.created_at);
+  // Use last interaction date if available, otherwise fall back to created_at
+  const interactionDate = lead.last_activity_at || lead.created_at;
+  const age = timeAgo(interactionDate);
+  const hint = maturationHint(lead.status, interactionDate);
 
   return (
     <div
@@ -70,7 +87,7 @@ export function CrmCard({ lead }: CrmCardProps) {
             </Badge>
           )}
         </div>
-        <Badge variant="secondary" className={agingClasses(lead.created_at)}>
+        <Badge variant="secondary" className={agingClasses(interactionDate)} title={lead.last_activity_at ? "Última interacción" : "Creado"}>
           {age}
         </Badge>
       </div>
@@ -105,8 +122,13 @@ export function CrmCard({ lead }: CrmCardProps) {
             </span>
           </div>
         )}
+        {hint && (
+          <span className={`ml-auto text-[10px] font-semibold ${hint.className}`}>
+            {hint.text}
+          </span>
+        )}
         {lead.estimated_value != null && (
-          <Badge variant="secondary" className="ml-auto bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+          <Badge variant="secondary" className={`${hint ? "" : "ml-auto"} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400`}>
             {lead.estimated_value.toLocaleString("es-ES")} €
           </Badge>
         )}
