@@ -33,7 +33,7 @@ interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
   managers: { id: string; name: string }[];
   owners: { id: string; name: string }[];
-  angelPreview?: CommissionPreview | null;
+  myCommission?: CommissionPreview | null;
 }
 
 function truncateWords(text: string, maxWords: number): string {
@@ -91,9 +91,9 @@ function CrmColumn({
 }
 
 // Default owner for filter
-const DEFAULT_OWNER = "angel";
+const DEFAULT_OWNER = "gonzalo";
 
-export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmKanbanProps) {
+export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
 
@@ -448,26 +448,26 @@ export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmK
       })()}
 
       {/* Angel's commission incentive banner — always visible */}
-      {angelPreview && (() => {
+      {myCommission && (() => {
         // Potential from all non-won/lost leads in view
         const openLeads = filteredLeads.filter(
           (l) => l.status !== "won" && l.status !== "lost" && (l.estimated_value ?? 0) > 0
         );
         const potentialBilling = openLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
-        const potentialCommission = potentialBilling * angelPreview.currentRate;
+        const potentialCommission = potentialBilling * myCommission.currentRate;
 
         return (
           <div className="mb-4 flex items-stretch gap-2 md:gap-3">
             {/* Accumulated this month */}
             <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
               <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
-                Comision acumulada · Angel
+                Mi comision · {myCommission.ownerName}
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
-                {angelPreview.monthlyCommission.toFixed(2)} €
+                {myCommission.monthlyCommission.toFixed(2)} €
               </p>
               <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
-                {angelPreview.monthlyBilled.toLocaleString("es-ES")} € facturado
+                {myCommission.monthlyBilled.toLocaleString("es-ES")} € facturado
               </p>
             </div>
 
@@ -481,7 +481,7 @@ export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmK
                   +{potentialCommission.toFixed(2)} €
                 </p>
                 <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
-                  {openLeads.length} leads · ~{(angelPreview.currentRate * 100).toFixed(0)}%
+                  {openLeads.length} leads · ~{(myCommission.currentRate * 100).toFixed(0)}%
                 </p>
               </div>
             )}
@@ -492,10 +492,10 @@ export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmK
                 Potencial total mes
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {(angelPreview.monthlyCommission + potentialCommission).toFixed(2)} €
+                {(myCommission.monthlyCommission + potentialCommission).toFixed(2)} €
               </p>
               <p className="text-[11px] tabular-nums text-emerald-600/70 dark:text-emerald-400/60">
-                {angelPreview.configType === "tiered" ? "Tramos" : "Plano"} · {(angelPreview.currentRate * 100).toFixed(0)}%
+                {myCommission.configType === "tiered" ? "Tramos" : "Plano"} · {(myCommission.currentRate * 100).toFixed(0)}%
               </p>
             </div>
           </div>
@@ -785,7 +785,7 @@ export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmK
               key={column.id}
               column={column}
               leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
-              commissionRate={column.id !== "won" && column.id !== "lost" ? angelPreview?.currentRate : undefined}
+              commissionRate={column.id !== "won" && column.id !== "lost" ? myCommission?.currentRate : undefined}
             />
           ))}
         </div>

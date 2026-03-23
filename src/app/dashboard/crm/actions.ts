@@ -374,31 +374,41 @@ export async function saveCommissionConfig(
  * For accumulatedBefore=2000, quoteTotal=2000:
  *   - 1000 at 5% (fills 0-3000 bracket) + 1000 at 10% = 150€
  */
+/**
+ * Step-based commission: the rate is determined by which tier the
+ * NEW total (accumulatedBefore + quoteTotal) falls into.
+ * That single rate applies to the entire quoteTotal (not split across tiers).
+ * This incentivizes reaching the next level — once you cross a threshold,
+ * the higher rate applies to the whole deal.
+ */
 function calcTieredCommission(
   tiers: CommissionTier[],
   accumulatedBefore: number,
   quoteTotal: number
 ): { commission: number; effectiveRate: number } {
   const sorted = [...tiers].sort((a, b) => a.min - b.min);
-  let remaining = quoteTotal;
-  let commission = 0;
-  let cursor = accumulatedBefore;
+  const newTotal = accumulatedBefore + quoteTotal;
 
+  // Find which tier the new total falls into
+  let rate = sorted[0]?.rate ?? 0;
   for (const tier of sorted) {
-    if (remaining <= 0) break;
     const tierMax = tier.max ?? Infinity;
-    if (cursor >= tierMax) continue;
-    const start = Math.max(cursor, tier.min);
-    const end = tierMax;
-    const slotAvailable = end - start;
-    const slice = Math.min(remaining, slotAvailable);
-    commission += slice * tier.rate;
-    remaining -= slice;
-    cursor += slice;
+    if (newTotal > tier.min && newTotal <= tierMax) {
+      rate = tier.rate;
+      break;
+    }
+    if (newTotal > tierMax) {
+      // Passed this tier, check next
+      rate = tier.rate;
+    }
+  }
+  // If beyond all tiers, use the last tier's rate
+  if (newTotal > (sorted[sorted.length - 1]?.max ?? Infinity)) {
+    rate = sorted[sorted.length - 1]?.rate ?? 0;
   }
 
-  const effectiveRate = quoteTotal > 0 ? commission / quoteTotal : 0;
-  return { commission, effectiveRate };
+  const commission = quoteTotal * rate;
+  return { commission, effectiveRate: rate };
 }
 
 export async function getCommissionSummary(leadId: string): Promise<{
@@ -1691,9 +1701,14 @@ export async function sendLeadProforma(
   }
 }
 
-// ── Angel Commission Preview (incentive widget) ─────
-
-const ANGEL_EMAIL = "angel@prototipalo.com";
+// ── My Commission Preview (incentive widget per logged-in user) ─────
+//
+// Commission model:
+//   - Captador (owned_by, flat config): e.g. 15% new / 7.5% returning
+//   - Closer (assigned_to, tiered config): e.g. 6/7/8/9/10% by monthly volume
+//   - When the closer's rate exceeds the base tier (6%), the excess is
+//     deducted from the captador's rate on the same lead.
+//     E.g. closer at 8% → captador gets 15% - (8%-6%) = 13%
 
 export type CommissionPreview = {
   ownerId: string;
@@ -1701,32 +1716,75 @@ export type CommissionPreview = {
   monthlyBilled: number;
   monthlyCommission: number;
   configType: "flat" | "tiered";
-  /** Current effective commission rate based on accumulated billing */
+  /** Current effective commission rate */
   currentRate: number;
 };
 
 /**
- * Get Angel's commission preview for the current month.
- * Used in Kanban and lead detail to incentivize.
+ * For a closer with tiered config, get their monthly accumulated billing
+ * so we can calculate what tier they're in (and how much to deduct from captador).
  */
-export async function getAngelCommissionPreview(): Promise<CommissionPreview | null> {
-  await requireRole("manager");
+async function getCloserAccumulated(
+  supabase: any,
+  closerId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const { data: closerLeads } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("status", "won")
+    .eq("assigned_to", closerId)
+    .gte("updated_at", startDate)
+    .lt("updated_at", endDate);
+
+  if (!closerLeads || closerLeads.length === 0) return 0;
+
+  const { data: quotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, items")
+    .in("lead_id", closerLeads.map((l: any) => l.id));
+
+  let total = 0;
+  for (const q of quotes || []) {
+    const items = (q.items || []) as unknown as ProformaLineItem[];
+    total += items.reduce((s, i) => s + i.price * i.units, 0);
+  }
+  return total;
+}
+
+/**
+ * Given a tiered config and accumulated billing, return the current tier rate.
+ */
+function getCurrentTierRate(tiers: CommissionTier[], accumulated: number): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  for (const tier of sorted) {
+    const tierMax = tier.max ?? Infinity;
+    if (accumulated < tierMax) return tier.rate;
+  }
+  return sorted[sorted.length - 1]?.rate ?? 0;
+}
+
+/**
+ * Get the base (minimum) tier rate from a tiered config — the rate
+ * the closer always gets, before any "bonus" kicks in.
+ */
+function getBaseTierRate(tiers: CommissionTier[]): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  return sorted[0]?.rate ?? 0;
+}
+
+/**
+ * Get the logged-in user's commission preview for the current month.
+ */
+export async function getMyCommissionPreview(): Promise<CommissionPreview | null> {
+  const profile = await requireRole("comercial");
   const supabase = await createClient();
 
-  // Find Angel's user ID
-  const { data: angelUser } = await supabase
-    .from("user_profiles")
-    .select("id, email")
-    .eq("email", ANGEL_EMAIL)
-    .maybeSingle();
-
-  if (!angelUser) return null;
-
-  // Get Angel's commission config
   const { data: config } = await (supabase as any)
     .from("commission_configs")
     .select("*")
-    .eq("user_id", angelUser.id)
+    .eq("user_id", profile.id)
     .maybeSingle();
 
   if (!config) return null;
@@ -1735,12 +1793,14 @@ export async function getAngelCommissionPreview(): Promise<CommissionPreview | n
   const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
 
-  // Get Angel's won leads this month
+  // Tiered = closer (assigned_to), Flat = captador (owned_by)
+  const roleField = config.type === "tiered" ? "assigned_to" : "owned_by";
+
   const { data: wonLeads } = await supabase
     .from("leads")
-    .select("id, owned_by, email, created_at, payment_condition")
+    .select("id, owned_by, assigned_to, email, created_at, payment_condition")
     .eq("status", "won")
-    .eq("owned_by", angelUser.id)
+    .eq(roleField, profile.id)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
     .order("updated_at", { ascending: true });
@@ -1754,14 +1814,45 @@ export async function getAngelCommissionPreview(): Promise<CommissionPreview | n
       .in("lead_id", leadIds);
     for (const q of quotes || []) {
       const items = (q.items || []) as unknown as ProformaLineItem[];
-      const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
-      quoteMap.set(q.lead_id, total);
+      quoteMap.set(q.lead_id, items.reduce((sum, i) => sum + i.price * i.units, 0));
+    }
+  }
+
+  // For flat captadores: we need to know if there's a closer with tiered config
+  // on each lead, so we can deduct the closer's excess from our rate.
+  let closerConfigs = new Map<string, any>();
+  let closerAccumulatedMap = new Map<string, number>();
+
+  if (config.type === "flat") {
+    // Find all unique closers (assigned_to) on our won leads
+    const closerIds = [...new Set(
+      (wonLeads || []).map((l) => l.assigned_to).filter(Boolean)
+    )] as string[];
+
+    if (closerIds.length > 0) {
+      const { data: configs } = await (supabase as any)
+        .from("commission_configs")
+        .select("*")
+        .in("user_id", closerIds)
+        .eq("type", "tiered");
+
+      for (const c of configs || []) {
+        closerConfigs.set(c.user_id, c);
+      }
+
+      // Get each closer's accumulated billing this month (for tier calculation)
+      for (const closerId of closerIds) {
+        if (closerConfigs.has(closerId)) {
+          const acc = await getCloserAccumulated(supabase, closerId, startDate, endDate);
+          closerAccumulatedMap.set(closerId, acc);
+        }
+      }
     }
   }
 
   let monthlyBilled = 0;
   let monthlyCommission = 0;
-  let accumulated = 0;
+  let closerAccRunning = new Map<string, number>(); // track per-closer accumulation
 
   for (const lead of wonLeads || []) {
     const qt = quoteMap.get(lead.id) ?? 0;
@@ -1773,11 +1864,14 @@ export async function getAngelCommissionPreview(): Promise<CommissionPreview | n
     const prepaidBonus = qt * bonusRate;
 
     if (config.type === "tiered") {
+      // Closer: straightforward tiered calculation
       const tiers = (config.tiers || []) as CommissionTier[];
-      const { commission } = calcTieredCommission(tiers, accumulated, qt);
+      const accBefore = closerAccRunning.get(profile.id) ?? 0;
+      const { commission } = calcTieredCommission(tiers, accBefore, qt);
       monthlyCommission += commission + prepaidBonus;
-      accumulated += qt;
+      closerAccRunning.set(profile.id, accBefore + qt);
     } else {
+      // Captador: base rate minus closer's excess
       let isReturning = false;
       if (lead.email) {
         const { count } = await supabase
@@ -1789,31 +1883,49 @@ export async function getAngelCommissionPreview(): Promise<CommissionPreview | n
           .lt("created_at", lead.created_at);
         isReturning = (count ?? 0) > 0;
       }
-      const rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
-      monthlyCommission += qt * rate + prepaidBonus;
+
+      let baseRate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+
+      // Deduct closer's excess if there's a tiered closer on this lead
+      const closerId = lead.assigned_to;
+      if (closerId) {
+        const closerConfig = closerConfigs.get(closerId);
+        if (closerConfig) {
+          const closerTiers = (closerConfig.tiers || []) as CommissionTier[];
+          const closerBaseRate = getBaseTierRate(closerTiers);
+          const closerAcc = closerAccRunning.get(closerId) ?? (closerAccumulatedMap.get(closerId) ?? 0);
+          const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+          const excess = closerCurrentRate - closerBaseRate;
+          baseRate = Math.max(0, baseRate - excess);
+        }
+      }
+
+      monthlyCommission += qt * baseRate + prepaidBonus;
     }
   }
 
-  // Determine current rate (what tier Angel is in right now)
+  // Current effective rate
   let currentRate: number;
   if (config.type === "tiered") {
     const tiers = (config.tiers || []) as CommissionTier[];
-    const sorted = [...tiers].sort((a, b) => a.min - b.min);
-    currentRate = 0;
-    for (const tier of sorted) {
-      const tierMax = tier.max ?? Infinity;
-      if (monthlyBilled < tierMax) {
-        currentRate = tier.rate;
-        break;
-      }
-    }
+    currentRate = getCurrentTierRate(tiers, monthlyBilled);
   } else {
     currentRate = Number(config.new_rate);
+    // If there are closers with excess, show adjusted rate
+    // (use the most common closer's excess as approximation)
+    if (closerConfigs.size > 0) {
+      const [firstCloserId, firstCloserConfig] = [...closerConfigs.entries()][0];
+      const closerTiers = (firstCloserConfig.tiers || []) as CommissionTier[];
+      const closerBaseRate = getBaseTierRate(closerTiers);
+      const closerAcc = closerAccumulatedMap.get(firstCloserId) ?? 0;
+      const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+      currentRate = Math.max(0, currentRate - (closerCurrentRate - closerBaseRate));
+    }
   }
 
   return {
-    ownerId: angelUser.id,
-    ownerName: "Angel",
+    ownerId: profile.id,
+    ownerName: profile.email.split("@")[0],
     monthlyBilled,
     monthlyCommission,
     configType: config.type as "flat" | "tiered",
@@ -1822,65 +1934,39 @@ export async function getAngelCommissionPreview(): Promise<CommissionPreview | n
 }
 
 /**
- * Estimate Angel's commission for a specific lead's estimated_value.
- * Returns the commission he would earn if this lead closes.
+ * Estimate the logged-in user's commission for a specific estimated_value.
  */
-export async function getAngelLeadCommissionEstimate(estimatedValue: number): Promise<{
+export async function getMyLeadCommissionEstimate(estimatedValue: number): Promise<{
   commission: number;
   rate: number;
 } | null> {
-  await requireRole("manager");
+  const profile = await requireRole("comercial");
   const supabase = await createClient();
-
-  const { data: angelUser } = await supabase
-    .from("user_profiles")
-    .select("id")
-    .eq("email", ANGEL_EMAIL)
-    .maybeSingle();
-
-  if (!angelUser) return null;
 
   const { data: config } = await (supabase as any)
     .from("commission_configs")
     .select("*")
-    .eq("user_id", angelUser.id)
+    .eq("user_id", profile.id)
     .maybeSingle();
 
   if (!config) return null;
 
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+
   if (config.type === "tiered") {
     const tiers = (config.tiers || []) as CommissionTier[];
 
-    // Get current month's accumulated billing
-    const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-
-    const { data: wonLeads } = await supabase
-      .from("leads")
-      .select("id")
-      .eq("status", "won")
-      .eq("owned_by", angelUser.id)
-      .gte("updated_at", startDate)
-      .lt("updated_at", endDate);
-
-    let accBefore = 0;
-    if (wonLeads && wonLeads.length > 0) {
-      const { data: quotes } = await supabase
-        .from("quote_requests")
-        .select("lead_id, items")
-        .in("lead_id", wonLeads.map((l) => l.id));
-      for (const q of quotes || []) {
-        const items = (q.items || []) as unknown as ProformaLineItem[];
-        accBefore += items.reduce((s, i) => s + i.price * i.units, 0);
-      }
-    }
+    // Get closer's accumulated billing this month
+    const accBefore = await getCloserAccumulated(supabase, profile.id, startDate, endDate);
 
     const { commission, effectiveRate } = calcTieredCommission(tiers, accBefore, estimatedValue);
     return { commission, rate: effectiveRate };
   }
 
-  // Flat
+  // Flat captador — estimate with possible closer deduction
+  // (we don't know which closer will handle this lead, so show base rate)
   const rate = Number(config.new_rate);
   return { commission: estimatedValue * rate, rate };
 }

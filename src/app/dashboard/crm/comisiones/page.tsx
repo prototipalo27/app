@@ -24,25 +24,25 @@ function calcTieredCommission(
   quoteTotal: number
 ): { commission: number; effectiveRate: number } {
   const sorted = [...tiers].sort((a, b) => a.min - b.min);
-  let remaining = quoteTotal;
-  let commission = 0;
-  let cursor = accumulatedBefore;
+  const newTotal = accumulatedBefore + quoteTotal;
 
+  let rate = sorted[0]?.rate ?? 0;
   for (const tier of sorted) {
-    if (remaining <= 0) break;
     const tierMax = tier.max ?? Infinity;
-    if (cursor >= tierMax) continue;
-    const start = Math.max(cursor, tier.min);
-    const end = tierMax;
-    const slotAvailable = end - start;
-    const slice = Math.min(remaining, slotAvailable);
-    commission += slice * tier.rate;
-    remaining -= slice;
-    cursor += slice;
+    if (newTotal > tier.min && newTotal <= tierMax) {
+      rate = tier.rate;
+      break;
+    }
+    if (newTotal > tierMax) {
+      rate = tier.rate;
+    }
+  }
+  if (newTotal > (sorted[sorted.length - 1]?.max ?? Infinity)) {
+    rate = sorted[sorted.length - 1]?.rate ?? 0;
   }
 
-  const effectiveRate = quoteTotal > 0 ? commission / quoteTotal : 0;
-  return { commission, effectiveRate };
+  const commission = quoteTotal * rate;
+  return { commission, effectiveRate: rate };
 }
 
 export default async function ComisionesPage({
@@ -66,21 +66,14 @@ export default async function ComisionesPage({
   const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString();
   const endDate = new Date(selectedYear, selectedMonth, 1).toISOString();
 
-  let wonLeadsQuery = supabase
+  // Get ALL won leads in period (both owned_by and assigned_to matter)
+  const { data: wonLeads } = await supabase
     .from("leads")
-    .select("id, full_name, company, email, owned_by, created_at, updated_at, payment_condition")
+    .select("id, full_name, company, email, owned_by, assigned_to, created_at, updated_at, payment_condition")
     .eq("status", "won")
-    .not("owned_by", "is", null)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
     .order("updated_at", { ascending: true });
-
-  // Comerciales only see their own leads
-  if (!isManager) {
-    wonLeadsQuery = wonLeadsQuery.eq("owned_by", profile.id);
-  }
-
-  const { data: wonLeads } = await wonLeadsQuery;
 
   const leadIds = (wonLeads || []).map((l) => l.id);
   let quoteMap = new Map<string, number>();
@@ -97,14 +90,17 @@ export default async function ComisionesPage({
     }
   }
 
-  const ownerIds = [...new Set((wonLeads || []).map((l) => l.owned_by).filter(Boolean))] as string[];
-  let ownerMap = new Map<string, string>();
-  if (ownerIds.length > 0) {
-    const { data: owners } = await supabase
+  // All user IDs involved (owners + closers)
+  const allUserIds = [...new Set(
+    (wonLeads || []).flatMap((l) => [l.owned_by, l.assigned_to]).filter(Boolean)
+  )] as string[];
+  let userMap = new Map<string, string>();
+  if (allUserIds.length > 0) {
+    const { data: users } = await supabase
       .from("user_profiles")
       .select("id, email")
-      .in("id", ownerIds);
-    ownerMap = new Map(owners?.map((u) => [u.id, u.email.split("@")[0]]) || []);
+      .in("id", allUserIds);
+    userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
 
   // Load commission configs
@@ -135,16 +131,70 @@ export default async function ComisionesPage({
     commission: number;
     configType: "flat" | "tiered";
     prepaidBonus: number;
+    role: "captador" | "closer";
   };
 
   const leadCommissions: LeadCommission[] = [];
 
-  // Track accumulated billing per owner for tiered calculation (ordered by updated_at ASC)
-  const ownerAccumulated = new Map<string, number>();
+  // Track accumulated billing per closer for tiered calculation
+  const closerAccumulated = new Map<string, number>();
+
+  // Helper: get base tier rate (minimum) from a tiered config
+  function getBaseTierRate(tiers: CommissionTier[]): number {
+    const sorted = [...tiers].sort((a, b) => a.min - b.min);
+    return sorted[0]?.rate ?? 0;
+  }
+
+  // First pass: calculate closer (tiered) commissions to know their rates
+  // We need this to deduct from captador rates
+  const closerRatePerLead = new Map<string, number>(); // leadId → closer effective rate
 
   for (const lead of wonLeads || []) {
     const quoteTotal = quoteMap.get(lead.id) ?? 0;
-    if (quoteTotal === 0) continue;
+    if (quoteTotal === 0 || !lead.assigned_to) continue;
+
+    const closerConfig = configMap.get(lead.assigned_to);
+    if (!closerConfig || closerConfig.type !== "tiered") continue;
+
+    const accBefore = closerAccumulated.get(lead.assigned_to) ?? 0;
+    const result = calcTieredCommission(closerConfig.tiers, accBefore, quoteTotal);
+    closerAccumulated.set(lead.assigned_to, accBefore + quoteTotal);
+
+    closerRatePerLead.set(lead.id, result.effectiveRate);
+
+    const isPrepaid = lead.payment_condition === "100-5";
+    const bonusRate = isPrepaid ? closerConfig.prepaid_bonus : 0;
+    const prepaidBonus = quoteTotal * bonusRate;
+
+    // Non-manager comerciales only see their own
+    if (!isManager && lead.assigned_to !== profile.id) continue;
+
+    leadCommissions.push({
+      id: lead.id,
+      fullName: lead.full_name,
+      company: lead.company,
+      ownerName: userMap.get(lead.assigned_to) || "—",
+      ownerId: lead.assigned_to,
+      quoteTotal,
+      isReturning: false,
+      rate: result.effectiveRate,
+      commission: result.commission + prepaidBonus,
+      configType: "tiered",
+      prepaidBonus,
+      role: "closer",
+    });
+  }
+
+  // Second pass: captador (flat) commissions, deducting closer excess
+  for (const lead of wonLeads || []) {
+    const quoteTotal = quoteMap.get(lead.id) ?? 0;
+    if (quoteTotal === 0 || !lead.owned_by) continue;
+
+    const config = configMap.get(lead.owned_by);
+    if (!config || config.type !== "flat") continue;
+
+    // Non-manager comerciales only see their own
+    if (!isManager && lead.owned_by !== profile.id) continue;
 
     let isReturning = false;
     if (lead.email) {
@@ -155,56 +205,49 @@ export default async function ComisionesPage({
         .eq("status", "won")
         .neq("id", lead.id)
         .lt("created_at", lead.created_at);
-
       isReturning = (count ?? 0) > 0;
     }
 
-    const config = configMap.get(lead.owned_by!);
-    let rate: number;
-    let commission: number;
-    let configType: "flat" | "tiered" = "flat";
+    let rate = isReturning ? config.returning_rate : config.new_rate;
 
-    // Prepaid bonus: extra % if 100% upfront payment
-    const isPrepaid = lead.payment_condition === "100-5";
-    const bonusRate = (isPrepaid && config) ? config.prepaid_bonus : isPrepaid ? 0.01 : 0;
-    const prepaidBonus = quoteTotal * bonusRate;
-
-    if (config?.type === "tiered") {
-      configType = "tiered";
-      const accBefore = ownerAccumulated.get(lead.owned_by!) ?? 0;
-      const result = calcTieredCommission(config.tiers, accBefore, quoteTotal);
-      commission = result.commission + prepaidBonus;
-      rate = result.effectiveRate;
-      ownerAccumulated.set(lead.owned_by!, accBefore + quoteTotal);
-    } else if (config?.type === "flat") {
-      rate = isReturning ? config.returning_rate : config.new_rate;
-      commission = quoteTotal * rate + prepaidBonus;
-    } else {
-      rate = isReturning ? 0.075 : 0.15;
-      commission = quoteTotal * rate + prepaidBonus;
+    // Deduct closer's excess above base tier
+    if (lead.assigned_to) {
+      const closerConfig = configMap.get(lead.assigned_to);
+      if (closerConfig?.type === "tiered") {
+        const baseRate = getBaseTierRate(closerConfig.tiers);
+        const closerRate = closerRatePerLead.get(lead.id) ?? baseRate;
+        const excess = closerRate - baseRate;
+        rate = Math.max(0, rate - excess);
+      }
     }
+
+    const isPrepaid = lead.payment_condition === "100-5";
+    const bonusRate = isPrepaid ? config.prepaid_bonus : 0;
+    const prepaidBonus = quoteTotal * bonusRate;
 
     leadCommissions.push({
       id: lead.id,
       fullName: lead.full_name,
       company: lead.company,
-      ownerName: ownerMap.get(lead.owned_by!) || "—",
-      ownerId: lead.owned_by!,
+      ownerName: userMap.get(lead.owned_by) || "—",
+      ownerId: lead.owned_by,
       quoteTotal,
       isReturning,
       rate,
-      commission,
-      configType,
+      commission: quoteTotal * rate + prepaidBonus,
+      configType: "flat",
       prepaidBonus,
+      role: "captador",
     });
   }
 
-  const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number; configType: "flat" | "tiered" }>();
+  const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number; configType: "flat" | "tiered"; role: string }>();
   for (const lc of leadCommissions) {
-    if (!byOwner.has(lc.ownerId)) {
-      byOwner.set(lc.ownerId, { name: lc.ownerName, leads: [], total: 0, commission: 0, configType: lc.configType });
+    const key = `${lc.ownerId}_${lc.role}`;
+    if (!byOwner.has(key)) {
+      byOwner.set(key, { name: `${lc.ownerName} (${lc.role === "closer" ? "closer" : "captador"})`, leads: [], total: 0, commission: 0, configType: lc.configType, role: lc.role });
     }
-    const entry = byOwner.get(lc.ownerId)!;
+    const entry = byOwner.get(key)!;
     entry.leads.push(lc);
     entry.total += lc.quoteTotal;
     entry.commission += lc.commission;
