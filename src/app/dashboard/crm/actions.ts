@@ -1690,3 +1690,139 @@ export async function sendLeadProforma(
     };
   }
 }
+
+// ── Commission Preview (for Kanban incentive widget) ─────
+
+export type CommissionPreview = {
+  ownerId: string;
+  ownerName: string;
+  monthlyBilled: number;
+  monthlyCommission: number;
+  configType: "flat" | "tiered";
+  /** For flat: base rate for new clients. For tiered: current effective rate */
+  currentRate: number;
+};
+
+/**
+ * Get commission preview data for all owners that have commission configs.
+ * Returns accumulated billing + commission for the current month.
+ */
+export async function getCommissionPreviews(): Promise<CommissionPreview[]> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+
+  // Get all commission configs
+  const { data: configs } = await (supabase as any)
+    .from("commission_configs")
+    .select("*");
+
+  if (!configs || configs.length === 0) return [];
+
+  // Get won leads this month with owners
+  const { data: wonLeads } = await supabase
+    .from("leads")
+    .select("id, owned_by, email, created_at, payment_condition")
+    .eq("status", "won")
+    .not("owned_by", "is", null)
+    .gte("updated_at", startDate)
+    .lt("updated_at", endDate)
+    .order("updated_at", { ascending: true });
+
+  const leadIds = (wonLeads || []).map((l) => l.id);
+  const quoteMap = new Map<string, number>();
+  if (leadIds.length > 0) {
+    const { data: quotes } = await supabase
+      .from("quote_requests")
+      .select("lead_id, items")
+      .in("lead_id", leadIds);
+    for (const q of quotes || []) {
+      const items = (q.items || []) as unknown as ProformaLineItem[];
+      const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
+      quoteMap.set(q.lead_id, total);
+    }
+  }
+
+  // Get owner names
+  const ownerIds = configs.map((c: any) => c.user_id);
+  const { data: owners } = await supabase
+    .from("user_profiles")
+    .select("id, email")
+    .in("id", ownerIds);
+  const ownerNameMap = new Map(owners?.map((u) => [u.id, u.email.split("@")[0]]) || []);
+
+  const results: CommissionPreview[] = [];
+
+  for (const config of configs) {
+    const ownerId = config.user_id;
+    const ownerLeads = (wonLeads || []).filter((l) => l.owned_by === ownerId);
+
+    let monthlyBilled = 0;
+    let monthlyCommission = 0;
+    let accumulated = 0;
+
+    for (const lead of ownerLeads) {
+      const qt = quoteMap.get(lead.id) ?? 0;
+      if (qt === 0) continue;
+      monthlyBilled += qt;
+
+      const isPrepaid = lead.payment_condition === "100-5";
+      const bonusRate = isPrepaid ? Number(config.prepaid_bonus ?? 0.01) : 0;
+      const prepaidBonus = qt * bonusRate;
+
+      if (config.type === "tiered") {
+        const tiers = (config.tiers || []) as CommissionTier[];
+        const { commission } = calcTieredCommission(tiers, accumulated, qt);
+        monthlyCommission += commission + prepaidBonus;
+        accumulated += qt;
+      } else {
+        // Check returning
+        let isReturning = false;
+        if (lead.email) {
+          const { count } = await supabase
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .ilike("email", lead.email)
+            .eq("status", "won")
+            .neq("id", lead.id)
+            .lt("created_at", lead.created_at);
+          isReturning = (count ?? 0) > 0;
+        }
+        const rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+        monthlyCommission += qt * rate + prepaidBonus;
+      }
+    }
+
+    // Determine current rate
+    let currentRate: number;
+    if (config.type === "tiered") {
+      const tiers = (config.tiers || []) as CommissionTier[];
+      const sorted = [...tiers].sort((a, b) => a.min - b.min);
+      // Find which tier we're currently in
+      currentRate = 0;
+      for (const tier of sorted) {
+        const tierMax = tier.max ?? Infinity;
+        if (monthlyBilled < tierMax) {
+          currentRate = tier.rate;
+          break;
+        }
+      }
+    } else {
+      currentRate = Number(config.new_rate);
+    }
+
+    results.push({
+      ownerId,
+      ownerName: ownerNameMap.get(ownerId) || "—",
+      monthlyBilled,
+      monthlyCommission,
+      configType: config.type as "flat" | "tiered",
+      currentRate,
+    });
+  }
+
+  return results;
+}

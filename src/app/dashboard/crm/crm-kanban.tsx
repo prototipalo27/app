@@ -27,11 +27,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import type { CommissionPreview } from "./actions";
 
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
   managers: { id: string; name: string }[];
   owners: { id: string; name: string }[];
+  commissionPreviews?: CommissionPreview[];
 }
 
 function truncateWords(text: string, maxWords: number): string {
@@ -43,9 +45,11 @@ function truncateWords(text: string, maxWords: number): string {
 function CrmColumn({
   column,
   leads,
+  commissionRate,
 }: {
   column: (typeof LEAD_COLUMNS)[number];
   leads: LeadWithAssignee[];
+  commissionRate?: number;
 }) {
   const { ref, isDropTarget } = useDroppable({ id: column.id });
 
@@ -79,7 +83,7 @@ function CrmColumn({
         }`}
       >
         {leads.map((lead) => (
-          <CrmCard key={lead.id} lead={lead} />
+          <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} />
         ))}
       </div>
     </div>
@@ -87,9 +91,9 @@ function CrmColumn({
 }
 
 // Default owner for filter
-const DEFAULT_OWNER = "gonzalo";
+const DEFAULT_OWNER = "angel";
 
-export function CrmKanban({ initialLeads, managers, owners }: CrmKanbanProps) {
+export function CrmKanban({ initialLeads, managers, owners, commissionPreviews = [] }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
 
@@ -443,6 +447,64 @@ export function CrmKanban({ initialLeads, managers, owners }: CrmKanbanProps) {
         );
       })()}
 
+      {/* Commission incentive banner */}
+      {(() => {
+        const preview = commissionPreviews.find((p) => p.ownerId === filterOwner);
+        if (!preview) return null;
+
+        // Calculate potential commission from non-won leads in view
+        const openLeads = filteredLeads.filter(
+          (l) => l.status !== "won" && l.status !== "lost" && (l.estimated_value ?? 0) > 0
+        );
+        const potentialBilling = openLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+        const potentialCommission = potentialBilling * preview.currentRate;
+
+        return (
+          <div className="mb-4 flex items-stretch gap-2 md:gap-3">
+            {/* Accumulated this month */}
+            <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
+              <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
+                Comision acumulada ({preview.ownerName})
+              </p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
+                {preview.monthlyCommission.toFixed(2)} €
+              </p>
+              <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
+                {preview.monthlyBilled.toLocaleString("es-ES")} € facturado
+              </p>
+            </div>
+
+            {/* Potential if all open leads close */}
+            {potentialCommission > 0 && (
+              <div className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
+                <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                  Si cierras todo en vista
+                </p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                  +{potentialCommission.toFixed(2)} €
+                </p>
+                <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
+                  {openLeads.length} leads · ~{(preview.currentRate * 100).toFixed(0)}%
+                </p>
+              </div>
+            )}
+
+            {/* Total potential */}
+            <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                Potencial total mes
+              </p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {(preview.monthlyCommission + potentialCommission).toFixed(2)} €
+              </p>
+              <p className="text-[11px] tabular-nums text-emerald-600/70 dark:text-emerald-400/60">
+                {preview.configType === "tiered" ? "Tramos" : "Plano"} · {(preview.currentRate * 100).toFixed(0)}%
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Search + Filters */}
       <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:gap-3">
         <input
@@ -721,13 +783,17 @@ export function CrmKanban({ initialLeads, managers, owners }: CrmKanbanProps) {
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
         <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
-          {kanbanColumns.map((column) => (
-            <CrmColumn
-              key={column.id}
-              column={column}
-              leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
-            />
-          ))}
+          {kanbanColumns.map((column) => {
+            const activePreview = commissionPreviews.find((p) => p.ownerId === filterOwner);
+            return (
+              <CrmColumn
+                key={column.id}
+                column={column}
+                leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
+                commissionRate={column.id !== "won" && column.id !== "lost" ? activePreview?.currentRate : undefined}
+              />
+            );
+          })}
         </div>
       </DragDropProvider>
 

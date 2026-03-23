@@ -16,6 +16,7 @@ export type LeadWithAssignee = Tables<"leads"> & {
 
 interface CrmCardProps {
   lead: LeadWithAssignee;
+  commissionRate?: number;
 }
 
 function timeAgo(dateStr: string): string {
@@ -54,7 +55,7 @@ function maturationHint(status: string, lastInteractionDate: string): { text: st
   return null;
 }
 
-export function CrmCard({ lead }: CrmCardProps) {
+export function CrmCard({ lead, commissionRate }: CrmCardProps) {
   const router = useRouter();
   const { ref, isDragging } = useDraggable({
     id: lead.id,
@@ -133,6 +134,16 @@ export function CrmCard({ lead }: CrmCardProps) {
           </Badge>
         )}
       </div>
+
+      {/* Commission potential */}
+      {commissionRate != null && commissionRate > 0 && lead.estimated_value != null && lead.estimated_value > 0 && (
+        <div className="mt-1.5 flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 dark:bg-amber-950/30">
+          <span className="text-[10px] text-amber-600 dark:text-amber-400">Si lo cierras:</span>
+          <span className="text-[11px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+            +{(lead.estimated_value * commissionRate).toFixed(2)} €
+          </span>
+        </div>
+      )}
     </div>
   );
 }

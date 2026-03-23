@@ -52,7 +52,9 @@ export default async function ComisionesPage({
 }) {
   const profile = await getUserProfile();
   if (!profile || !profile.is_active) redirect("/login");
-  if (!hasRole(profile.role, "manager")) redirect("/dashboard");
+  if (!hasRole(profile.role, "comercial")) redirect("/dashboard");
+
+  const isManager = hasRole(profile.role, "manager");
 
   const params = await searchParams;
   const now = new Date();
@@ -64,7 +66,7 @@ export default async function ComisionesPage({
   const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString();
   const endDate = new Date(selectedYear, selectedMonth, 1).toISOString();
 
-  const { data: wonLeads } = await supabase
+  let wonLeadsQuery = supabase
     .from("leads")
     .select("id, full_name, company, email, owned_by, created_at, updated_at, payment_condition")
     .eq("status", "won")
@@ -72,6 +74,13 @@ export default async function ComisionesPage({
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
     .order("updated_at", { ascending: true });
+
+  // Comerciales only see their own leads
+  if (!isManager) {
+    wonLeadsQuery = wonLeadsQuery.eq("owned_by", profile.id);
+  }
+
+  const { data: wonLeads } = await wonLeadsQuery;
 
   const leadIds = (wonLeads || []).map((l) => l.id);
   let quoteMap = new Map<string, number>();
@@ -378,13 +387,15 @@ export default async function ComisionesPage({
         </div>
       )}
 
-      {/* Commission settings */}
-      <div className="mt-8">
-        <CommissionSettings
-          configs={commissionConfigs}
-          users={managersForSettings}
-        />
-      </div>
+      {/* Commission settings — only for managers */}
+      {isManager && (
+        <div className="mt-8">
+          <CommissionSettings
+            configs={commissionConfigs}
+            users={managersForSettings}
+          />
+        </div>
+      )}
     </div>
   );
 }
