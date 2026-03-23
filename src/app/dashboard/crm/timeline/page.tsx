@@ -79,7 +79,7 @@ export default async function TimelinePage() {
             </svg>
             CRM
           </Button>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Maduración</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Tracker</h1>
         </div>
       </div>
 

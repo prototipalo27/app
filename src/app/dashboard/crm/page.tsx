@@ -54,6 +54,9 @@ export default async function CrmPage() {
     name: m.email.split("@")[0],
   }));
 
+  // Build unique owners (captadores) list from leads
+  const ownerIds = [...new Set((leads || []).map((l) => l.owned_by).filter(Boolean))] as string[];
+
   // Fetch assignee + owner emails
   const userIds = [
     ...new Set([
@@ -70,6 +73,10 @@ export default async function CrmPage() {
       .in("id", userIds);
     userEmailMap = new Map(users?.map((u) => [u.id, u.email]) || []);
   }
+
+  const owners = ownerIds
+    .filter((id) => userEmailMap.has(id))
+    .map((id) => ({ id, name: userEmailMap.get(id)!.split("@")[0] }));
 
   // Generate AI summaries for new leads that don't have one (fire-and-forget for speed)
   const leadsWithoutSummary = (leads || [])
@@ -97,7 +104,7 @@ export default async function CrmPage() {
             <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            Maduración
+            Tracker
           </Button>
           <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/comisiones" />}>
             Comisiones
@@ -114,7 +121,7 @@ export default async function CrmPage() {
         </div>
       </div>
 
-      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} />
+      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} />
 
       <PricingConfig basePrices={basePrices} />
     </div>

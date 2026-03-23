@@ -31,6 +31,7 @@ import {
 interface CrmKanbanProps {
   initialLeads: LeadWithAssignee[];
   managers: { id: string; name: string }[];
+  owners: { id: string; name: string }[];
 }
 
 function truncateWords(text: string, maxWords: number): string {
@@ -85,7 +86,10 @@ function CrmColumn({
   );
 }
 
-export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
+// Default owner for filter
+const DEFAULT_OWNER = "gonzalo";
+
+export function CrmKanban({ initialLeads, managers, owners }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
 
@@ -142,6 +146,14 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
     if (typeof window === "undefined") return "all";
     return localStorage.getItem("crm_filterManager") || "all";
   });
+  const [filterOwner, setFilterOwner] = useState<string>(() => {
+    if (typeof window === "undefined") return DEFAULT_OWNER;
+    const stored = localStorage.getItem("crm_filterOwner");
+    if (stored) return stored;
+    // Default to gonzalo's ID if available
+    const gonzalo = owners.find((o) => o.name.toLowerCase() === DEFAULT_OWNER);
+    return gonzalo ? gonzalo.id : "all";
+  });
   const [filterType, setFilterType] = useState<string>(() => {
     if (typeof window === "undefined") return "all";
     return localStorage.getItem("crm_filterType") || "all";
@@ -169,13 +181,14 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
   useEffect(() => {
     localStorage.setItem("crm_filterManager", filterManager);
+    localStorage.setItem("crm_filterOwner", filterOwner);
     localStorage.setItem("crm_filterType", filterType);
     localStorage.setItem("crm_filterLevel", filterLevel);
     localStorage.setItem("crm_sortBy", sortBy);
     localStorage.setItem("crm_filterTime", filterTime);
     localStorage.setItem("crm_customFrom", customFrom);
     localStorage.setItem("crm_customTo", customTo);
-  }, [filterManager, filterType, filterLevel, sortBy, filterTime, customFrom, customTo]);
+  }, [filterManager, filterOwner, filterType, filterLevel, sortBy, filterTime, customFrom, customTo]);
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -347,6 +360,9 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
       if (filterManager === "unassigned" && l.assigned_to) return false;
       if (filterManager !== "unassigned" && l.assigned_to !== filterManager) return false;
     }
+    if (filterOwner !== "all") {
+      if (!l.owned_by || l.owned_by !== filterOwner) return false;
+    }
     if (filterType !== "all") {
       if (filterType === "none" && l.project_type_tag) return false;
       if (filterType !== "none" && l.project_type_tag !== filterType) return false;
@@ -439,7 +455,13 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
 
         <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
           <SelectTrigger size="sm">
-            <SelectValue placeholder="Comercial" />
+            <SelectValue placeholder="Comercial">
+              {filterManager === "all"
+                ? "Todos los comerciales"
+                : filterManager === "unassigned"
+                  ? "Sin asignar"
+                  : managers.find((m) => m.id === filterManager)?.name ?? "Comercial"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los comerciales</SelectItem>
@@ -447,6 +469,22 @@ export function CrmKanban({ initialLeads, managers }: CrmKanbanProps) {
               <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
             ))}
             <SelectItem value="unassigned">Sin asignar</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterOwner} onValueChange={(v) => v && setFilterOwner(v)}>
+          <SelectTrigger size="sm">
+            <SelectValue placeholder="Captador">
+              {filterOwner === "all"
+                ? "Todos los captadores"
+                : owners.find((o) => o.id === filterOwner)?.name ?? "Captador"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los captadores</SelectItem>
+            {owners.map((o) => (
+              <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
