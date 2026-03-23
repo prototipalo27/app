@@ -16,7 +16,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
-import { getBasePrices, getCommissionSummary, getNdaStatus, getMyCommissionPreview, getMyLeadCommissionEstimate } from "../actions";
+import { getBasePrices, getCommissionSummary, getNdaStatus, getMyCommissionData } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,28 +44,29 @@ export default async function LeadDetailPage({
 
   // Fire ALL remaining queries in parallel — none depend on each other
   const [
-    { data: activeLeadIds },
+    { data: prevLeads },
+    { data: nextLeads },
     { data: activities },
     { data: managers },
     { data: linkedProjects },
     commission,
     ndaStatusResult,
-    myCommission,
-    myEstimate,
+    myCommissionData,
     { data: quoteRequest },
     { data: snippets },
     { data: emailResources },
     { data: projectTemplates },
     basePrices,
   ] = await Promise.all([
-    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").order("created_at", { ascending: false }),
+    // Prev/next: only fetch 1 lead in each direction (instead of ALL active leads)
+    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
+    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
     supabase.from("lead_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
     supabase.from("projects").select("id, name, status, project_type").eq("lead_id", id).order("created_at", { ascending: false }),
     getCommissionSummary(id),
     getNdaStatus(id),
-    getMyCommissionPreview(),
-    lead.estimated_value ? getMyLeadCommissionEstimate(lead.estimated_value) : Promise.resolve(null),
+    getMyCommissionData(lead.estimated_value),
     supabase.from("quote_requests").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("email_snippets").select("id, title, category, content").order("category").order("sort_order", { ascending: true }),
     supabase.from("tools_resources").select("id, title, type, content, category").in("type", ["imagen", "archivo"]).order("category").order("title"),
@@ -73,10 +74,8 @@ export default async function LeadDetailPage({
     getBasePrices(),
   ]);
 
-  const ids = (activeLeadIds || []).map((l) => l.id);
-  const currentIndex = ids.indexOf(id);
-  const prevId = currentIndex > 0 ? ids[currentIndex - 1] : null;
-  const nextId = currentIndex >= 0 && currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
+  const prevId = prevLeads?.[0]?.id ?? null;
+  const nextId = nextLeads?.[0]?.id ?? null;
 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
 
@@ -115,46 +114,44 @@ export default async function LeadDetailPage({
       <LeadNav
         prevId={prevId}
         nextId={nextId}
-        current={currentIndex + 1}
-        total={ids.length}
       />
 
       {/* Angel's commission widget */}
-      {myCommission && (
+      {myCommissionData?.preview && (
         <div className="mb-4 flex items-stretch gap-2 md:gap-3">
           <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
             <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
-              Mi comision · {myCommission.ownerName}
+              Mi comision · {myCommissionData?.preview.ownerName}
             </p>
             <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
-              {myCommission.monthlyCommission.toFixed(2)} €
+              {myCommissionData?.preview.monthlyCommission.toFixed(2)} €
             </p>
             <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
-              {myCommission.monthlyBilled.toLocaleString("es-ES")} € facturado este mes
+              {myCommissionData?.preview.monthlyBilled.toLocaleString("es-ES")} € facturado este mes
             </p>
           </div>
 
-          {myEstimate && lead.status !== "won" && lead.status !== "lost" && (
+          {myCommissionData?.estimate && lead.status !== "won" && lead.status !== "lost" && (
             <div className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
               <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
                 Si cierras esta oportunidad
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                +{myEstimate.commission.toFixed(2)} €
+                +{myCommissionData?.estimate.commission.toFixed(2)} €
               </p>
               <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
-                {lead.estimated_value?.toLocaleString("es-ES")} € · {(myEstimate.rate * 100).toFixed(1)}%
+                {lead.estimated_value?.toLocaleString("es-ES")} € · {(myCommissionData?.estimate.rate * 100).toFixed(1)}%
               </p>
             </div>
           )}
 
-          {myEstimate && lead.status !== "won" && lead.status !== "lost" && (
+          {myCommissionData?.estimate && lead.status !== "won" && lead.status !== "lost" && (
             <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
               <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 Total mes si cierras
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {(myCommission.monthlyCommission + myEstimate.commission).toFixed(2)} €
+                {(myCommissionData?.preview.monthlyCommission + myCommissionData?.estimate.commission).toFixed(2)} €
               </p>
             </div>
           )}

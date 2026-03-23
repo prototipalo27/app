@@ -18,23 +18,82 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
+const SORTABLE_COLUMNS: Record<string, string> = {
+  name: "full_name",
+  company: "company",
+  email: "email",
+  status: "status",
+  value: "estimated_value",
+  date: "created_at",
+};
+
+function SortableHead({
+  label,
+  sortKey,
+  currentSort,
+  currentOrder,
+  filterStatus,
+  className,
+}: {
+  label: string;
+  sortKey: string;
+  currentSort: string | undefined;
+  currentOrder: string | undefined;
+  filterStatus: string | undefined;
+  className?: string;
+}) {
+  const isActive = currentSort === sortKey;
+  const nextOrder = isActive && currentOrder !== "asc" ? "asc" : "desc";
+  const params = new URLSearchParams();
+  if (filterStatus) params.set("status", filterStatus);
+  params.set("sort", sortKey);
+  params.set("order", nextOrder);
+
+  return (
+    <TableHead className={className}>
+      <Link
+        href={`/dashboard/crm/list?${params.toString()}`}
+        className="inline-flex items-center gap-1 hover:text-foreground"
+      >
+        {label}
+        {isActive ? (
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {currentOrder === "asc" ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            )}
+          </svg>
+        ) : (
+          <svg className="h-3.5 w-3.5 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        )}
+      </Link>
+    </TableHead>
+  );
+}
+
 export default async function CrmListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; sort?: string; order?: string }>;
 }) {
   const profile = await getUserProfile();
   if (!profile || !profile.is_active) redirect("/login");
   if (!hasRole(profile.role, "manager")) redirect("/dashboard");
 
-  const { status: filterStatus } = await searchParams;
+  const { status: filterStatus, sort: sortKey, order: sortOrder } = await searchParams;
 
   const supabase = await createClient();
+
+  const dbColumn = sortKey && SORTABLE_COLUMNS[sortKey] ? SORTABLE_COLUMNS[sortKey] : "created_at";
+  const ascending = sortOrder === "asc";
 
   let query = supabase
     .from("leads")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order(dbColumn, { ascending });
 
   if (
     filterStatus &&
@@ -106,14 +165,14 @@ export default async function CrmListPage({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Email</TableHead>
+              <SortableHead label="Nombre" sortKey="name" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} />
+              <SortableHead label="Empresa" sortKey="company" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} />
+              <SortableHead label="Email" sortKey="email" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} />
               <TableHead className="hidden md:table-cell">Telefono</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="hidden text-right md:table-cell">Valor est.</TableHead>
+              <SortableHead label="Estado" sortKey="status" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} />
+              <SortableHead label="Valor est." sortKey="value" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} className="hidden text-right md:table-cell" />
               <TableHead className="hidden md:table-cell">Asignado</TableHead>
-              <TableHead>Fecha</TableHead>
+              <SortableHead label="Fecha" sortKey="date" currentSort={sortKey} currentOrder={sortOrder} filterStatus={filterStatus} />
             </TableRow>
           </TableHeader>
           <TableBody>

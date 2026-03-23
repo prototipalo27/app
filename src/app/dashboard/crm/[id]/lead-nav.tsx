@@ -8,11 +8,9 @@ import { Button } from "@/components/ui/button";
 interface LeadNavProps {
   prevId: string | null;
   nextId: string | null;
-  current: number;
-  total: number;
 }
 
-export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps) {
+export default function LeadNav({ prevId, nextId }: LeadNavProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
@@ -48,10 +46,6 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
       </Link>
 
       <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">
-          {current} de {total}
-        </span>
-
         <div className="flex gap-1">
           {prevId ? (
             <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${prevId}${suffix}`} title="Anterior (k)" />}>

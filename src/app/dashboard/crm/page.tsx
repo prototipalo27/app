@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CrmKanban } from "./crm-kanban";
 import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
-import { getBasePrices, getMyCommissionPreview } from "./actions";
+import { getBasePrices, getMyCommissionData } from "./actions";
 import { Button } from "@/components/ui/button";
 import { generateMissingSummaries } from "@/lib/ai-summary";
 
@@ -48,7 +48,8 @@ export default async function CrmPage() {
     .eq("is_active", true);
 
   const basePrices = await getBasePrices();
-  const myCommission = await getMyCommissionPreview();
+  const myCommissionData = await getMyCommissionData();
+  const myCommission = myCommissionData?.preview ?? null;
 
   const managers = (allManagers || []).map((m) => ({
     id: m.id,

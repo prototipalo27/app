@@ -1935,11 +1935,12 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
 }
 
 /**
- * Estimate the logged-in user's commission for a specific estimated_value.
+ * Combined: get preview + estimate in a single call (avoids duplicate queries).
+ * If estimatedValue is provided, also returns the incremental commission estimate.
  */
-export async function getMyLeadCommissionEstimate(estimatedValue: number): Promise<{
-  commission: number;
-  rate: number;
+export async function getMyCommissionData(estimatedValue?: number | null): Promise<{
+  preview: CommissionPreview;
+  estimate: { commission: number; rate: number } | null;
 } | null> {
   const profile = await requireRole("comercial");
   const supabase = await createClient();
@@ -1956,18 +1957,144 @@ export async function getMyLeadCommissionEstimate(estimatedValue: number): Promi
   const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
 
-  if (config.type === "tiered") {
-    const tiers = (config.tiers || []) as CommissionTier[];
+  const roleField = config.type === "tiered" ? "assigned_to" : "owned_by";
 
-    // Get closer's accumulated billing this month
-    const accBefore = await getCloserAccumulated(supabase, profile.id, startDate, endDate);
+  const { data: wonLeads } = await supabase
+    .from("leads")
+    .select("id, owned_by, assigned_to, email, created_at, payment_condition")
+    .eq("status", "won")
+    .eq(roleField, profile.id)
+    .gte("updated_at", startDate)
+    .lt("updated_at", endDate)
+    .order("updated_at", { ascending: true });
 
-    const { commission, effectiveRate } = calcTieredCommission(tiers, accBefore, estimatedValue);
-    return { commission, rate: effectiveRate };
+  const leadIds = (wonLeads || []).map((l) => l.id);
+  const quoteMap = new Map<string, number>();
+  if (leadIds.length > 0) {
+    const { data: quotes } = await supabase
+      .from("quote_requests")
+      .select("lead_id, items")
+      .in("lead_id", leadIds);
+    for (const q of quotes || []) {
+      const items = (q.items || []) as unknown as ProformaLineItem[];
+      quoteMap.set(q.lead_id, items.reduce((sum, i) => sum + i.price * i.units, 0));
+    }
   }
 
-  // Flat captador — estimate with possible closer deduction
-  // (we don't know which closer will handle this lead, so show base rate)
-  const rate = Number(config.new_rate);
-  return { commission: estimatedValue * rate, rate };
+  let closerConfigs = new Map<string, any>();
+  let closerAccumulatedMap = new Map<string, number>();
+
+  if (config.type === "flat") {
+    const closerIds = [...new Set(
+      (wonLeads || []).map((l) => l.assigned_to).filter(Boolean)
+    )] as string[];
+
+    if (closerIds.length > 0) {
+      const { data: configs } = await (supabase as any)
+        .from("commission_configs")
+        .select("*")
+        .in("user_id", closerIds)
+        .eq("type", "tiered");
+
+      for (const c of configs || []) closerConfigs.set(c.user_id, c);
+
+      // Parallelize closer accumulated queries
+      const closerAccResults = await Promise.all(
+        closerIds
+          .filter((cid) => closerConfigs.has(cid))
+          .map(async (cid) => ({ id: cid, acc: await getCloserAccumulated(supabase, cid, startDate, endDate) }))
+      );
+      for (const r of closerAccResults) closerAccumulatedMap.set(r.id, r.acc);
+    }
+  }
+
+  let monthlyBilled = 0;
+  let monthlyPrepaidBonus = 0;
+  for (const lead of wonLeads || []) {
+    const qt = quoteMap.get(lead.id) ?? 0;
+    if (qt === 0) continue;
+    monthlyBilled += qt;
+    const isPrepaid = lead.payment_condition === "100-5";
+    if (isPrepaid) monthlyPrepaidBonus += qt * Number(config.prepaid_bonus ?? 0.01);
+  }
+
+  let monthlyCommission: number;
+  let currentRate: number;
+
+  if (config.type === "tiered") {
+    const tiers = (config.tiers || []) as CommissionTier[];
+    currentRate = getCurrentTierRate(tiers, monthlyBilled);
+    monthlyCommission = monthlyBilled * currentRate + monthlyPrepaidBonus;
+  } else {
+    monthlyCommission = 0;
+    currentRate = Number(config.new_rate);
+
+    for (const lead of wonLeads || []) {
+      const qt = quoteMap.get(lead.id) ?? 0;
+      if (qt === 0) continue;
+
+      const isPrepaid = lead.payment_condition === "100-5";
+      const prepaidBonus = isPrepaid ? qt * Number(config.prepaid_bonus ?? 0.01) : 0;
+
+      let isReturning = false;
+      if (lead.email) {
+        const { count } = await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .ilike("email", lead.email)
+          .eq("status", "won")
+          .neq("id", lead.id)
+          .lt("created_at", lead.created_at);
+        isReturning = (count ?? 0) > 0;
+      }
+
+      let rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+
+      const closerId = lead.assigned_to;
+      if (closerId) {
+        const closerConfig = closerConfigs.get(closerId);
+        if (closerConfig) {
+          const closerTiers = (closerConfig.tiers || []) as CommissionTier[];
+          const closerBaseRate = getBaseTierRate(closerTiers);
+          const closerAcc = closerAccumulatedMap.get(closerId) ?? 0;
+          const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+          rate = Math.max(0, rate - (closerCurrentRate - closerBaseRate));
+        }
+      }
+
+      monthlyCommission += qt * rate + prepaidBonus;
+    }
+
+    if (closerConfigs.size > 0) {
+      const [firstCloserId, firstCloserConfig] = [...closerConfigs.entries()][0];
+      const closerTiers = (firstCloserConfig.tiers || []) as CommissionTier[];
+      const closerBaseRate = getBaseTierRate(closerTiers);
+      const closerAcc = closerAccumulatedMap.get(firstCloserId) ?? 0;
+      const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+      currentRate = Math.max(0, currentRate - (closerCurrentRate - closerBaseRate));
+    }
+  }
+
+  const preview: CommissionPreview = {
+    ownerId: profile.id,
+    ownerName: profile.email.split("@")[0],
+    monthlyBilled,
+    monthlyCommission,
+    configType: config.type as "flat" | "tiered",
+    currentRate,
+  };
+
+  // Estimate for a specific lead value (reuses data already fetched)
+  let estimate: { commission: number; rate: number } | null = null;
+  if (estimatedValue && estimatedValue > 0) {
+    if (config.type === "tiered") {
+      const tiers = (config.tiers || []) as CommissionTier[];
+      const { commission, effectiveRate } = calcTieredCommission(tiers, monthlyBilled, estimatedValue);
+      estimate = { commission, rate: effectiveRate };
+    } else {
+      estimate = { commission: estimatedValue * currentRate, rate: currentRate };
+    }
+  }
+
+  return { preview, estimate };
 }
