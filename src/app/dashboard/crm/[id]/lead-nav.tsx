@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 interface LeadNavProps {
@@ -14,6 +14,11 @@ interface LeadNavProps {
 
 export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+  const suffix = from ? `?from=${from}` : "";
+  const backHref = from === "tracker" ? "/dashboard/crm/timeline" : "/dashboard/crm";
+  const backLabel = from === "tracker" ? "Volver a Tracker" : "Volver a Leads";
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -22,24 +27,24 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
 
       if (e.key === "j" && nextId) {
         e.preventDefault();
-        router.push(`/dashboard/crm/${nextId}`);
+        router.push(`/dashboard/crm/${nextId}${suffix}`);
       } else if (e.key === "k" && prevId) {
         e.preventDefault();
-        router.push(`/dashboard/crm/${prevId}`);
+        router.push(`/dashboard/crm/${prevId}${suffix}`);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prevId, nextId, router]);
+  }, [prevId, nextId, router, suffix]);
 
   return (
     <div className="mb-6 flex items-center justify-between">
       <Link
-        href="/dashboard/crm"
+        href={backHref}
         className="text-sm text-muted-foreground hover:text-foreground"
       >
-        &larr; Volver a CRM
+        &larr; {backLabel}
       </Link>
 
       <div className="flex items-center gap-3">
@@ -49,7 +54,7 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
 
         <div className="flex gap-1">
           {prevId ? (
-            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${prevId}`} title="Anterior (k)" />}>
+            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${prevId}${suffix}`} title="Anterior (k)" />}>
               &larr; Ant
             </Button>
           ) : (
@@ -59,7 +64,7 @@ export default function LeadNav({ prevId, nextId, current, total }: LeadNavProps
           )}
 
           {nextId ? (
-            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${nextId}`} title="Siguiente (j)" />}>
+            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${nextId}${suffix}`} title="Siguiente (j)" />}>
               Sig &rarr;
             </Button>
           ) : (

@@ -64,7 +64,7 @@ export default async function CrmListPage({
     <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">
-          CRM — Lista de Leads
+          Tracker — Lista de Leads
         </h1>
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href="/dashboard/crm" />}>

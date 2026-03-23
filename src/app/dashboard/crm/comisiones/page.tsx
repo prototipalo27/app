@@ -217,7 +217,7 @@ export default async function ComisionesPage({
             href="/dashboard/crm"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            &larr; Volver a CRM
+            &larr; Volver a Tracker
           </Link>
           <h1 className="mt-1 text-2xl font-bold text-foreground">
             Comisiones

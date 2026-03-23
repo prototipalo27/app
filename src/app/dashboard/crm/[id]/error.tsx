@@ -16,7 +16,7 @@ export default function LeadError({
       </h2>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
         Algo ha fallado al cargar esta pagina. Puedes intentarlo de nuevo o
-        volver al CRM.
+        volver al Tracker.
       </p>
       {error.digest && (
         <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
@@ -34,7 +34,7 @@ export default function LeadError({
           href="/dashboard/crm"
           className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          Volver al CRM
+          Volver al Tracker
         </Link>
       </div>
     </div>

@@ -32,7 +32,7 @@ export default async function NewLeadPage() {
           href="/dashboard/crm"
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          &larr; Volver a CRM
+          &larr; Volver a Tracker
         </Link>
       </div>
 

@@ -189,7 +189,7 @@ export function TimelineView({ leads }: { leads: TimelineLead[] }) {
               {groupLeads.map((lead) => (
                 <Link
                   key={lead.id}
-                  href={`/dashboard/crm/${lead.id}`}
+                  href={`/dashboard/crm/${lead.id}?from=tracker`}
                   className={`flex items-center gap-3 rounded-lg border ${config.borderColor} ${config.bgColor} px-4 py-3 transition-colors hover:opacity-80`}
                 >
                   {/* Bar visual */}
