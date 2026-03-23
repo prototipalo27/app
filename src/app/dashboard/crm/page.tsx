@@ -56,14 +56,17 @@ export default async function CrmPage() {
     name: m.email.split("@")[0],
   }));
 
-  // Build unique owners (captadores) list from leads
-  const ownerIds = [...new Set((leads || []).map((l) => l.owned_by).filter(Boolean))] as string[];
+  // Build unique owners (captadores) list from leads + commission configs
+  const ownerIdsFromLeads = (leads || []).map((l) => l.owned_by).filter(Boolean) as string[];
+  const ownerIdsFromCommissions = commissionPreviews.map((c) => c.ownerId);
+  const ownerIds = [...new Set([...ownerIdsFromLeads, ...ownerIdsFromCommissions])];
 
   // Fetch assignee + owner emails
   const userIds = [
     ...new Set([
       ...(leads || []).map((l) => l.assigned_to),
       ...(leads || []).map((l) => l.owned_by),
+      ...ownerIdsFromCommissions,
     ].filter(Boolean)),
   ] as string[];
 
