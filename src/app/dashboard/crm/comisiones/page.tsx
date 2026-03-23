@@ -18,31 +18,39 @@ import {
 } from "@/components/ui/table";
 import { CommissionSettings } from "./commission-settings";
 
+function getCurrentTierRate(tiers: CommissionTier[], totalBilling: number): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  if (totalBilling <= 0) return sorted[0]?.rate ?? 0;
+  let rate = sorted[0]?.rate ?? 0;
+  for (const tier of sorted) {
+    if (totalBilling > tier.min) rate = tier.rate;
+  }
+  return rate;
+}
+
+function getBaseTierRate(tiers: CommissionTier[]): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  return sorted[0]?.rate ?? 0;
+}
+
+/**
+ * Retroactive step-based: when you cross a tier, the new rate applies
+ * to the ENTIRE month billing. Returns incremental commission for this lead.
+ */
 function calcTieredCommission(
   tiers: CommissionTier[],
   accumulatedBefore: number,
   quoteTotal: number
 ): { commission: number; effectiveRate: number } {
-  const sorted = [...tiers].sort((a, b) => a.min - b.min);
   const newTotal = accumulatedBefore + quoteTotal;
+  const newRate = getCurrentTierRate(tiers, newTotal);
+  const prevRate = getCurrentTierRate(tiers, accumulatedBefore);
 
-  let rate = sorted[0]?.rate ?? 0;
-  for (const tier of sorted) {
-    const tierMax = tier.max ?? Infinity;
-    if (newTotal > tier.min && newTotal <= tierMax) {
-      rate = tier.rate;
-      break;
-    }
-    if (newTotal > tierMax) {
-      rate = tier.rate;
-    }
-  }
-  if (newTotal > (sorted[sorted.length - 1]?.max ?? Infinity)) {
-    rate = sorted[sorted.length - 1]?.rate ?? 0;
-  }
+  const newMonthTotal = newTotal * newRate;
+  const prevMonthTotal = accumulatedBefore * prevRate;
+  const commission = newMonthTotal - prevMonthTotal;
 
-  const commission = quoteTotal * rate;
-  return { commission, effectiveRate: rate };
+  return { commission, effectiveRate: newRate };
 }
 
 export default async function ComisionesPage({

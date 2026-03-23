@@ -375,40 +375,61 @@ export async function saveCommissionConfig(
  *   - 1000 at 5% (fills 0-3000 bracket) + 1000 at 10% = 150€
  */
 /**
- * Step-based commission: the rate is determined by which tier the
- * NEW total (accumulatedBefore + quoteTotal) falls into.
- * That single rate applies to the entire quoteTotal (not split across tiers).
- * This incentivizes reaching the next level — once you cross a threshold,
- * the higher rate applies to the whole deal.
+ * Retroactive step-based commission.
+ * When the closer's total monthly billing crosses a tier threshold,
+ * the new rate applies to the ENTIRE month's billing (retroactive).
+ *
+ * Example (tiers: 0-10K@6%, 10K-15K@7%):
+ *   Lead 1: 8,000€ → total 8,000 → 6% → month commission = 480€
+ *   Lead 2: 6,000€ → total 14,000 → 7% → month commission = 980€ (7% × 14,000)
+ *   Lead 2's incremental = 980 - 480 = 500€ (not just 7% × 6,000 = 420€)
+ *
+ * Returns:
+ *   - monthTotal: commission for the entire month at the new rate
+ *   - effectiveRate: the tier rate that applies
+ *   - incrementalCommission: how much this specific lead adds (monthTotal - prevMonthTotal)
  */
 function calcTieredCommission(
   tiers: CommissionTier[],
   accumulatedBefore: number,
   quoteTotal: number
-): { commission: number; effectiveRate: number } {
-  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+): { commission: number; effectiveRate: number; monthTotal: number } {
   const newTotal = accumulatedBefore + quoteTotal;
+  const newRate = getCurrentTierRate(tiers, newTotal);
+  const prevRate = getCurrentTierRate(tiers, accumulatedBefore);
 
-  // Find which tier the new total falls into
+  const newMonthTotal = newTotal * newRate;
+  const prevMonthTotal = accumulatedBefore * prevRate;
+  const incrementalCommission = newMonthTotal - prevMonthTotal;
+
+  return {
+    commission: incrementalCommission,
+    effectiveRate: newRate,
+    monthTotal: newMonthTotal,
+  };
+}
+
+/**
+ * Given a tiered config and a total billing amount, return the applicable tier rate.
+ */
+function getCurrentTierRate(tiers: CommissionTier[], totalBilling: number): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  if (totalBilling <= 0) return sorted[0]?.rate ?? 0;
   let rate = sorted[0]?.rate ?? 0;
   for (const tier of sorted) {
-    const tierMax = tier.max ?? Infinity;
-    if (newTotal > tier.min && newTotal <= tierMax) {
-      rate = tier.rate;
-      break;
-    }
-    if (newTotal > tierMax) {
-      // Passed this tier, check next
+    if (totalBilling > tier.min) {
       rate = tier.rate;
     }
   }
-  // If beyond all tiers, use the last tier's rate
-  if (newTotal > (sorted[sorted.length - 1]?.max ?? Infinity)) {
-    rate = sorted[sorted.length - 1]?.rate ?? 0;
-  }
+  return rate;
+}
 
-  const commission = quoteTotal * rate;
-  return { commission, effectiveRate: rate };
+/**
+ * Get the base (minimum) tier rate from a tiered config.
+ */
+function getBaseTierRate(tiers: CommissionTier[]): number {
+  const sorted = [...tiers].sort((a, b) => a.min - b.min);
+  return sorted[0]?.rate ?? 0;
 }
 
 export async function getCommissionSummary(leadId: string): Promise<{
@@ -1754,27 +1775,6 @@ async function getCloserAccumulated(
 }
 
 /**
- * Given a tiered config and accumulated billing, return the current tier rate.
- */
-function getCurrentTierRate(tiers: CommissionTier[], accumulated: number): number {
-  const sorted = [...tiers].sort((a, b) => a.min - b.min);
-  for (const tier of sorted) {
-    const tierMax = tier.max ?? Infinity;
-    if (accumulated < tierMax) return tier.rate;
-  }
-  return sorted[sorted.length - 1]?.rate ?? 0;
-}
-
-/**
- * Get the base (minimum) tier rate from a tiered config — the rate
- * the closer always gets, before any "bonus" kicks in.
- */
-function getBaseTierRate(tiers: CommissionTier[]): number {
-  const sorted = [...tiers].sort((a, b) => a.min - b.min);
-  return sorted[0]?.rate ?? 0;
-}
-
-/**
  * Get the logged-in user's commission preview for the current month.
  */
 export async function getMyCommissionPreview(): Promise<CommissionPreview | null> {
@@ -1850,28 +1850,37 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
     }
   }
 
+  // Sum total billing from quotes
   let monthlyBilled = 0;
-  let monthlyCommission = 0;
-  let closerAccRunning = new Map<string, number>(); // track per-closer accumulation
-
+  let monthlyPrepaidBonus = 0;
   for (const lead of wonLeads || []) {
     const qt = quoteMap.get(lead.id) ?? 0;
     if (qt === 0) continue;
     monthlyBilled += qt;
-
     const isPrepaid = lead.payment_condition === "100-5";
-    const bonusRate = isPrepaid ? Number(config.prepaid_bonus ?? 0.01) : 0;
-    const prepaidBonus = qt * bonusRate;
+    if (isPrepaid) monthlyPrepaidBonus += qt * Number(config.prepaid_bonus ?? 0.01);
+  }
 
-    if (config.type === "tiered") {
-      // Closer: straightforward tiered calculation
-      const tiers = (config.tiers || []) as CommissionTier[];
-      const accBefore = closerAccRunning.get(profile.id) ?? 0;
-      const { commission } = calcTieredCommission(tiers, accBefore, qt);
-      monthlyCommission += commission + prepaidBonus;
-      closerAccRunning.set(profile.id, accBefore + qt);
-    } else {
-      // Captador: base rate minus closer's excess
+  let monthlyCommission: number;
+  let currentRate: number;
+
+  if (config.type === "tiered") {
+    // Closer: retroactive model — rate × total month billing
+    const tiers = (config.tiers || []) as CommissionTier[];
+    currentRate = getCurrentTierRate(tiers, monthlyBilled);
+    monthlyCommission = monthlyBilled * currentRate + monthlyPrepaidBonus;
+  } else {
+    // Captador: per-lead calculation with closer deduction
+    monthlyCommission = 0;
+    currentRate = Number(config.new_rate);
+
+    for (const lead of wonLeads || []) {
+      const qt = quoteMap.get(lead.id) ?? 0;
+      if (qt === 0) continue;
+
+      const isPrepaid = lead.payment_condition === "100-5";
+      const prepaidBonus = isPrepaid ? qt * Number(config.prepaid_bonus ?? 0.01) : 0;
+
       let isReturning = false;
       if (lead.email) {
         const { count } = await supabase
@@ -1884,35 +1893,27 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
         isReturning = (count ?? 0) > 0;
       }
 
-      let baseRate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+      let rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
 
-      // Deduct closer's excess if there's a tiered closer on this lead
+      // Deduct closer's excess above base tier
       const closerId = lead.assigned_to;
       if (closerId) {
         const closerConfig = closerConfigs.get(closerId);
         if (closerConfig) {
           const closerTiers = (closerConfig.tiers || []) as CommissionTier[];
           const closerBaseRate = getBaseTierRate(closerTiers);
-          const closerAcc = closerAccRunning.get(closerId) ?? (closerAccumulatedMap.get(closerId) ?? 0);
+          // Use the closer's TOTAL month accumulated to determine their tier
+          const closerAcc = closerAccumulatedMap.get(closerId) ?? 0;
           const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
           const excess = closerCurrentRate - closerBaseRate;
-          baseRate = Math.max(0, baseRate - excess);
+          rate = Math.max(0, rate - excess);
         }
       }
 
-      monthlyCommission += qt * baseRate + prepaidBonus;
+      monthlyCommission += qt * rate + prepaidBonus;
     }
-  }
 
-  // Current effective rate
-  let currentRate: number;
-  if (config.type === "tiered") {
-    const tiers = (config.tiers || []) as CommissionTier[];
-    currentRate = getCurrentTierRate(tiers, monthlyBilled);
-  } else {
-    currentRate = Number(config.new_rate);
-    // If there are closers with excess, show adjusted rate
-    // (use the most common closer's excess as approximation)
+    // Adjust displayed current rate with closer deduction
     if (closerConfigs.size > 0) {
       const [firstCloserId, firstCloserConfig] = [...closerConfigs.entries()][0];
       const closerTiers = (firstCloserConfig.tiers || []) as CommissionTier[];
