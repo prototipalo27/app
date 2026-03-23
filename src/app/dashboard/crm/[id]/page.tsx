@@ -33,6 +33,7 @@ export default async function LeadDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
+  // First: fetch the lead (required for notFound check and other queries)
   const { data: lead } = await supabase
     .from("leads")
     .select("*")
@@ -41,43 +42,45 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
 
-  const { data: activeLeadIds } = await supabase
-    .from("leads")
-    .select("id")
-    .not("status", "eq", "won")
-    .not("status", "eq", "lost")
-    .order("created_at", { ascending: false });
+  // Fire ALL remaining queries in parallel — none depend on each other
+  const [
+    { data: activeLeadIds },
+    { data: activities },
+    { data: managers },
+    { data: linkedProjects },
+    commission,
+    ndaStatusResult,
+    myCommission,
+    myEstimate,
+    { data: quoteRequest },
+    { data: snippets },
+    { data: emailResources },
+    { data: projectTemplates },
+    basePrices,
+  ] = await Promise.all([
+    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").order("created_at", { ascending: false }),
+    supabase.from("lead_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
+    supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
+    supabase.from("projects").select("id, name, status, project_type").eq("lead_id", id).order("created_at", { ascending: false }),
+    getCommissionSummary(id),
+    getNdaStatus(id),
+    getMyCommissionPreview(),
+    lead.estimated_value ? getMyLeadCommissionEstimate(lead.estimated_value) : Promise.resolve(null),
+    supabase.from("quote_requests").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("email_snippets").select("id, title, category, content").order("category").order("sort_order", { ascending: true }),
+    supabase.from("tools_resources").select("id, title, type, content, category").in("type", ["imagen", "archivo"]).order("category").order("title"),
+    supabase.from("project_templates").select("name").eq("is_active", true).order("name"),
+    getBasePrices(),
+  ]);
 
   const ids = (activeLeadIds || []).map((l) => l.id);
   const currentIndex = ids.indexOf(id);
   const prevId = currentIndex > 0 ? ids[currentIndex - 1] : null;
   const nextId = currentIndex >= 0 && currentIndex < ids.length - 1 ? ids[currentIndex + 1] : null;
 
-  const { data: activities } = await supabase
-    .from("lead_activities")
-    .select("*")
-    .eq("lead_id", id)
-    .order("created_at", { ascending: false });
+  const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
 
-  const { data: managers } = await supabase
-    .from("user_profiles")
-    .select("id, email")
-    .in("role", ["manager", "super_admin"])
-    .eq("is_active", true);
-
-  const { data: linkedProjects } = await supabase
-    .from("projects")
-    .select("id, name, status, project_type")
-    .eq("lead_id", id)
-    .order("created_at", { ascending: false });
-
-  const [commission, ndaStatusResult, myCommission, myEstimate] = await Promise.all([
-    getCommissionSummary(id),
-    getNdaStatus(id),
-    getMyCommissionPreview(),
-    lead.estimated_value ? getMyLeadCommissionEstimate(lead.estimated_value) : Promise.resolve(null),
-  ]);
-
+  // User map for display names (depends on activities result)
   const userIds = [
     ...new Set([
       lead.assigned_to,
@@ -94,37 +97,6 @@ export default async function LeadDetailPage({
       .in("id", userIds);
     userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
   }
-
-  const { data: quoteRequest } = await supabase
-    .from("quote_requests")
-    .select("*")
-    .eq("lead_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: snippets } = await supabase
-    .from("email_snippets")
-    .select("id, title, category, content")
-    .order("category")
-    .order("sort_order", { ascending: true });
-
-  const { data: emailResources } = await supabase
-    .from("tools_resources")
-    .select("id, title, type, content, category")
-    .in("type", ["imagen", "archivo"])
-    .order("category")
-    .order("title");
-
-  const { data: projectTemplates } = await supabase
-    .from("project_templates")
-    .select("name")
-    .eq("is_active", true)
-    .order("name");
-
-  const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
-
-  const basePrices = await getBasePrices();
 
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
 

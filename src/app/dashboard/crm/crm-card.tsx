@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -61,6 +62,10 @@ export function CrmCard({ lead, commissionRate }: CrmCardProps) {
     id: lead.id,
     data: { status: lead.status },
   });
+
+  // Prefetch lead detail page for instant navigation
+  const url = `/dashboard/crm/${lead.id}`;
+  useEffect(() => { router.prefetch(url); }, [router, url]);
 
   // Use last interaction date if available, otherwise fall back to created_at
   const interactionDate = lead.last_activity_at || lead.created_at;
