@@ -49,24 +49,24 @@ export default async function CrmPage() {
     .eq("is_active", true);
 
   const basePrices = await getBasePrices();
-  const commissionPreviews = await getCommissionPreviews();
+  const angelPreview = await getAngelCommissionPreview();
 
   const managers = (allManagers || []).map((m) => ({
     id: m.id,
     name: m.email.split("@")[0],
   }));
 
-  // Build unique owners (captadores) list from leads + commission configs
+  // Build unique owners (captadores) list from leads + Angel
   const ownerIdsFromLeads = (leads || []).map((l) => l.owned_by).filter(Boolean) as string[];
-  const ownerIdsFromCommissions = commissionPreviews.map((c) => c.ownerId);
-  const ownerIds = [...new Set([...ownerIdsFromLeads, ...ownerIdsFromCommissions])];
+  const angelId = angelPreview?.ownerId;
+  const ownerIds = [...new Set([...ownerIdsFromLeads, ...(angelId ? [angelId] : [])])];
 
   // Fetch assignee + owner emails
   const userIds = [
     ...new Set([
       ...(leads || []).map((l) => l.assigned_to),
       ...(leads || []).map((l) => l.owned_by),
-      ...ownerIdsFromCommissions,
+      ...(angelId ? [angelId] : []),
     ].filter(Boolean)),
   ] as string[];
 
@@ -126,7 +126,7 @@ export default async function CrmPage() {
         </div>
       </div>
 
-      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} commissionPreviews={commissionPreviews} />
+      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} angelPreview={angelPreview} />
 
       <PricingConfig basePrices={basePrices} />
     </div>
