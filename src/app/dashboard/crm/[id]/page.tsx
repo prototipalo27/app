@@ -16,7 +16,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
-import { getBasePrices, getCommissionSummary, getNdaStatus } from "../actions";
+import { getBasePrices, getCommissionSummary, getNdaStatus, getAngelCommissionPreview, getAngelLeadCommissionEstimate } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -71,9 +71,11 @@ export default async function LeadDetailPage({
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
 
-  const [commission, ndaStatusResult] = await Promise.all([
+  const [commission, ndaStatusResult, angelPreview, angelEstimate] = await Promise.all([
     getCommissionSummary(id),
     getNdaStatus(id),
+    getAngelCommissionPreview(),
+    lead.estimated_value ? getAngelLeadCommissionEstimate(lead.estimated_value) : Promise.resolve(null),
   ]);
 
   const userIds = [
@@ -144,6 +146,48 @@ export default async function LeadDetailPage({
         current={currentIndex + 1}
         total={ids.length}
       />
+
+      {/* Angel's commission widget */}
+      {angelPreview && (
+        <div className="mb-4 flex items-stretch gap-2 md:gap-3">
+          <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
+            <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
+              Comision acumulada · Angel
+            </p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
+              {angelPreview.monthlyCommission.toFixed(2)} €
+            </p>
+            <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
+              {angelPreview.monthlyBilled.toLocaleString("es-ES")} € facturado este mes
+            </p>
+          </div>
+
+          {angelEstimate && lead.status !== "won" && lead.status !== "lost" && (
+            <div className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                Si cierras esta oportunidad
+              </p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                +{angelEstimate.commission.toFixed(2)} €
+              </p>
+              <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
+                {lead.estimated_value?.toLocaleString("es-ES")} € · {(angelEstimate.rate * 100).toFixed(1)}%
+              </p>
+            </div>
+          )}
+
+          {angelEstimate && lead.status !== "won" && lead.status !== "lost" && (
+            <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                Total mes si cierras
+              </p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {(angelPreview.monthlyCommission + angelEstimate.commission).toFixed(2)} €
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Left panel */}

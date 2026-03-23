@@ -780,17 +780,14 @@ export function CrmKanban({ initialLeads, managers, owners, angelPreview }: CrmK
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
         <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
-          {kanbanColumns.map((column) => {
-            const activePreview = commissionPreviews.find((p) => p.ownerId === filterOwner);
-            return (
-              <CrmColumn
-                key={column.id}
-                column={column}
-                leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
-                commissionRate={column.id !== "won" && column.id !== "lost" ? activePreview?.currentRate : undefined}
-              />
-            );
-          })}
+          {kanbanColumns.map((column) => (
+            <CrmColumn
+              key={column.id}
+              column={column}
+              leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
+              commissionRate={column.id !== "won" && column.id !== "lost" ? angelPreview?.currentRate : undefined}
+            />
+          ))}
         </div>
       </DragDropProvider>
 
