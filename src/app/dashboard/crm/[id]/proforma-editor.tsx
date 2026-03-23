@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   saveQuoteItems,
   sendQuoteToClient,
@@ -82,6 +83,7 @@ export default function ProformaEditor({
   basePrices,
 }: ProformaEditorProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const initialLines = (): ProformaLineItem[] => {
     if (existingItems && existingItems.length > 0) return existingItems;
@@ -146,6 +148,7 @@ export default function ProformaEditor({
       const result = await saveQuoteItems(leadId, validLines, notes || undefined);
       if (result.success) {
         setSaved(true);
+        router.refresh();
       } else {
         setError(result.error || "Error al guardar");
       }

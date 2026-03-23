@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateLeadStatus,
@@ -103,6 +103,9 @@ export default function LeadActions({
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
+  useEffect(() => {
+    setEditedValue(estimatedValue?.toString() ?? "");
+  }, [estimatedValue]);
   const [ndaError, setNdaError] = useState<string | null>(null);
 
   const selectClass =
