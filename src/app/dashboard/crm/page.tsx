@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CrmKanban } from "./crm-kanban";
 import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
-import { getBasePrices, getCommissionPreviews } from "./actions";
+import { getBasePrices, getAngelCommissionPreview } from "./actions";
 import type { CommissionPreview } from "./actions";
 import { Button } from "@/components/ui/button";
 import { generateMissingSummaries } from "@/lib/ai-summary";
