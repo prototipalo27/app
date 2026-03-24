@@ -181,7 +181,6 @@ export async function sendEmail(options: SendEmailOptions) {
       content: a.content,
       contentType: a.contentType,
       contentDisposition: "attachment" as const,
-      encoding: "base64" as const,
     })),
   });
 

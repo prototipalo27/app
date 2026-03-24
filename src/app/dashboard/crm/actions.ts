@@ -1094,16 +1094,24 @@ export async function sendQuoteToClient(
       notes: qr.notes || undefined,
     });
     holdedEstimateId = estimate.id;
+  } catch (err) {
+    console.error("[sendQuoteToClient] Holded estimate creation failed:", err);
+  }
 
-    // Download PDF from Holded and attach to email
-    const pdfBuffer = await getDocumentPdf("estimate", holdedEstimateId);
-    emailAttachments.push({
-      filename: `Presupuesto-Prototipalo.pdf`,
-      content: pdfBuffer,
-      contentType: "application/pdf",
-    });
-  } catch {
-    // Holded failure should not block quote sending
+  // Download PDF from Holded and attach to email
+  if (holdedEstimateId) {
+    try {
+      const pdfBuffer = await getDocumentPdf("estimate", holdedEstimateId);
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        emailAttachments.push({
+          filename: `Presupuesto-Prototipalo.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    } catch (err) {
+      console.error("[sendQuoteToClient] Holded PDF download failed:", err);
+    }
   }
 
   // Send email (or schedule if night hours)
