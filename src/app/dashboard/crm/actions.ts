@@ -1053,6 +1053,10 @@ export async function sendQuoteToClient(
       </tfoot>
     </table>`;
 
+  const notesHtml = qr.notes
+    ? `<p style="white-space:pre-line;">${qr.notes}</p>`
+    : "";
+
   // Get per-user SMTP config
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
@@ -1062,7 +1066,7 @@ export async function sendQuoteToClient(
       to: lead.email,
       subject: "Presupuesto — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
-      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
       smtpConfig,
     }, { createdBy: profile.id });
   } catch {
