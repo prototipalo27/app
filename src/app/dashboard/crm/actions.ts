@@ -1060,22 +1060,10 @@ export async function sendQuoteToClient(
   // Get per-user SMTP config
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
-  // Send email (or schedule if night hours)
-  try {
-    await sendEmailOrSchedule({
-      to: lead.email,
-      subject: "Presupuesto — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
-      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-      smtpConfig,
-    }, { createdBy: profile.id });
-  } catch {
-    return { success: false, error: "Error al enviar el email" };
-  }
-
-  // Create estimate (presupuesto no vinculante) in Holded
+  // Create estimate (presupuesto no vinculante) in Holded FIRST so we can attach its PDF
   let holdedContactId = qr.holded_contact_id || null;
   let holdedEstimateId: string | null = null;
+  const emailAttachments: EmailAttachment[] = [];
 
   try {
     // Find or create a basic contact in Holded from lead data
@@ -1106,8 +1094,30 @@ export async function sendQuoteToClient(
       notes: qr.notes || undefined,
     });
     holdedEstimateId = estimate.id;
+
+    // Download PDF from Holded and attach to email
+    const pdfBuffer = await getDocumentPdf("estimate", holdedEstimateId);
+    emailAttachments.push({
+      filename: `Presupuesto-Prototipalo.pdf`,
+      content: pdfBuffer,
+      contentType: "application/pdf",
+    });
   } catch {
     // Holded failure should not block quote sending
+  }
+
+  // Send email (or schedule if night hours)
+  try {
+    await sendEmailOrSchedule({
+      to: lead.email,
+      subject: "Presupuesto — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
+      attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
+    }, { createdBy: profile.id });
+  } catch {
+    return { success: false, error: "Error al enviar el email" };
   }
 
   // Update quote request status + Holded IDs
