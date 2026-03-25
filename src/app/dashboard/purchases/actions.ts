@@ -51,8 +51,9 @@ export async function addPurchaseItem(formData: FormData) {
     .eq("is_active", true)
     .neq("id", profile.id);
 
-  // Create task assigned to first manager (Ian if available, else first manager)
-  const assignTo = managers?.find((m) => m.id === "cd95b109-3af7-4658-b782-cb0f2f3419c3")?.id
+  // Create task assigned to Manu (purchase manager), else first available manager
+  const MANU_ID = "1acae8cc-e872-4513-8133-27cbbf05d6ba";
+  const assignTo = managers?.find((m) => m.id === MANU_ID)?.id
     ?? managers?.[0]?.id
     ?? profile.id;
 
