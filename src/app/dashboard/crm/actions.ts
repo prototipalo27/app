@@ -123,109 +123,187 @@ export async function createLead(formData: FormData) {
 
 // ── Recurring client: New Order ──────────────────────────
 
-export type WonClient = {
-  leadId: string;
+export type PastDocument = {
+  id: string;
+  source: "crm" | "holded";
+  items: ProformaLineItem[];
+  notes: string | null;
+  createdAt: string;
+  total: number;
+  docNumber?: string;
+};
+
+export type RecurringClient = {
+  id: string;
+  holdedContactId: string | null;
   fullName: string;
   company: string | null;
   email: string | null;
   phone: string | null;
-  quotes: {
-    id: string;
-    items: ProformaLineItem[];
-    notes: string | null;
-    createdAt: string;
-    total: number;
-  }[];
+  taxId: string | null;
+  source: "crm" | "holded" | "both";
+  documents: PastDocument[];
 };
 
-/** Get all won clients with their quote history for "Nuevo pedido" */
-export async function getWonClients(): Promise<WonClient[]> {
+/** Get all clients (CRM won leads + Holded contacts) for "Nuevo pedido" */
+export async function getRecurringClients(): Promise<RecurringClient[]> {
   await requireRole("manager");
   const supabase = await createClient();
 
-  // Get distinct won clients by email (most recent lead per email)
-  const { data: wonLeads } = await supabase
-    .from("leads")
-    .select("id, full_name, company, email, phone")
-    .eq("status", "won")
-    .order("updated_at", { ascending: false });
+  // Fetch CRM won leads + Holded contacts in parallel
+  const [{ data: wonLeads }, holdedContacts] = await Promise.all([
+    supabase.from("leads").select("id, full_name, company, email, phone").eq("status", "won").order("updated_at", { ascending: false }),
+    listContacts().catch(() => [] as HoldedContact[]),
+  ]);
 
-  if (!wonLeads || wonLeads.length === 0) return [];
+  // Get CRM quotes
+  const allLeadIds = (wonLeads || []).map((l) => l.id);
+  let crmQuotes: { id: string; lead_id: string; items: unknown; notes: string | null; created_at: string | null }[] = [];
+  if (allLeadIds.length > 0) {
+    const { data } = await supabase
+      .from("quote_requests")
+      .select("id, lead_id, items, notes, created_at")
+      .in("lead_id", allLeadIds)
+      .order("created_at", { ascending: false });
+    crmQuotes = data || [];
+  }
 
-  // Dedupe by email (keep most recent)
-  const seen = new Set<string>();
-  const uniqueClients = wonLeads.filter((l) => {
-    const key = l.email?.toLowerCase() || l.id;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // Build client map keyed by email
+  const clientMap = new Map<string, RecurringClient>();
 
-  // Get all quotes for these leads
-  const allLeadIds = wonLeads.map((l) => l.id);
-  const { data: quotes } = await supabase
-    .from("quote_requests")
-    .select("id, lead_id, items, notes, created_at")
-    .in("lead_id", allLeadIds)
-    .order("created_at", { ascending: false });
+  for (const l of wonLeads || []) {
+    const key = l.email?.toLowerCase() || `lead_${l.id}`;
+    if (clientMap.has(key)) continue;
 
-  // Build quote map by email (so we get quotes from all leads of same client)
-  const quotesByEmail = new Map<string, WonClient["quotes"]>();
-  for (const q of quotes || []) {
-    const lead = wonLeads.find((l) => l.id === q.lead_id);
-    const key = lead?.email?.toLowerCase() || q.lead_id;
-    const items = (q.items || []) as unknown as ProformaLineItem[];
-    const total = items.reduce((s, i) => s + i.price * i.units, 0);
-    if (!quotesByEmail.has(key)) quotesByEmail.set(key, []);
-    quotesByEmail.get(key)!.push({
-      id: q.id,
-      items,
-      notes: q.notes,
-      createdAt: q.created_at || new Date().toISOString(),
-      total,
+    const leadQuotes = crmQuotes.filter((q) => q.lead_id === l.id);
+    const docs: PastDocument[] = leadQuotes.map((q) => {
+      const items = (q.items || []) as unknown as ProformaLineItem[];
+      return {
+        id: q.id,
+        source: "crm" as const,
+        items,
+        notes: q.notes,
+        createdAt: q.created_at || new Date().toISOString(),
+        total: items.reduce((s, i) => s + i.price * i.units, 0),
+      };
+    });
+
+    clientMap.set(key, {
+      id: l.id,
+      holdedContactId: null,
+      fullName: l.full_name,
+      company: l.company,
+      email: l.email,
+      phone: l.phone,
+      taxId: null,
+      source: "crm",
+      documents: docs,
     });
   }
 
-  return uniqueClients.map((l) => ({
-    leadId: l.id,
-    fullName: l.full_name,
-    company: l.company,
-    email: l.email,
-    phone: l.phone,
-    quotes: quotesByEmail.get(l.email?.toLowerCase() || l.id) || [],
-  }));
+  // Merge Holded contacts
+  for (const hc of holdedContacts) {
+    if (hc.type !== "client") continue;
+    const key = hc.email?.toLowerCase() || `holded_${hc.id}`;
+
+    const existing = clientMap.get(key);
+    if (existing) {
+      existing.holdedContactId = hc.id;
+      existing.taxId = hc.code || null;
+      existing.source = "both";
+    } else {
+      clientMap.set(key, {
+        id: `h_${hc.id}`,
+        holdedContactId: hc.id,
+        fullName: hc.name,
+        company: hc.tradeName || null,
+        email: hc.email || null,
+        phone: hc.phone || hc.mobile || null,
+        taxId: hc.code || null,
+        source: "holded",
+        documents: [],
+      });
+    }
+  }
+
+  // Fetch Holded docs for clients that have a holdedContactId but no CRM docs
+  const clientsNeedingDocs = [...clientMap.values()].filter(
+    (c) => c.holdedContactId && c.documents.length === 0
+  );
+
+  if (clientsNeedingDocs.length > 0) {
+    const sixMonthsAgo = Math.floor(Date.now() / 1000) - 180 * 86400;
+    const [proformas, invoices] = await Promise.all([
+      listDocuments("proform", { starttmp: sixMonthsAgo }).catch(() => []),
+      listDocuments("invoice", { starttmp: sixMonthsAgo }).catch(() => []),
+    ]);
+
+    const holdedIdSet = new Set(clientsNeedingDocs.map((c) => c.holdedContactId));
+    for (const doc of [...proformas, ...invoices]) {
+      if (!holdedIdSet.has(doc.contact)) continue;
+      const client = [...clientMap.values()].find((c) => c.holdedContactId === doc.contact);
+      if (!client) continue;
+
+      client.documents.push({
+        id: doc.id,
+        source: "holded",
+        items: doc.products.map((p) => ({
+          concept: p.name,
+          price: p.price,
+          units: p.units,
+          tax: p.tax,
+        })),
+        notes: doc.notes || null,
+        createdAt: new Date(doc.date * 1000).toISOString(),
+        total: doc.total,
+        docNumber: doc.docNumber,
+      });
+    }
+  }
+
+  return [...clientMap.values()].sort((a, b) => {
+    if (a.documents.length > 0 && b.documents.length === 0) return -1;
+    if (b.documents.length > 0 && a.documents.length === 0) return 1;
+    return a.fullName.localeCompare(b.fullName);
+  });
 }
 
-/** Create a new lead (order) for a recurring client, duplicating a previous quote */
+/** Create a new lead (order) for a recurring client, duplicating a previous document */
 export async function createRepeatOrder(
-  sourceLeadId: string,
-  sourceQuoteId: string | null,
+  clientId: string,
+  client: { fullName: string; company: string | null; email: string | null; phone: string | null; holdedContactId: string | null },
+  sourceDoc: PastDocument | null,
   message: string,
 ): Promise<{ success: boolean; error?: string; leadId?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
-  // Get source lead data
-  const { data: source } = await supabase
-    .from("leads")
-    .select("full_name, company, email, phone, owned_by, assigned_to")
-    .eq("id", sourceLeadId)
-    .single();
+  // If client comes from CRM (not prefixed with h_), try to inherit owner/closer
+  let ownedBy = profile.id;
+  let assignedTo = profile.id;
+  if (!clientId.startsWith("h_")) {
+    const { data: source } = await supabase
+      .from("leads")
+      .select("owned_by, assigned_to")
+      .eq("id", clientId)
+      .single();
+    if (source) {
+      ownedBy = source.owned_by || profile.id;
+      assignedTo = source.assigned_to || profile.id;
+    }
+  }
 
-  if (!source) return { success: false, error: "Cliente no encontrado" };
-
-  // Create new lead with inherited data
   const { data: newLead, error } = await supabase
     .from("leads")
     .insert({
-      full_name: source.full_name,
-      company: source.company,
-      email: source.email,
-      phone: source.phone,
+      full_name: client.fullName,
+      company: client.company,
+      email: client.email,
+      phone: client.phone,
       message: message || "Nuevo pedido (cliente recurrente)",
       source: "recurring",
-      owned_by: source.owned_by || profile.id,
-      assigned_to: source.assigned_to || profile.id,
+      owned_by: ownedBy,
+      assigned_to: assignedTo,
       status: "contacted",
     })
     .select("id")
@@ -233,23 +311,15 @@ export async function createRepeatOrder(
 
   if (error || !newLead) return { success: false, error: error?.message || "Error al crear lead" };
 
-  // Duplicate quote items if a source quote was selected
-  if (sourceQuoteId) {
-    const { data: sourceQuote } = await supabase
-      .from("quote_requests")
-      .select("items, notes, holded_contact_id")
-      .eq("id", sourceQuoteId)
-      .single();
-
-    if (sourceQuote?.items) {
-      await supabase.from("quote_requests").insert({
-        lead_id: newLead.id,
-        items: sourceQuote.items,
-        notes: sourceQuote.notes,
-        holded_contact_id: sourceQuote.holded_contact_id,
-        status: "pending",
-      });
-    }
+  // Duplicate document items as a new quote_request
+  if (sourceDoc && sourceDoc.items.length > 0) {
+    await supabase.from("quote_requests").insert({
+      lead_id: newLead.id,
+      items: sourceDoc.items as unknown as import("@/lib/supabase/database.types").Json,
+      notes: sourceDoc.notes,
+      holded_contact_id: client.holdedContactId,
+      status: "pending",
+    });
   }
 
   revalidatePath("/dashboard/crm");
