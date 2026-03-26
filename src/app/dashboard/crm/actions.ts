@@ -1759,6 +1759,35 @@ export async function getProformaDetails(
   }
 }
 
+export async function getInvoiceDetails(
+  leadId: string,
+): Promise<{ success: boolean; invoice?: HoldedDocument; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("holded_invoice_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr?.holded_invoice_id) {
+    return { success: false, error: "No hay factura vinculada" };
+  }
+
+  try {
+    const invoice = await getDocument("invoice", qr.holded_invoice_id);
+    return { success: true, invoice };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Error al obtener la factura",
+    };
+  }
+}
+
 export async function dismissLead(
   leadId: string,
   email: string | null
