@@ -123,14 +123,11 @@ export async function createLead(formData: FormData) {
 
 // ── Recurring client: New Order ──────────────────────────
 
-export type PastDocument = {
-  id: string;
-  source: "crm" | "holded";
-  items: ProformaLineItem[];
-  notes: string | null;
-  createdAt: string;
-  total: number;
-  docNumber?: string;
+export type ClientProduct = {
+  concept: string;
+  price: number;
+  tax: number;
+  lastUnits: number;
 };
 
 export type RecurringClient = {
@@ -142,7 +139,7 @@ export type RecurringClient = {
   phone: string | null;
   taxId: string | null;
   source: "crm" | "holded" | "both";
-  documents: PastDocument[];
+  products: ClientProduct[];
 };
 
 /** Get all clients (CRM won leads + Holded contacts) for "Nuevo pedido" */
@@ -168,6 +165,21 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
     crmQuotes = data || [];
   }
 
+  // Helper: merge products into a map, keeping most recent price per concept
+  function mergeProducts(productMap: Map<string, ClientProduct>, items: ProformaLineItem[]) {
+    for (const item of items) {
+      const key = item.concept.trim().toLowerCase();
+      if (!productMap.has(key)) {
+        productMap.set(key, {
+          concept: item.concept.trim(),
+          price: item.price,
+          tax: item.tax,
+          lastUnits: item.units,
+        });
+      }
+    }
+  }
+
   // Build client map keyed by email
   const clientMap = new Map<string, RecurringClient>();
 
@@ -176,17 +188,11 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
     if (clientMap.has(key)) continue;
 
     const leadQuotes = crmQuotes.filter((q) => q.lead_id === l.id);
-    const docs: PastDocument[] = leadQuotes.map((q) => {
+    const productMap = new Map<string, ClientProduct>();
+    for (const q of leadQuotes) {
       const items = (q.items || []) as unknown as ProformaLineItem[];
-      return {
-        id: q.id,
-        source: "crm" as const,
-        items,
-        notes: q.notes,
-        createdAt: q.created_at || new Date().toISOString(),
-        total: items.reduce((s, i) => s + i.price * i.units, 0),
-      };
-    });
+      mergeProducts(productMap, items);
+    }
 
     clientMap.set(key, {
       id: l.id,
@@ -197,7 +203,7 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
       phone: l.phone,
       taxId: null,
       source: "crm",
-      documents: docs,
+      products: [...productMap.values()],
     });
   }
 
@@ -221,58 +227,62 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
         phone: hc.phone || hc.mobile || null,
         taxId: hc.code || null,
         source: "holded",
-        documents: [],
+        products: [],
       });
     }
   }
 
-  // Fetch Holded docs for all clients that have a holdedContactId
-  const clientsNeedingDocs = [...clientMap.values()].filter(
+  // Fetch Holded docs (all time) for clients with holdedContactId and extract products
+  const clientsWithHolded = [...clientMap.values()].filter(
     (c) => c.holdedContactId
   );
 
-  if (clientsNeedingDocs.length > 0) {
-    const sixMonthsAgo = Math.floor(Date.now() / 1000) - 180 * 86400;
+  if (clientsWithHolded.length > 0) {
     const [proformas, invoices] = await Promise.all([
-      listDocuments("proform", { starttmp: sixMonthsAgo }).catch(() => []),
-      listDocuments("invoice", { starttmp: sixMonthsAgo }).catch(() => []),
+      listDocuments("proform").catch(() => []),
+      listDocuments("invoice").catch(() => []),
     ]);
 
-    const holdedIdSet = new Set(clientsNeedingDocs.map((c) => c.holdedContactId));
-    for (const doc of [...proformas, ...invoices]) {
+    const holdedIdSet = new Set(clientsWithHolded.map((c) => c.holdedContactId));
+    // Group docs by contact, sorted newest first
+    const docsByContact = new Map<string, HoldedDocument[]>();
+    for (const doc of [...proformas, ...invoices].sort((a, b) => b.date - a.date)) {
       if (!holdedIdSet.has(doc.contact)) continue;
-      const client = [...clientMap.values()].find((c) => c.holdedContactId === doc.contact);
-      if (!client) continue;
+      if (!docsByContact.has(doc.contact)) docsByContact.set(doc.contact, []);
+      docsByContact.get(doc.contact)!.push(doc);
+    }
 
-      client.documents.push({
-        id: doc.id,
-        source: "holded",
-        items: doc.products.map((p) => ({
+    for (const client of clientsWithHolded) {
+      const docs = docsByContact.get(client.holdedContactId!) || [];
+      const productMap = new Map<string, ClientProduct>();
+      for (const doc of docs) {
+        mergeProducts(productMap, doc.products.map((p) => ({
           concept: p.name,
           price: p.price,
           units: p.units,
           tax: p.tax,
-        })),
-        notes: doc.notes || null,
-        createdAt: new Date(doc.date * 1000).toISOString(),
-        total: doc.total,
-        docNumber: doc.docNumber,
-      });
+        })));
+      }
+      // Merge with existing CRM products
+      for (const [key, prod] of productMap) {
+        const existing = client.products.find((p) => p.concept.trim().toLowerCase() === key);
+        if (!existing) client.products.push(prod);
+      }
     }
   }
 
   return [...clientMap.values()].sort((a, b) => {
-    if (a.documents.length > 0 && b.documents.length === 0) return -1;
-    if (b.documents.length > 0 && a.documents.length === 0) return 1;
+    if (a.products.length > 0 && b.products.length === 0) return -1;
+    if (b.products.length > 0 && a.products.length === 0) return 1;
     return a.fullName.localeCompare(b.fullName);
   });
 }
 
-/** Create a new lead (order) for a recurring client, duplicating a previous document */
+/** Create a new lead (order) for a recurring client with selected products */
 export async function createRepeatOrder(
   clientId: string,
   client: { fullName: string; company: string | null; email: string | null; phone: string | null; holdedContactId: string | null },
-  sourceDoc: PastDocument | null,
+  items: ProformaLineItem[],
   message: string,
 ): Promise<{ success: boolean; error?: string; leadId?: string }> {
   const profile = await requireRole("manager");
@@ -311,12 +321,11 @@ export async function createRepeatOrder(
 
   if (error || !newLead) return { success: false, error: error?.message || "Error al crear lead" };
 
-  // Duplicate document items as a new quote_request
-  if (sourceDoc && sourceDoc.items.length > 0) {
+  // Create quote_request with selected products
+  if (items.length > 0) {
     await supabase.from("quote_requests").insert({
       lead_id: newLead.id,
-      items: sourceDoc.items as unknown as import("@/lib/supabase/database.types").Json,
-      notes: sourceDoc.notes,
+      items: items as unknown as import("@/lib/supabase/database.types").Json,
       holded_contact_id: client.holdedContactId,
       status: "pending",
     });

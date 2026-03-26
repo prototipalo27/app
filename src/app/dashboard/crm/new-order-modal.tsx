@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getRecurringClients, createRepeatOrder, type RecurringClient, type PastDocument } from "./actions";
+import { getRecurringClients, createRepeatOrder, type RecurringClient, type ClientProduct } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+type SelectedProduct = ClientProduct & { selected: boolean; units: number };
 
 export function NewOrderModal({
   open,
@@ -24,7 +26,7 @@ export function NewOrderModal({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<RecurringClient | null>(null);
-  const [selectedDoc, setSelectedDoc] = useState<PastDocument | null>(null);
+  const [products, setProducts] = useState<SelectedProduct[]>([]);
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -37,7 +39,7 @@ export function NewOrderModal({
       });
     } else {
       setSelectedClient(null);
-      setSelectedDoc(null);
+      setProducts([]);
       setMessage("");
       setSearch("");
     }
@@ -49,9 +51,37 @@ export function NewOrderModal({
     return [c.fullName, c.company, c.email, c.taxId].filter(Boolean).join(" ").toLowerCase().includes(q);
   });
 
+  const selectClient = (client: RecurringClient) => {
+    setSelectedClient(client);
+    setProducts(
+      client.products.map((p) => ({ ...p, selected: false, units: p.lastUnits }))
+    );
+  };
+
+  const toggleProduct = (idx: number) => {
+    setProducts((prev) =>
+      prev.map((p, i) => (i === idx ? { ...p, selected: !p.selected } : p))
+    );
+  };
+
+  const updateUnits = (idx: number, units: number) => {
+    setProducts((prev) =>
+      prev.map((p, i) => (i === idx ? { ...p, units: Math.max(1, units) } : p))
+    );
+  };
+
+  const selectedItems = products.filter((p) => p.selected);
+  const total = selectedItems.reduce((s, p) => s + p.price * p.units, 0);
+
   const handleCreate = async () => {
     if (!selectedClient) return;
     setCreating(true);
+    const items = selectedItems.map((p) => ({
+      concept: p.concept,
+      price: p.price,
+      units: p.units,
+      tax: p.tax,
+    }));
     const result = await createRepeatOrder(
       selectedClient.id,
       {
@@ -61,7 +91,7 @@ export function NewOrderModal({
         phone: selectedClient.phone,
         holdedContactId: selectedClient.holdedContactId,
       },
-      selectedDoc || null,
+      items,
       message,
     );
     setCreating(false);
@@ -106,12 +136,7 @@ export function NewOrderModal({
                 filtered.map((client) => (
                   <button
                     key={client.id}
-                    onClick={() => {
-                      setSelectedClient(client);
-                      if (client.documents.length > 0) {
-                        setSelectedDoc(client.documents[0]);
-                      }
-                    }}
+                    onClick={() => selectClient(client)}
                     className="flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
                   >
                     <div className="min-w-0">
@@ -123,9 +148,9 @@ export function NewOrderModal({
                       {client.email && <p className="text-[11px] text-muted-foreground/70">{client.email}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {client.documents.length > 0 && (
+                      {client.products.length > 0 && (
                         <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                          {client.documents.length} doc{client.documents.length !== 1 && "s"}
+                          {client.products.length} producto{client.products.length !== 1 && "s"}
                         </Badge>
                       )}
                     </div>
@@ -137,7 +162,7 @@ export function NewOrderModal({
         ) : (
           <div className="flex flex-col gap-4">
             <button
-              onClick={() => { setSelectedClient(null); setSelectedDoc(null); }}
+              onClick={() => { setSelectedClient(null); setProducts([]); }}
               className="self-start text-xs text-muted-foreground hover:text-foreground"
             >
               &larr; Cambiar cliente
@@ -155,57 +180,69 @@ export function NewOrderModal({
               </div>
             </div>
 
-            {selectedClient.documents.length > 0 && (
+            {products.length > 0 ? (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-                  Documentos anteriores — selecciona para duplicar
+                  Productos anteriores — selecciona y ajusta unidades
                 </p>
-                <div className="max-h-44 space-y-1.5 overflow-y-auto">
-                  {selectedClient.documents.map((doc) => (
-                    <button
-                      key={doc.id}
-                      onClick={() => setSelectedDoc(doc.id === selectedDoc?.id ? null : doc)}
-                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
-                        selectedDoc?.id === doc.id
+                <div className="max-h-52 space-y-1.5 overflow-y-auto">
+                  {products.map((prod, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => toggleProduct(idx)}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+                        prod.selected
                           ? "border-brand bg-brand/5 ring-1 ring-brand/30"
                           : "hover:bg-muted/50"
                       }`}
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(doc.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
-                          </p>
-                          {doc.docNumber && (
-                            <span className="text-[10px] text-muted-foreground/60">{doc.docNumber}</span>
-                          )}
-                          <Badge variant="secondary" className={`text-[9px] ${doc.source === "holded" ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" : ""}`}>
-                            {doc.source === "holded" ? "Holded" : "CRM"}
-                          </Badge>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap gap-1">
-                          {doc.items.slice(0, 3).map((item, i) => (
-                            <span key={i} className="text-[11px] text-foreground">
-                              {item.concept} (x{item.units}){i < Math.min(doc.items.length, 3) - 1 && ","}
-                            </span>
-                          ))}
-                          {doc.items.length > 3 && (
-                            <span className="text-[11px] text-muted-foreground">+{doc.items.length - 3} mas</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {doc.total.toLocaleString("es-ES")} €
+                      <input
+                        type="checkbox"
+                        checked={prod.selected}
+                        onChange={() => toggleProduct(idx)}
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 accent-brand"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-foreground">{prod.concept}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {prod.price.toLocaleString("es-ES", { minimumFractionDigits: 2 })} € / ud · IVA {prod.tax}%
                         </p>
-                        {selectedDoc?.id === doc.id && (
-                          <span className="text-[10px] font-medium text-brand">Duplicar</span>
-                        )}
                       </div>
-                    </button>
+                      <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => updateUnits(idx, prod.units - 1)}
+                          className="flex h-6 w-6 items-center justify-center rounded border text-xs hover:bg-muted"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          value={prod.units}
+                          onChange={(e) => updateUnits(idx, parseInt(e.target.value) || 1)}
+                          className="h-6 w-14 rounded border bg-background px-1 text-center text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <button
+                          onClick={() => updateUnits(idx, prod.units + 1)}
+                          className="flex h-6 w-6 items-center justify-center rounded border text-xs hover:bg-muted"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
+                {selectedItems.length > 0 && (
+                  <div className="mt-2 flex items-center justify-between rounded-md bg-muted/50 px-3 py-1.5 text-sm">
+                    <span className="text-muted-foreground">{selectedItems.length} producto{selectedItems.length !== 1 && "s"}</span>
+                    <span className="font-semibold tabular-nums">{total.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €</span>
+                  </div>
+                )}
               </div>
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No hay productos de facturas anteriores
+              </p>
             )}
 
             <div>
@@ -226,7 +263,9 @@ export function NewOrderModal({
               disabled={creating}
               className="bg-brand text-white hover:bg-brand-dark"
             >
-              {creating ? "Creando..." : selectedDoc ? "Crear pedido con presupuesto duplicado" : "Crear pedido sin presupuesto"}
+              {creating ? "Creando..." : selectedItems.length > 0
+                ? `Crear pedido (${selectedItems.length} producto${selectedItems.length !== 1 ? "s" : ""})`
+                : "Crear pedido sin productos"}
             </Button>
           </div>
         )}
