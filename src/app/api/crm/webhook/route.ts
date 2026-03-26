@@ -206,12 +206,10 @@ export async function POST(request: NextRequest) {
 
         // Save / update UTM tracking data
         if (hasUtmData) {
-          supabase
+          const { error: utmErr } = await supabase
             .from("lead_utm_data")
-            .upsert({ lead_id: existingByEmail.id, ...utmFields }, { onConflict: "lead_id" })
-            .then(({ error }) => {
-              if (error) console.error("UTM upsert error (dup email):", error);
-            });
+            .upsert({ lead_id: existingByEmail.id, ...utmFields }, { onConflict: "lead_id" });
+          if (utmErr) console.error("UTM upsert error (dup email):", utmErr);
         }
 
         return NextResponse.json({
@@ -259,14 +257,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Save UTM tracking data (fire-and-forget)
+    // Save UTM tracking data
     if (hasUtmData && lead?.id) {
-      supabase
+      const { error: utmErr } = await supabase
         .from("lead_utm_data")
-        .insert({ lead_id: lead.id, ...utmFields })
-        .then(({ error }) => {
-          if (error) console.error("UTM insert error:", error);
-        });
+        .insert({ lead_id: lead.id, ...utmFields });
+      if (utmErr) console.error("UTM insert error:", utmErr);
     }
 
     // Auto-detect project type tag
