@@ -1835,6 +1835,7 @@ export type Database = {
           created_at: string | null
           holded_contact_id: string | null
           holded_estimate_id: string | null
+          holded_invoice_id: string | null
           holded_proforma_id: string | null
           id: string
           items: Json | null
@@ -1864,6 +1865,7 @@ export type Database = {
           created_at?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
+          holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
           items?: Json | null
@@ -1893,6 +1895,7 @@ export type Database = {
           created_at?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
+          holded_invoice_id?: string | null
           holded_proforma_id?: string | null
           id?: string
           items?: Json | null

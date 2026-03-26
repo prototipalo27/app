@@ -16,6 +16,8 @@ import {
   updateEstimatedValue,
   getProformaDetails,
   createLeadProforma,
+  sendProformaToClient,
+  sendInvoiceToClient,
   updateLeadOwner,
   sendQuoteToClient,
   sendNdaToClient,
@@ -100,6 +102,9 @@ export default function LeadActions({
   const [proformaLoading, setProformaLoading] = useState(false);
   const [proformaData, setProformaData] = useState<HoldedDocument | null>(null);
   const [proformaError, setProformaError] = useState<string | null>(null);
+  const [sendingProforma, setSendingProforma] = useState(false);
+  const [sendingInvoice, setSendingInvoice] = useState(false);
+  const [docSent, setDocSent] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
@@ -655,10 +660,11 @@ export default function LeadActions({
                   Datos recibidos
                 </Badge>
                 <div className="text-xs text-muted-foreground">
-                  <p><strong>Razón social:</strong> {quoteRequest.billing_name}</p>
+                  <p><strong>Razon social:</strong> {quoteRequest.billing_name}</p>
                   <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
                 </div>
 
+                {/* Proforma section */}
                 {!quoteRequest.holded_proforma_id && quoteRequest.holded_contact_id && (
                   <Button
                     size="sm"
@@ -681,38 +687,63 @@ export default function LeadActions({
 
                 {quoteRequest.holded_proforma_id && (
                   <>
-                    <a
-                      href={`https://app.holded.com/sales/revenue#open:proform-${quoteRequest.holded_proforma_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      Ver proforma en Holded
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://app.holded.com/sales/revenue#open:proform-${quoteRequest.holded_proforma_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Ver proforma en Holded
+                      </a>
+                    </div>
 
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleViewProforma}
-                      disabled={proformaLoading}
-                    >
-                      {proformaLoading ? (
-                        <>
-                          <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          Cargando...
-                        </>
-                      ) : (
-                        <>
-                          <svg className={`h-3 w-3 transition-transform ${proformaOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                          {proformaOpen ? "Ocultar proforma" : "Ver proforma"}
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleViewProforma}
+                        disabled={proformaLoading}
+                      >
+                        {proformaLoading ? (
+                          <>
+                            <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Cargando...
+                          </>
+                        ) : (
+                          <>
+                            <svg className={`h-3 w-3 transition-transform ${proformaOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                            {proformaOpen ? "Ocultar" : "Ver proforma"}
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          setSendingProforma(true);
+                          setQuoteError(null);
+                          setDocSent(null);
+                          const result = await sendProformaToClient(leadId);
+                          setSendingProforma(false);
+                          if (result.success) {
+                            setDocSent("proforma");
+                            router.refresh();
+                          } else {
+                            setQuoteError(result.error || "Error");
+                          }
+                        }}
+                        disabled={sendingProforma}
+                        className="bg-brand text-white hover:bg-brand-dark"
+                      >
+                        {sendingProforma ? "Enviando..." : "Enviar proforma"}
+                      </Button>
+                    </div>
 
                     {proformaError && (
                       <p className="text-xs text-destructive">{proformaError}</p>
@@ -781,6 +812,38 @@ export default function LeadActions({
                       </div>
                     )}
                   </>
+                )}
+
+                {/* Invoice section */}
+                {quoteRequest.holded_contact_id && (
+                  <div className="border-t pt-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        setSendingInvoice(true);
+                        setQuoteError(null);
+                        setDocSent(null);
+                        const result = await sendInvoiceToClient(leadId);
+                        setSendingInvoice(false);
+                        if (result.success) {
+                          setDocSent("factura");
+                          router.refresh();
+                        } else {
+                          setQuoteError(result.error || "Error");
+                        }
+                      }}
+                      disabled={sendingInvoice}
+                    >
+                      {sendingInvoice ? "Enviando..." : "Crear y enviar factura"}
+                    </Button>
+                  </div>
+                )}
+
+                {docSent && (
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    {docSent === "proforma" ? "Proforma enviada" : "Factura enviada"} correctamente
+                  </p>
                 )}
 
                 {quoteError && (

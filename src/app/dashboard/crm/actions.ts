@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, createEstimate, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument } from "@/lib/holded/api";
+import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
@@ -1839,6 +1839,216 @@ export async function createLeadProforma(
       error: e instanceof Error ? e.message : "Error al crear la proforma",
     };
   }
+}
+
+// ── Send Proforma to Client ─────────────────────────────
+
+export async function sendProformaToClient(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_contact_id, holded_proforma_id, items, notes")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) {
+    return { success: false, error: "No hay presupuesto guardado" };
+  }
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) {
+    return { success: false, error: "El presupuesto no tiene líneas" };
+  }
+
+  if (!qr.holded_contact_id) {
+    return { success: false, error: "No hay contacto de Holded vinculado" };
+  }
+
+  // Create proforma in Holded if it doesn't exist yet
+  let proformaId = qr.holded_proforma_id;
+  if (!proformaId) {
+    try {
+      const proforma = await createProforma(qr.holded_contact_id, {
+        items: items.map((item) => ({
+          name: item.concept,
+          units: item.units,
+          subtotal: item.price,
+          tax: item.tax,
+        })),
+        notes: qr.notes || undefined,
+      });
+      proformaId = proforma.id;
+      await supabase
+        .from("quote_requests")
+        .update({ holded_proforma_id: proformaId })
+        .eq("id", qr.id);
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Error al crear la proforma" };
+    }
+  }
+
+  // Download PDF
+  let pdfBuffer: Buffer | null = null;
+  try {
+    pdfBuffer = await getDocumentPdf("proform", proformaId);
+  } catch (err) {
+    console.error("[sendProformaToClient] PDF download failed:", err);
+    return { success: false, error: "Error al descargar el PDF de la proforma" };
+  }
+
+  // Send email
+  const smtpConfig = await getUserSmtpConfig(profile.id);
+  try {
+    await sendEmailOrSchedule({
+      to: lead.email,
+      subject: "Proforma — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nTe adjuntamos la proforma de tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la proforma de tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
+      attachments: pdfBuffer && pdfBuffer.length > 0
+        ? [{ filename: "Proforma-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+        : undefined,
+    }, { createdBy: profile.id });
+  } catch {
+    return { success: false, error: "Error al enviar el email" };
+  }
+
+  // Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: "Proforma enviada al cliente",
+    metadata: {
+      email_to: lead.email,
+      email_subject: "Proforma — Prototipalo",
+      holded_proforma_id: proformaId,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+// ── Send Invoice to Client ──────────────────────────────
+
+export async function sendInvoiceToClient(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_contact_id, holded_invoice_id, items, notes")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) {
+    return { success: false, error: "No hay presupuesto guardado" };
+  }
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) {
+    return { success: false, error: "El presupuesto no tiene líneas" };
+  }
+
+  if (!qr.holded_contact_id) {
+    return { success: false, error: "No hay contacto de Holded vinculado" };
+  }
+
+  // Create invoice in Holded if it doesn't exist yet
+  let invoiceId = qr.holded_invoice_id;
+  if (!invoiceId) {
+    try {
+      const invoice = await createInvoice(qr.holded_contact_id, {
+        items: items.map((item) => ({
+          name: item.concept,
+          units: item.units,
+          subtotal: item.price,
+          tax: item.tax,
+        })),
+        notes: qr.notes || undefined,
+      });
+      invoiceId = invoice.id;
+      await supabase
+        .from("quote_requests")
+        .update({ holded_invoice_id: invoiceId })
+        .eq("id", qr.id);
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Error al crear la factura" };
+    }
+  }
+
+  // Download PDF
+  let pdfBuffer: Buffer | null = null;
+  try {
+    pdfBuffer = await getDocumentPdf("invoice", invoiceId);
+  } catch (err) {
+    console.error("[sendInvoiceToClient] PDF download failed:", err);
+    return { success: false, error: "Error al descargar el PDF de la factura" };
+  }
+
+  // Send email
+  const smtpConfig = await getUserSmtpConfig(profile.id);
+  try {
+    await sendEmailOrSchedule({
+      to: lead.email,
+      subject: "Factura — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nTe adjuntamos la factura correspondiente a tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la factura correspondiente a tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      smtpConfig,
+      attachments: pdfBuffer && pdfBuffer.length > 0
+        ? [{ filename: "Factura-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+        : undefined,
+    }, { createdBy: profile.id });
+  } catch {
+    return { success: false, error: "Error al enviar el email" };
+  }
+
+  // Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: "Factura enviada al cliente",
+    metadata: {
+      email_to: lead.email,
+      email_subject: "Factura — Prototipalo",
+      holded_invoice_id: invoiceId,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
 }
 
 // ── Generate Email Draft with AI ─────────────────────────
