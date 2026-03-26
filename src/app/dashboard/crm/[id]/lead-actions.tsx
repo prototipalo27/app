@@ -14,8 +14,6 @@ import {
   updateQualificationLevel,
   updateEstimationField,
   updateEstimatedValue,
-  getProformaDetails,
-  getInvoiceDetails,
   createLeadProforma,
   sendProformaToClient,
   sendInvoiceToClient,
@@ -24,7 +22,6 @@ import {
   sendNdaToClient,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
-import type { HoldedDocument } from "@/lib/holded/types";
 import {
   LEAD_COLUMNS,
   STATUS_LABELS,
@@ -37,6 +34,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { PdfPreviewButton } from "./pdf-viewer";
 
 interface LeadActionsProps {
   leadId: string;
@@ -99,17 +97,9 @@ export default function LeadActions({
   const [lostReason, setLostReason] = useState("");
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [proformaOpen, setProformaOpen] = useState(false);
-  const [proformaLoading, setProformaLoading] = useState(false);
-  const [proformaData, setProformaData] = useState<HoldedDocument | null>(null);
-  const [proformaError, setProformaError] = useState<string | null>(null);
   const [sendingProforma, setSendingProforma] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [docSent, setDocSent] = useState<string | null>(null);
-  const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
-  const [invoiceData, setInvoiceData] = useState<HoldedDocument | null>(null);
-  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
@@ -169,40 +159,6 @@ export default function LeadActions({
     startTransition(async () => {
       await deleteLead(leadId);
     });
-  };
-
-  const handleViewProforma = async () => {
-    if (proformaData) {
-      setProformaOpen(!proformaOpen);
-      return;
-    }
-    setProformaLoading(true);
-    setProformaError(null);
-    const result = await getProformaDetails(leadId);
-    setProformaLoading(false);
-    if (result.success && result.proforma) {
-      setProformaData(result.proforma);
-      setProformaOpen(true);
-    } else {
-      setProformaError(result.error || "Error al cargar la proforma");
-    }
-  };
-
-  const handleViewInvoice = async () => {
-    if (invoiceData) {
-      setInvoiceOpen(!invoiceOpen);
-      return;
-    }
-    setInvoiceLoading(true);
-    setInvoiceError(null);
-    const result = await getInvoiceDetails(leadId);
-    setInvoiceLoading(false);
-    if (result.success && result.invoice) {
-      setInvoiceData(result.invoice);
-      setInvoiceOpen(true);
-    } else {
-      setInvoiceError(result.error || "Error al cargar la factura");
-    }
   };
 
   const nextStatuses = LEAD_COLUMNS.filter(
@@ -660,6 +616,9 @@ export default function LeadActions({
                 <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                   Pendiente de datos del cliente
                 </Badge>
+                {quoteRequest.holded_estimate_id && (
+                  <PdfPreviewButton leadId={leadId} docType="estimate" />
+                )}
                 <button
                   onClick={() => {
                     const baseUrl = window.location.origin;
@@ -720,30 +679,8 @@ export default function LeadActions({
                       </a>
                     </div>
 
-                    <div className="flex gap-1.5">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleViewProforma}
-                        disabled={proformaLoading}
-                      >
-                        {proformaLoading ? (
-                          <>
-                            <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            Cargando...
-                          </>
-                        ) : (
-                          <>
-                            <svg className={`h-3 w-3 transition-transform ${proformaOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                            {proformaOpen ? "Ocultar" : "Ver proforma"}
-                          </>
-                        )}
-                      </Button>
+                    <div className="flex flex-wrap gap-1.5">
+                      <PdfPreviewButton leadId={leadId} docType="proform" />
 
                       <Button
                         size="sm"
@@ -767,72 +704,6 @@ export default function LeadActions({
                       </Button>
                     </div>
 
-                    {proformaError && (
-                      <p className="text-xs text-destructive">{proformaError}</p>
-                    )}
-
-                    {proformaOpen && proformaData && (
-                      <div className="rounded-lg border bg-muted/50 p-3">
-                        <div className="mb-3">
-                          <p className="text-xs font-semibold text-foreground">
-                            Proforma {proformaData.docNumber}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {new Date(proformaData.date * 1000).toLocaleDateString("es-ES", {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                            })}
-                          </p>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-[11px]">
-                            <thead>
-                              <tr className="border-b text-muted-foreground">
-                                <th className="pb-1.5 pr-2 font-medium">Producto</th>
-                                <th className="pb-1.5 pr-2 text-right font-medium">Uds</th>
-                                <th className="pb-1.5 pr-2 text-right font-medium">Precio</th>
-                                <th className="pb-1.5 text-right font-medium">Subtotal</th>
-                              </tr>
-                            </thead>
-                            <tbody className="text-foreground">
-                              {proformaData.products.map((p, i) => {
-                                const lineSubtotal = p.units * p.price * (1 - p.discount / 100);
-                                return (
-                                  <tr key={i} className="border-b border-border/50">
-                                    <td className="py-1.5 pr-2">
-                                      <span className="font-medium">{p.name}</span>
-                                      {p.desc && (
-                                        <span className="block text-[10px] text-muted-foreground">{p.desc}</span>
-                                      )}
-                                    </td>
-                                    <td className="py-1.5 pr-2 text-right tabular-nums">{p.units}</td>
-                                    <td className="py-1.5 pr-2 text-right tabular-nums">{p.price.toFixed(2)} €</td>
-                                    <td className="py-1.5 text-right tabular-nums">{lineSubtotal.toFixed(2)} €</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div className="mt-3 space-y-1 border-t pt-2 text-[11px]">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Subtotal</span>
-                            <span className="tabular-nums">{proformaData.subtotal.toFixed(2)} €</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>IVA</span>
-                            <span className="tabular-nums">{proformaData.tax.toFixed(2)} €</span>
-                          </div>
-                          <div className="flex justify-between text-sm font-semibold text-foreground">
-                            <span>Total</span>
-                            <span className="tabular-nums">{proformaData.total.toFixed(2)} €</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
 
@@ -849,97 +720,7 @@ export default function LeadActions({
                         >
                           Ver factura en Holded
                         </a>
-
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleViewInvoice}
-                          disabled={invoiceLoading}
-                        >
-                          {invoiceLoading ? (
-                            <>
-                              <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                              Cargando...
-                            </>
-                          ) : (
-                            <>
-                              <svg className={`h-3 w-3 transition-transform ${invoiceOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                              {invoiceOpen ? "Ocultar factura" : "Ver factura"}
-                            </>
-                          )}
-                        </Button>
-
-                        {invoiceError && (
-                          <p className="text-xs text-destructive">{invoiceError}</p>
-                        )}
-
-                        {invoiceOpen && invoiceData && (
-                          <div className="rounded-lg border bg-muted/50 p-3">
-                            <div className="mb-3">
-                              <p className="text-xs font-semibold text-foreground">
-                                Factura {invoiceData.docNumber}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {new Date(invoiceData.date * 1000).toLocaleDateString("es-ES", {
-                                  day: "numeric",
-                                  month: "long",
-                                  year: "numeric",
-                                })}
-                              </p>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-[11px]">
-                                <thead>
-                                  <tr className="border-b text-muted-foreground">
-                                    <th className="pb-1.5 pr-2 font-medium">Producto</th>
-                                    <th className="pb-1.5 pr-2 text-right font-medium">Uds</th>
-                                    <th className="pb-1.5 pr-2 text-right font-medium">Precio</th>
-                                    <th className="pb-1.5 text-right font-medium">Subtotal</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="text-foreground">
-                                  {invoiceData.products.map((p, i) => {
-                                    const lineSubtotal = p.units * p.price * (1 - p.discount / 100);
-                                    return (
-                                      <tr key={i} className="border-b border-border/50">
-                                        <td className="py-1.5 pr-2">
-                                          <span className="font-medium">{p.name}</span>
-                                          {p.desc && (
-                                            <span className="block text-[10px] text-muted-foreground">{p.desc}</span>
-                                          )}
-                                        </td>
-                                        <td className="py-1.5 pr-2 text-right tabular-nums">{p.units}</td>
-                                        <td className="py-1.5 pr-2 text-right tabular-nums">{p.price.toFixed(2)} €</td>
-                                        <td className="py-1.5 text-right tabular-nums">{lineSubtotal.toFixed(2)} €</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <div className="mt-3 space-y-1 border-t pt-2 text-[11px]">
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Subtotal</span>
-                                <span className="tabular-nums">{invoiceData.subtotal.toFixed(2)} €</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>IVA</span>
-                                <span className="tabular-nums">{invoiceData.tax.toFixed(2)} €</span>
-                              </div>
-                              <div className="flex justify-between text-sm font-semibold text-foreground">
-                                <span>Total</span>
-                                <span className="tabular-nums">{invoiceData.total.toFixed(2)} €</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        <PdfPreviewButton leadId={leadId} docType="invoice" />
                       </>
                     )}
 
@@ -953,7 +734,6 @@ export default function LeadActions({
                         setSendingInvoice(false);
                         if (result.success) {
                           setDocSent("factura");
-                          setInvoiceData(null);
                           router.refresh();
                         } else {
                           setQuoteError(result.error || "Error");

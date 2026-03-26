@@ -1759,6 +1759,39 @@ export async function getProformaDetails(
   }
 }
 
+/** Get PDF (base64) for a lead's document (estimate, proform, or invoice) */
+export async function getLeadDocumentPdf(
+  leadId: string,
+  docType: "estimate" | "proform" | "invoice",
+): Promise<{ success: boolean; base64?: string; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("holded_estimate_id, holded_proforma_id, holded_invoice_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  const docId =
+    docType === "estimate" ? qr.holded_estimate_id :
+    docType === "proform" ? qr.holded_proforma_id :
+    qr.holded_invoice_id;
+
+  if (!docId) return { success: false, error: `No hay ${docType === "estimate" ? "presupuesto" : docType === "proform" ? "proforma" : "factura"} vinculada` };
+
+  try {
+    const pdfBuffer = await getDocumentPdf(docType, docId);
+    return { success: true, base64: pdfBuffer.toString("base64") };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Error al descargar el PDF" };
+  }
+}
+
 export async function getInvoiceDetails(
   leadId: string,
 ): Promise<{ success: boolean; invoice?: HoldedDocument; error?: string }> {
