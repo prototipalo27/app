@@ -121,6 +121,141 @@ export async function createLead(formData: FormData) {
   redirect(`/dashboard/crm/${data.id}`);
 }
 
+// ── Recurring client: New Order ──────────────────────────
+
+export type WonClient = {
+  leadId: string;
+  fullName: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  quotes: {
+    id: string;
+    items: ProformaLineItem[];
+    notes: string | null;
+    createdAt: string;
+    total: number;
+  }[];
+};
+
+/** Get all won clients with their quote history for "Nuevo pedido" */
+export async function getWonClients(): Promise<WonClient[]> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get distinct won clients by email (most recent lead per email)
+  const { data: wonLeads } = await supabase
+    .from("leads")
+    .select("id, full_name, company, email, phone")
+    .eq("status", "won")
+    .order("updated_at", { ascending: false });
+
+  if (!wonLeads || wonLeads.length === 0) return [];
+
+  // Dedupe by email (keep most recent)
+  const seen = new Set<string>();
+  const uniqueClients = wonLeads.filter((l) => {
+    const key = l.email?.toLowerCase() || l.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Get all quotes for these leads
+  const allLeadIds = wonLeads.map((l) => l.id);
+  const { data: quotes } = await supabase
+    .from("quote_requests")
+    .select("id, lead_id, items, notes, created_at")
+    .in("lead_id", allLeadIds)
+    .order("created_at", { ascending: false });
+
+  // Build quote map by email (so we get quotes from all leads of same client)
+  const quotesByEmail = new Map<string, WonClient["quotes"]>();
+  for (const q of quotes || []) {
+    const lead = wonLeads.find((l) => l.id === q.lead_id);
+    const key = lead?.email?.toLowerCase() || q.lead_id;
+    const items = (q.items || []) as unknown as ProformaLineItem[];
+    const total = items.reduce((s, i) => s + i.price * i.units, 0);
+    if (!quotesByEmail.has(key)) quotesByEmail.set(key, []);
+    quotesByEmail.get(key)!.push({
+      id: q.id,
+      items,
+      notes: q.notes,
+      createdAt: q.created_at || new Date().toISOString(),
+      total,
+    });
+  }
+
+  return uniqueClients.map((l) => ({
+    leadId: l.id,
+    fullName: l.full_name,
+    company: l.company,
+    email: l.email,
+    phone: l.phone,
+    quotes: quotesByEmail.get(l.email?.toLowerCase() || l.id) || [],
+  }));
+}
+
+/** Create a new lead (order) for a recurring client, duplicating a previous quote */
+export async function createRepeatOrder(
+  sourceLeadId: string,
+  sourceQuoteId: string | null,
+  message: string,
+): Promise<{ success: boolean; error?: string; leadId?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get source lead data
+  const { data: source } = await supabase
+    .from("leads")
+    .select("full_name, company, email, phone, owned_by, assigned_to")
+    .eq("id", sourceLeadId)
+    .single();
+
+  if (!source) return { success: false, error: "Cliente no encontrado" };
+
+  // Create new lead with inherited data
+  const { data: newLead, error } = await supabase
+    .from("leads")
+    .insert({
+      full_name: source.full_name,
+      company: source.company,
+      email: source.email,
+      phone: source.phone,
+      message: message || "Nuevo pedido (cliente recurrente)",
+      source: "recurring",
+      owned_by: source.owned_by || profile.id,
+      assigned_to: source.assigned_to || profile.id,
+      status: "contacted",
+    })
+    .select("id")
+    .single();
+
+  if (error || !newLead) return { success: false, error: error?.message || "Error al crear lead" };
+
+  // Duplicate quote items if a source quote was selected
+  if (sourceQuoteId) {
+    const { data: sourceQuote } = await supabase
+      .from("quote_requests")
+      .select("items, notes, holded_contact_id")
+      .eq("id", sourceQuoteId)
+      .single();
+
+    if (sourceQuote?.items) {
+      await supabase.from("quote_requests").insert({
+        lead_id: newLead.id,
+        items: sourceQuote.items,
+        notes: sourceQuote.notes,
+        holded_contact_id: sourceQuote.holded_contact_id,
+        status: "pending",
+      });
+    }
+  }
+
+  revalidatePath("/dashboard/crm");
+  return { success: true, leadId: newLead.id };
+}
+
 // ── Estimation helpers ───────────────────────────────────
 
 /** Trigger a recalculation of estimated_value via the DB trigger.

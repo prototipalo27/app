@@ -7,6 +7,7 @@ import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
 import { getBasePrices, getMyCommissionData } from "./actions";
 import { Button } from "@/components/ui/button";
+import { NewOrderButton } from "./new-order-button";
 import { generateMissingSummaries } from "@/lib/ai-summary";
 
 export default async function CrmPage() {
@@ -120,6 +121,7 @@ export default async function CrmPage() {
             </svg>
             Lista
           </Button>
+          <NewOrderButton />
           <Button render={<Link href="/dashboard/crm/new" />} className="bg-brand text-white hover:bg-brand-dark">
             + Nuevo lead
           </Button>
