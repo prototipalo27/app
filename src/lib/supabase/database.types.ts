@@ -761,6 +761,83 @@ export type Database = {
           },
         ]
       }
+      lead_utm_data: {
+        Row: {
+          id: string
+          lead_id: string
+          utm_source: string | null
+          utm_medium: string | null
+          utm_campaign: string | null
+          utm_term: string | null
+          utm_content: string | null
+          gclid: string | null
+          fbclid: string | null
+          msclkid: string | null
+          ttclid: string | null
+          referrer: string | null
+          landing_page: string | null
+          current_page: string | null
+          first_touch_page: string | null
+          first_touch_referrer: string | null
+          first_touch_timestamp: string | null
+          last_touch_timestamp: string | null
+          session_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          utm_source?: string | null
+          utm_medium?: string | null
+          utm_campaign?: string | null
+          utm_term?: string | null
+          utm_content?: string | null
+          gclid?: string | null
+          fbclid?: string | null
+          msclkid?: string | null
+          ttclid?: string | null
+          referrer?: string | null
+          landing_page?: string | null
+          current_page?: string | null
+          first_touch_page?: string | null
+          first_touch_referrer?: string | null
+          first_touch_timestamp?: string | null
+          last_touch_timestamp?: string | null
+          session_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          utm_source?: string | null
+          utm_medium?: string | null
+          utm_campaign?: string | null
+          utm_term?: string | null
+          utm_content?: string | null
+          gclid?: string | null
+          fbclid?: string | null
+          msclkid?: string | null
+          ttclid?: string | null
+          referrer?: string | null
+          landing_page?: string | null
+          current_page?: string | null
+          first_touch_page?: string | null
+          first_touch_referrer?: string | null
+          first_touch_timestamp?: string | null
+          last_touch_timestamp?: string | null
+          session_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_utm_data_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           activity_type: string

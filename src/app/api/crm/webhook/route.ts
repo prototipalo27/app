@@ -116,6 +116,46 @@ export async function POST(request: NextRequest) {
     const submissionId =
       payload?.payload?.id || payload?._id || payload?.submissionId || data?._id || null;
 
+    // ── UTM tracking fields ──
+    const utmSource = findField(data, ["utm_source", "utmSource", "utm-source"]);
+    const utmMedium = findField(data, ["utm_medium", "utmMedium", "utm-medium"]);
+    const utmCampaign = findField(data, ["utm_campaign", "utmCampaign", "utm-campaign"]);
+    const utmTerm = findField(data, ["utm_term", "utmTerm", "utm-term"]);
+    const utmContent = findField(data, ["utm_content", "utmContent", "utm-content"]);
+    const gclid = findField(data, ["gclid"]);
+    const fbclid = findField(data, ["fbclid"]);
+    const msclkid = findField(data, ["msclkid"]);
+    const ttclid = findField(data, ["ttclid"]);
+    const referrer = findField(data, ["referrer", "referer", "http_referrer"]);
+    const landingPage = findField(data, ["landing_page", "landingPage", "landing-page"]);
+    const currentPage = findField(data, ["current_page", "currentPage", "current-page"]);
+    const firstTouchPage = findField(data, ["first_touch_page", "firstTouchPage"]);
+    const firstTouchReferrer = findField(data, ["first_touch_referrer", "firstTouchReferrer"]);
+    const firstTouchTimestamp = findField(data, ["first_touch_timestamp", "firstTouchTimestamp"]);
+    const lastTouchTimestamp = findField(data, ["last_touch_timestamp", "lastTouchTimestamp"]);
+    const sessionId = findField(data, ["session_id", "sessionId", "session-id"]);
+
+    const utmFields = {
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
+      utm_term: utmTerm,
+      utm_content: utmContent,
+      gclid,
+      fbclid,
+      msclkid,
+      ttclid,
+      referrer,
+      landing_page: landingPage,
+      current_page: currentPage,
+      first_touch_page: firstTouchPage,
+      first_touch_referrer: firstTouchReferrer,
+      first_touch_timestamp: firstTouchTimestamp || null,
+      last_touch_timestamp: lastTouchTimestamp || null,
+      session_id: sessionId,
+    };
+    const hasUtmData = utmSource || utmMedium || utmCampaign || gclid || fbclid || msclkid || ttclid || referrer || landingPage;
+
     if (!fullName?.trim()) {
       return NextResponse.json(
         { error: "Nombre completo es obligatorio" },
@@ -164,6 +204,16 @@ export async function POST(request: NextRequest) {
           })
           .eq("id", existingByEmail.id);
 
+        // Save / update UTM tracking data
+        if (hasUtmData) {
+          supabase
+            .from("lead_utm_data")
+            .upsert({ lead_id: existingByEmail.id, ...utmFields }, { onConflict: "lead_id" })
+            .then(({ error }) => {
+              if (error) console.error("UTM upsert error (dup email):", error);
+            });
+        }
+
         return NextResponse.json({
           ok: true,
           duplicate: true,
@@ -207,6 +257,16 @@ export async function POST(request: NextRequest) {
       }
       console.error("CRM webhook insert error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Save UTM tracking data (fire-and-forget)
+    if (hasUtmData && lead?.id) {
+      supabase
+        .from("lead_utm_data")
+        .insert({ lead_id: lead.id, ...utmFields })
+        .then(({ error }) => {
+          if (error) console.error("UTM insert error:", error);
+        });
     }
 
     // Auto-detect project type tag

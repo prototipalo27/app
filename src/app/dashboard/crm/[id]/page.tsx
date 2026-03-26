@@ -17,6 +17,7 @@ import {
   type LeadStatus,
   type ActivityType,
 } from "@/lib/crm-config";
+import { classifyTrafficSource, SOURCE_COLORS } from "@/lib/utm-utils";
 import { getBasePrices, getCommissionSummary, getNdaStatus, getMyCommissionData } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,59 @@ const STATUS_COLORS: Record<string, string> = {
   shipping: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
   delivered: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
 };
+
+async function UtmSection({ leadId, leadSource }: { leadId: string; leadSource: string }) {
+  const supabase = await createClient();
+  const { data: utm } = await supabase
+    .from("lead_utm_data")
+    .select("*")
+    .eq("lead_id", leadId)
+    .maybeSingle();
+
+  if (!utm) return null;
+
+  const trafficSource = classifyTrafficSource(leadSource, utm);
+  const color = SOURCE_COLORS[trafficSource];
+
+  const fields: { label: string; value: string | null }[] = [
+    { label: "Fuente", value: utm.utm_source },
+    { label: "Medio", value: utm.utm_medium },
+    { label: "Campaña", value: utm.utm_campaign },
+    { label: "Término", value: utm.utm_term },
+    { label: "Contenido", value: utm.utm_content },
+    { label: "Landing page", value: utm.landing_page },
+    { label: "Referrer", value: utm.referrer },
+    { label: "gclid", value: utm.gclid },
+    { label: "fbclid", value: utm.fbclid },
+    { label: "Primer toque", value: utm.first_touch_timestamp ? new Date(utm.first_touch_timestamp).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null },
+    { label: "Último toque", value: utm.last_touch_timestamp ? new Date(utm.last_touch_timestamp).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null },
+  ].filter((f) => f.value);
+
+  return (
+    <Card>
+      <CardContent>
+        <div className="mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-card-foreground">Atribución</h3>
+          <Badge
+            variant="secondary"
+            style={{ backgroundColor: `${color}20`, color }}
+            className="text-[10px] font-semibold"
+          >
+            {trafficSource}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {fields.map((f) => (
+            <div key={f.label}>
+              <p className="text-[10px] font-medium uppercase text-muted-foreground">{f.label}</p>
+              <p className="truncate text-xs text-foreground">{f.value}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 async function LinkedProjectsSection({ leadId }: { leadId: string }) {
   const supabase = await createClient();
@@ -448,6 +502,11 @@ export default async function LeadDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {/* UTM attribution */}
+          <Suspense fallback={null}>
+            <UtmSection leadId={id} leadSource={lead.source} />
+          </Suspense>
 
           {/* Everything below streams in progressively */}
           <Suspense fallback={null}>

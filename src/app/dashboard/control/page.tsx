@@ -5,6 +5,8 @@ import { getNextTaxDeadline } from "@/lib/finance/tax-calendar";
 import Link from "next/link";
 import { BillingBreakdown } from "./billing-breakdown";
 import { LeadsChart } from "../leads-chart";
+import { LeadAnalytics } from "./lead-analytics";
+import { classifyTrafficSource, SOURCE_COLORS, ALL_SOURCES, type TrafficSource } from "@/lib/utm-utils";
 
 /* ── helpers ── */
 
@@ -91,6 +93,7 @@ export default async function ControlPage() {
     { data: fixedExpenses },
     { data: taxPayments },
     { data: leadsRaw },
+    { data: utmRows },
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -112,6 +115,9 @@ export default async function ControlPage() {
       .select("created_at")
       .gte("created_at", thirtyDaysAgo.toISOString())
       .order("created_at", { ascending: true }),
+    supabase
+      .from("lead_utm_data")
+      .select("utm_source, utm_medium, utm_campaign, gclid, fbclid, msclkid, ttclid, referrer, lead_id, created_at"),
   ]);
 
   const allProjects = projects ?? [];
@@ -199,6 +205,73 @@ export default async function ControlPage() {
     const key = d.toISOString().slice(0, 10);
     leadsPerDay.push({ date: key, count: dayMap.get(key) ?? 0 });
   }
+
+  /* ── UTM / Source Analytics ── */
+
+  // Build a map lead_id → utm data for fast lookup
+  const utmByLeadId = new Map(
+    (utmRows ?? []).map((u) => [u.lead_id, u])
+  );
+
+  // Classify every lead into a traffic source
+  const leadSourceClassified = allLeads.map((l) => ({
+    ...l,
+    trafficSource: classifyTrafficSource(l.source, utmByLeadId.get(l.id) ?? null),
+  }));
+
+  // 1. Source distribution (for donut chart)
+  const sourceCounts = new Map<TrafficSource, number>();
+  for (const l of leadSourceClassified) {
+    sourceCounts.set(l.trafficSource, (sourceCounts.get(l.trafficSource) ?? 0) + 1);
+  }
+  const sourceDistribution = ALL_SOURCES
+    .filter((s) => (sourceCounts.get(s) ?? 0) > 0)
+    .map((s) => ({ source: s, count: sourceCounts.get(s)!, color: SOURCE_COLORS[s] }))
+    .sort((a, b) => b.count - a.count);
+
+  // 2. Leads by day + source (stacked area) — last 30 days
+  const leadsByDayAndSource: Record<string, string | number>[] = [];
+  const activeSources = new Set(sourceDistribution.map((s) => s.source));
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(thirtyDaysAgo);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    const dayLabel = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+    const row: Record<string, string | number> = { date: dayLabel };
+    for (const src of activeSources) row[src] = 0;
+    leadsByDayAndSource.push(row);
+  }
+  // Fill counts
+  for (const l of leadSourceClassified) {
+    const dayKey = l.created_at.slice(0, 10);
+    const d = new Date(dayKey + "T00:00:00");
+    const idx = Math.floor((d.getTime() - thirtyDaysAgo.getTime()) / 86400000);
+    if (idx >= 0 && idx < 30 && leadsByDayAndSource[idx]) {
+      const src = l.trafficSource;
+      if (activeSources.has(src)) {
+        (leadsByDayAndSource[idx][src] as number)++;
+      }
+    }
+  }
+
+  // 3. Campaign performance
+  const campaignMap = new Map<string, { leads: number; won: number }>();
+  for (const l of leadSourceClassified) {
+    const utm = utmByLeadId.get(l.id);
+    const campaign = utm?.utm_campaign;
+    if (!campaign) continue;
+    const entry = campaignMap.get(campaign) ?? { leads: 0, won: 0 };
+    entry.leads++;
+    if (l.status === "won") entry.won++;
+    campaignMap.set(campaign, entry);
+  }
+  const campaignPerformance = Array.from(campaignMap.entries())
+    .map(([campaign, data]) => ({ campaign, ...data }))
+    .sort((a, b) => b.leads - a.leads);
+
+  const analyticsSourceList = Array.from(activeSources);
+  const analyticsColorMap: Record<string, string> = {};
+  for (const s of analyticsSourceList) analyticsColorMap[s] = SOURCE_COLORS[s];
 
   const pendingPurchases = allPurchases.filter((p) => p.status === "pending");
   const receivedPurchases = allPurchases.filter((p) => p.status === "received");
@@ -426,6 +499,16 @@ export default async function ControlPage() {
         />
         <LeadsChart data={leadsPerDay} />
       </div>
+
+      {/* ── Lead Source Analytics ── */}
+      <LeadAnalytics
+        sourceDistribution={sourceDistribution}
+        leadsByDayAndSource={leadsByDayAndSource}
+        campaignPerformance={campaignPerformance}
+        totalLeads={allLeads.length}
+        sources={analyticsSourceList}
+        sourceColors={analyticsColorMap}
+      />
 
       {/* ── 5. Gastos ── */}
       <div className="grid gap-4 md:grid-cols-2">
