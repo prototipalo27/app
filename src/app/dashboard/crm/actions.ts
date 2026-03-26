@@ -226,9 +226,9 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
     }
   }
 
-  // Fetch Holded docs for clients that have a holdedContactId but no CRM docs
+  // Fetch Holded docs for all clients that have a holdedContactId
   const clientsNeedingDocs = [...clientMap.values()].filter(
-    (c) => c.holdedContactId && c.documents.length === 0
+    (c) => c.holdedContactId
   );
 
   if (clientsNeedingDocs.length > 0) {
