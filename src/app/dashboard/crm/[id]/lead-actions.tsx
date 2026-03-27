@@ -644,120 +644,6 @@ export default function LeadActions({
                   <p><strong>Razon social:</strong> {quoteRequest.billing_name}</p>
                   <p><strong>NIF:</strong> {quoteRequest.tax_id}</p>
                 </div>
-
-                {/* Proforma section */}
-                {!quoteRequest.holded_proforma_id && quoteRequest.holded_contact_id && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setQuoteError(null);
-                      startTransition(async () => {
-                        const result = await createLeadProforma(leadId);
-                        if (!result.success) {
-                          setQuoteError(result.error || "Error");
-                        }
-                        router.refresh();
-                      });
-                    }}
-                    disabled={isPending}
-                    className="block bg-brand text-white hover:bg-brand-dark"
-                  >
-                    {isPending ? "Creando..." : "Crear proforma en Holded"}
-                  </Button>
-                )}
-
-                {quoteRequest.holded_proforma_id && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={`https://app.holded.com/sales/revenue#open:proform-${quoteRequest.holded_proforma_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        Ver proforma en Holded
-                      </a>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      <PdfPreviewButton leadId={leadId} docType="proform" />
-
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          setSendingProforma(true);
-                          setQuoteError(null);
-                          setDocSent(null);
-                          const result = await sendProformaToClient(leadId);
-                          setSendingProforma(false);
-                          if (result.success) {
-                            setDocSent("proforma");
-                            router.refresh();
-                          } else {
-                            setQuoteError(result.error || "Error");
-                          }
-                        }}
-                        disabled={sendingProforma}
-                        className="bg-brand text-white hover:bg-brand-dark"
-                      >
-                        {sendingProforma ? "Enviando..." : "Enviar proforma"}
-                      </Button>
-                    </div>
-
-                  </>
-                )}
-
-                {/* Invoice section */}
-                {quoteRequest.holded_contact_id && (
-                  <div className="border-t pt-2 space-y-2">
-                    {quoteRequest.holded_invoice_id && (
-                      <>
-                        <a
-                          href={`https://app.holded.com/sales/revenue#open:invoice-${quoteRequest.holded_invoice_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          Ver factura en Holded
-                        </a>
-                        <PdfPreviewButton leadId={leadId} docType="invoice" />
-                      </>
-                    )}
-
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        setSendingInvoice(true);
-                        setQuoteError(null);
-                        setDocSent(null);
-                        const result = await sendInvoiceToClient(leadId);
-                        setSendingInvoice(false);
-                        if (result.success) {
-                          setDocSent("factura");
-                          router.refresh();
-                        } else {
-                          setQuoteError(result.error || "Error");
-                        }
-                      }}
-                      disabled={sendingInvoice}
-                      className={quoteRequest.holded_invoice_id ? "" : "bg-brand text-white hover:bg-brand-dark"}
-                      variant={quoteRequest.holded_invoice_id ? "secondary" : "default"}
-                    >
-                      {sendingInvoice
-                        ? "Enviando..."
-                        : quoteRequest.holded_invoice_id
-                          ? "Reenviar factura"
-                          : "Crear y enviar factura"}
-                    </Button>
-                  </div>
-                )}
-
-                {docSent && (
-                  <p className="text-xs text-green-600 dark:text-green-400">
-                    {docSent === "proforma" ? "Proforma enviada" : "Factura enviada"} correctamente
-                  </p>
-                )}
-
                 {quoteError && (
                   <p className="text-xs text-destructive">{quoteError}</p>
                 )}
@@ -767,6 +653,123 @@ export default function LeadActions({
 
           return null;
         })()}
+
+        {/* Proforma & Factura — visible siempre que haya items + contacto Holded */}
+        {quoteRequest && Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0 && quoteRequest.holded_contact_id && (
+          <div className="space-y-2 border-t pt-3 mt-3">
+            {/* Proforma */}
+            {!quoteRequest.holded_proforma_id && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setQuoteError(null);
+                  startTransition(async () => {
+                    const result = await createLeadProforma(leadId);
+                    if (!result.success) {
+                      setQuoteError(result.error || "Error");
+                    }
+                    router.refresh();
+                  });
+                }}
+                disabled={isPending}
+                className="block bg-brand text-white hover:bg-brand-dark"
+              >
+                {isPending ? "Creando..." : "Crear proforma en Holded"}
+              </Button>
+            )}
+
+            {quoteRequest.holded_proforma_id && (
+              <>
+                <a
+                  href={`https://app.holded.com/sales/revenue#open:proform-${quoteRequest.holded_proforma_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Ver proforma en Holded
+                </a>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <PdfPreviewButton leadId={leadId} docType="proform" />
+
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setSendingProforma(true);
+                      setQuoteError(null);
+                      setDocSent(null);
+                      const result = await sendProformaToClient(leadId);
+                      setSendingProforma(false);
+                      if (result.success) {
+                        setDocSent("proforma");
+                        router.refresh();
+                      } else {
+                        setQuoteError(result.error || "Error");
+                      }
+                    }}
+                    disabled={sendingProforma}
+                    className="bg-brand text-white hover:bg-brand-dark"
+                  >
+                    {sendingProforma ? "Enviando..." : "Enviar proforma"}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* Factura */}
+            <div className="border-t pt-2 space-y-2">
+              {quoteRequest.holded_invoice_id && (
+                <>
+                  <a
+                    href={`https://app.holded.com/sales/revenue#open:invoice-${quoteRequest.holded_invoice_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    Ver factura en Holded
+                  </a>
+                  <PdfPreviewButton leadId={leadId} docType="invoice" />
+                </>
+              )}
+
+              <Button
+                size="sm"
+                onClick={async () => {
+                  setSendingInvoice(true);
+                  setQuoteError(null);
+                  setDocSent(null);
+                  const result = await sendInvoiceToClient(leadId);
+                  setSendingInvoice(false);
+                  if (result.success) {
+                    setDocSent("factura");
+                    router.refresh();
+                  } else {
+                    setQuoteError(result.error || "Error");
+                  }
+                }}
+                disabled={sendingInvoice}
+                className={quoteRequest.holded_invoice_id ? "" : "bg-brand text-white hover:bg-brand-dark"}
+                variant={quoteRequest.holded_invoice_id ? "secondary" : "default"}
+              >
+                {sendingInvoice
+                  ? "Enviando..."
+                  : quoteRequest.holded_invoice_id
+                    ? "Reenviar factura"
+                    : "Crear y enviar factura"}
+              </Button>
+            </div>
+
+            {docSent && (
+              <p className="text-xs text-green-600 dark:text-green-400">
+                {docSent === "proforma" ? "Proforma enviada" : "Factura enviada"} correctamente
+              </p>
+            )}
+
+            {quoteError && (
+              <p className="text-xs text-destructive">{quoteError}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add note */}
