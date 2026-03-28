@@ -2716,10 +2716,27 @@ export async function createStripeCheckout(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
+  // Create or find Stripe customer (required for bank_transfer)
+  const customers = lead?.email
+    ? await stripe.customers.list({ email: lead.email, limit: 1 })
+    : { data: [] };
+  const customer = customers.data.length > 0
+    ? customers.data[0]
+    : await stripe.customers.create({
+        email: lead?.email || undefined,
+        name: lead?.full_name || undefined,
+      });
+
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    payment_method_types: ["card"],
-    customer_email: lead?.email || undefined,
+    customer: customer.id,
+    payment_method_types: ["card", "customer_balance"],
+    payment_method_options: {
+      customer_balance: {
+        funding_type: "bank_transfer",
+        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+      },
+    },
     line_items: [{
       price_data: {
         currency: "eur",
