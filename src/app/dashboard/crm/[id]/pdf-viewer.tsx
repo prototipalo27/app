@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
@@ -83,14 +82,14 @@ export function PdfPreviewButton({
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="h-[90vh] max-w-3xl p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle>{label}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="flex h-[90vh] max-w-3xl flex-col gap-0 p-0 overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
+            <DialogTitle className="text-base font-semibold">{label}</DialogTitle>
+          </div>
           {pdfUrl && (
             <iframe
               src={pdfUrl}
-              className="h-full w-full border-0"
+              className="min-h-0 flex-1 border-0"
               title={label}
             />
           )}
