@@ -18,6 +18,7 @@ import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
 import ProjectChecklist from "./project-checklist";
 import PmSelector from "./pm-selector";
+import { NegotiationBriefing } from "./negotiation-briefing";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },

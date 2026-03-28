@@ -487,3 +487,106 @@ export async function deleteProject(id: string): Promise<{ success: boolean; err
   revalidatePath("/dashboard");
   return { success: true, error: null };
 }
+
+// ── Negotiation Summary (AI) ──────────────────────────────
+
+export async function generateNegotiationSummary(
+  leadId: string,
+): Promise<{ success: boolean; summary?: string; error?: string }> {
+  await requireRole("manager");
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { success: false, error: "ANTHROPIC_API_KEY no configurada" };
+
+  const supabase = await createClient();
+
+  // Get lead info
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("full_name, company, email, message, source, estimated_quantity, estimated_value, project_type_tag, payment_condition")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead) return { success: false, error: "Lead no encontrado" };
+
+  // Get all activities (emails, notes, status changes)
+  const { data: activities } = await supabase
+    .from("lead_activities")
+    .select("activity_type, content, metadata, created_at")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  // Get quote items
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("items, notes, status")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Build context
+  const emailHistory = (activities || [])
+    .filter((a) => a.activity_type === "email_sent" || a.activity_type === "email_received")
+    .map((a) => {
+      const meta = a.metadata as Record<string, unknown> | null;
+      const direction = a.activity_type === "email_sent" ? "ENVIADO" : "RECIBIDO";
+      const subject = meta?.email_subject || "";
+      return `[${new Date(a.created_at).toLocaleDateString("es-ES")}] ${direction}: ${subject}\n${a.content || ""}`;
+    })
+    .join("\n---\n");
+
+  const notes = (activities || [])
+    .filter((a) => a.activity_type === "note")
+    .map((a) => `[${new Date(a.created_at).toLocaleDateString("es-ES")}] ${a.content}`)
+    .join("\n");
+
+  const quoteInfo = qr?.items
+    ? `Items del presupuesto: ${JSON.stringify(qr.items)}\nNotas: ${qr.notes || "N/A"}\nEstado: ${qr.status}`
+    : "Sin presupuesto";
+
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic({ apiKey });
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 800,
+    messages: [
+      {
+        role: "user",
+        content: `Eres un asistente de operaciones de un taller de impresion 3D (Prototipalo). Genera un resumen conciso del briefing de negociacion para el equipo de operaciones.
+
+DATOS DEL CLIENTE:
+- Nombre: ${lead.full_name}
+- Empresa: ${lead.company || "N/A"}
+- Email: ${lead.email || "N/A"}
+- Mensaje inicial: ${lead.message || "N/A"}
+- Cantidad estimada: ${lead.estimated_quantity || "N/A"}
+- Valor estimado: ${lead.estimated_value ? `${lead.estimated_value}€` : "N/A"}
+- Tipo proyecto: ${lead.project_type_tag || "N/A"}
+- Condicion de pago: ${lead.payment_condition || "N/A"}
+
+PRESUPUESTO:
+${quoteInfo}
+
+HISTORIAL DE EMAILS:
+${emailHistory || "Sin emails"}
+
+NOTAS INTERNAS:
+${notes || "Sin notas"}
+
+Genera un resumen en espanol estructurado con:
+1. **Resumen** (2-3 frases de que necesita el cliente)
+2. **Detalles clave** (material, acabados, plazos, cantidades - solo si se mencionan)
+3. **Acuerdos** (precios pactados, condiciones especiales, descuentos)
+4. **Notas para produccion** (cualquier detalle tecnico o preferencia del cliente relevante para fabricacion)
+
+Se breve y directo. No inventes informacion que no este en los datos. Usa formato markdown.`,
+      },
+    ],
+  });
+
+  const summary = response.content[0].type === "text" ? response.content[0].text : "";
+  return { success: true, summary };
+}
