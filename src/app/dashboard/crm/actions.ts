@@ -2729,7 +2729,14 @@ export async function createStripeCheckout(
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    payment_method_types: ["card"],
+    payment_method_types: ["card", "customer_balance"],
+    payment_method_options: {
+      customer_balance: {
+        funding_type: "bank_transfer",
+        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+      },
+    },
+    customer_creation: "always",
     line_items: isSplit
       ? [{
           price_data: {
@@ -2740,7 +2747,6 @@ export async function createStripeCheckout(
           quantity: 1,
         }]
       : lineItems,
-    customer_email: lead?.email || undefined,
     metadata: {
       lead_id: leadId,
       quote_request_id: qr.id,
