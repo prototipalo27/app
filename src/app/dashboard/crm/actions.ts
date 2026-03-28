@@ -2706,47 +2706,28 @@ export async function createStripeCheckout(
   const discountFactor = isFull ? 0.95 : 1;
   const isSplit = qr.payment_option === "split";
 
-  const lineItems = items.map((item) => {
-    const unitPrice = Math.round(item.price * discountFactor * 100); // cents
-    const taxRate = item.tax;
-    return {
-      price_data: {
-        currency: "eur",
-        product_data: { name: item.concept },
-        unit_amount: unitPrice,
-        tax_behavior: "exclusive" as const,
-      },
-      quantity: item.units,
-    };
-  });
+  // Calculate total in cents
+  const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+  const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
 
-  // If split payment, add a note about 50% first payment
-  const description = isSplit
-    ? "Primer pago (50%) — Prototipalo"
-    : "Pago completo — Prototipalo";
+  const label = isSplit
+    ? "Primer pago (50%) — Proyecto Prototipalo"
+    : "Pago — Proyecto Prototipalo";
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    payment_method_types: ["card", "customer_balance"],
-    payment_method_options: {
-      customer_balance: {
-        funding_type: "bank_transfer",
-        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+    payment_method_types: ["card"],
+    customer_email: lead?.email || undefined,
+    line_items: [{
+      price_data: {
+        currency: "eur",
+        product_data: { name: label },
+        unit_amount: chargeAmount,
       },
-    },
-    customer_creation: "always",
-    line_items: isSplit
-      ? [{
-          price_data: {
-            currency: "eur",
-            product_data: { name: "Primer pago (50%) — Proyecto Prototipalo" },
-            unit_amount: Math.round(items.reduce((s, i) => s + i.price * i.units * discountFactor, 0) * 50), // 50% in cents
-          },
-          quantity: 1,
-        }]
-      : lineItems,
+      quantity: 1,
+    }],
     metadata: {
       lead_id: leadId,
       quote_request_id: qr.id,
@@ -2754,9 +2735,6 @@ export async function createStripeCheckout(
     },
     success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/payment/cancel`,
-    payment_intent_data: {
-      description,
-    },
   });
 
   await supabase
