@@ -17,6 +17,8 @@ import {
   createLeadProforma,
   sendProformaToClient,
   sendInvoiceToClient,
+  createStripeCheckout,
+  markAsPaid,
   updateLeadOwner,
   sendQuoteToClient,
   sendNdaToClient,
@@ -100,6 +102,9 @@ export default function LeadActions({
   const [sendingProforma, setSendingProforma] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [docSent, setDocSent] = useState<string | null>(null);
+  const [generatingPayLink, setGeneratingPayLink] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
@@ -771,6 +776,98 @@ export default function LeadActions({
           </div>
         )}
       </div>
+
+      {/* Payment section */}
+      {quoteRequest && Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0 && quoteRequest.holded_proforma_id && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-card-foreground">Pago</h3>
+          <div className="space-y-2">
+            {quoteRequest.payment_status === "paid" ? (
+              <div className="space-y-1">
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  Pagado
+                  {quoteRequest.paid_at && (
+                    <span className="ml-1 font-normal">
+                      {new Date(quoteRequest.paid_at).toLocaleDateString("es-ES")}
+                    </span>
+                  )}
+                </Badge>
+                {quoteRequest.paid_amount && (
+                  <p className="text-xs text-muted-foreground">
+                    {Number(quoteRequest.paid_amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  Pendiente de pago
+                </Badge>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={async () => {
+                      setGeneratingPayLink(true);
+                      setQuoteError(null);
+                      const result = await createStripeCheckout(leadId);
+                      setGeneratingPayLink(false);
+                      if (result.success && result.url) {
+                        setPaymentLink(result.url);
+                        navigator.clipboard.writeText(result.url);
+                      } else {
+                        setQuoteError(result.error || "Error");
+                      }
+                    }}
+                    disabled={generatingPayLink}
+                  >
+                    {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Generar link de pago"}
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setMarkingPaid(true);
+                      setQuoteError(null);
+                      const result = await markAsPaid(leadId);
+                      setMarkingPaid(false);
+                      if (result.success) {
+                        setDocSent("pago");
+                        router.refresh();
+                      } else {
+                        setQuoteError(result.error || "Error");
+                      }
+                    }}
+                    disabled={markingPaid}
+                    className="bg-green-600 text-white hover:bg-green-700"
+                  >
+                    {markingPaid ? "Procesando..." : "Marcar como pagado"}
+                  </Button>
+                </div>
+
+                {paymentLink && (
+                  <input
+                    readOnly
+                    value={paymentLink}
+                    onClick={(e) => {
+                      (e.target as HTMLInputElement).select();
+                      navigator.clipboard.writeText(paymentLink);
+                    }}
+                    className="w-full rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
+                  />
+                )}
+
+                {docSent === "pago" && (
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    Pago confirmado. Factura enviada y proyecto creado.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add note */}
       <div>

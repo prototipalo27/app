@@ -2671,3 +2671,248 @@ export async function getMyCommissionData(estimatedValue?: number | null): Promi
 
   return { preview, estimate };
 }
+
+// ── Stripe Checkout ─────────────────────────────────────
+
+export async function createStripeCheckout(
+  leadId: string,
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, items, notes, payment_option, holded_contact_id, holded_proforma_id, stripe_checkout_session_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) return { success: false, error: "Sin líneas de presupuesto" };
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name")
+    .eq("id", leadId)
+    .single();
+
+  const Stripe = (await import("stripe")).default;
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+  const isFull = qr.payment_option === "full";
+  const discountFactor = isFull ? 0.95 : 1;
+  const isSplit = qr.payment_option === "split";
+
+  const lineItems = items.map((item) => {
+    const unitPrice = Math.round(item.price * discountFactor * 100); // cents
+    const taxRate = item.tax;
+    return {
+      price_data: {
+        currency: "eur",
+        product_data: { name: item.concept },
+        unit_amount: unitPrice,
+        tax_behavior: "exclusive" as const,
+      },
+      quantity: item.units,
+    };
+  });
+
+  // If split payment, add a note about 50% first payment
+  const description = isSplit
+    ? "Primer pago (50%) — Prototipalo"
+    : "Pago completo — Prototipalo";
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: isSplit
+      ? [{
+          price_data: {
+            currency: "eur",
+            product_data: { name: "Primer pago (50%) — Proyecto Prototipalo" },
+            unit_amount: Math.round(items.reduce((s, i) => s + i.price * i.units * discountFactor, 0) * 50), // 50% in cents
+          },
+          quantity: 1,
+        }]
+      : lineItems,
+    customer_email: lead?.email || undefined,
+    metadata: {
+      lead_id: leadId,
+      quote_request_id: qr.id,
+      payment_type: isSplit ? "split_50" : "full",
+    },
+    success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/payment/cancel`,
+    payment_intent_data: {
+      description,
+    },
+  });
+
+  await supabase
+    .from("quote_requests")
+    .update({ stripe_checkout_session_id: session.id })
+    .eq("id", qr.id);
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true, url: session.url! };
+}
+
+// ── On Payment Confirmed (auto-pipeline) ────────────────
+
+export async function onPaymentConfirmed(
+  quoteRequestId: string,
+): Promise<{ success: boolean; error?: string; projectId?: string }> {
+  const supabase = await createClient();
+
+  // Get quote request with lead data
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("*, leads(id, full_name, company, email, phone, attachments, message)")
+    .eq("id", quoteRequestId)
+    .single();
+
+  if (!qr) return { success: false, error: "Quote request not found" };
+
+  const lead = qr.leads as unknown as {
+    id: string; full_name: string; company: string | null;
+    email: string | null; phone: string | null; attachments: string | null; message: string | null;
+  };
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+
+  // 1. Create invoice in Holded
+  let invoiceId = qr.holded_invoice_id;
+  if (!invoiceId && qr.holded_contact_id) {
+    try {
+      const invoice = await createInvoice(qr.holded_contact_id, {
+        items: items.map((item) => ({
+          name: item.concept,
+          units: item.units,
+          subtotal: item.price,
+          tax: item.tax,
+        })),
+        notes: qr.notes || undefined,
+      });
+      invoiceId = invoice.id;
+      await supabase
+        .from("quote_requests")
+        .update({ holded_invoice_id: invoiceId })
+        .eq("id", qr.id);
+    } catch (e) {
+      console.error("[onPaymentConfirmed] Invoice creation failed:", e);
+    }
+  }
+
+  // 2. Send invoice by email
+  if (invoiceId && lead.email) {
+    try {
+      const pdfBuffer = await getDocumentPdf("invoice", invoiceId);
+      await sendEmailOrSchedule({
+        to: lead.email,
+        subject: "Factura — Prototipalo",
+        text: `Hola ${lead.full_name},\n\nTe adjuntamos la factura correspondiente a tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
+        html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la factura correspondiente a tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+        attachments: pdfBuffer && pdfBuffer.length > 0
+          ? [{ filename: "Factura-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+          : undefined,
+      });
+    } catch (e) {
+      console.error("[onPaymentConfirmed] Invoice email failed:", e);
+    }
+  }
+
+  // 3. Create project
+  const projectName = lead.company || lead.full_name;
+  const { data: newProject, error: projectError } = await supabase
+    .from("projects")
+    .insert({
+      name: projectName,
+      description: lead.message || null,
+      project_type: "confirmed",
+      status: "pending",
+      lead_id: lead.id,
+      holded_contact_id: qr.holded_contact_id,
+      holded_invoice_id: invoiceId,
+      client_name: lead.full_name,
+      client_email: lead.email,
+    })
+    .select("id")
+    .single();
+
+  if (projectError) {
+    console.error("[onPaymentConfirmed] Project creation failed:", projectError);
+    return { success: false, error: projectError.message };
+  }
+
+  // 4. Copy lead attachments to Briefing (fire-and-forget)
+  if (lead.attachments && newProject) {
+    copyLeadAttachmentsToBriefing(lead.id, newProject.id, supabase).catch((err) => {
+      console.error("[onPaymentConfirmed] Attachment copy failed:", err);
+    });
+  }
+
+  // 5. Change lead to "won"
+  await supabase
+    .from("leads")
+    .update({ status: "won" })
+    .eq("id", lead.id);
+
+  // 6. Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: lead.id,
+    activity_type: "status_change",
+    content: "Pago confirmado. Factura enviada y proyecto creado automaticamente.",
+    metadata: {
+      old_status: "quoted",
+      new_status: "won",
+      auto: true,
+      project_id: newProject.id,
+      holded_invoice_id: invoiceId,
+    },
+  });
+
+  revalidatePath(`/dashboard/crm/${lead.id}`);
+  revalidatePath("/dashboard");
+  return { success: true, projectId: newProject.id };
+}
+
+// ── Mark as Paid (manual transfer) ──────────────────────
+
+export async function markAsPaid(
+  leadId: string,
+): Promise<{ success: boolean; error?: string; projectId?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, items, payment_option")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  const isFull = qr.payment_option === "full";
+  const discountFactor = isFull ? 0.95 : 1;
+  const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+
+  await supabase
+    .from("quote_requests")
+    .update({
+      payment_status: "paid",
+      paid_at: new Date().toISOString(),
+      paid_amount: total,
+    })
+    .eq("id", qr.id);
+
+  const result = await onPaymentConfirmed(qr.id);
+  return result;
+}

@@ -187,41 +187,95 @@ export async function submitBillingData(
     })
     .eq("id", qr.id);
 
-  // 6. Update lead status to "won"
-  await supabase
-    .from("leads")
-    .update({ status: "won" })
-    .eq("id", qr.lead_id);
+  // 6. Create Stripe Checkout session for payment
+  let stripeCheckoutUrl: string | null = null;
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+    const isSplit = data.payment_option === "split";
+    const discountFactor = isFullPayment ? 0.95 : 1;
+    const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+    const chargeAmount = isSplit ? Math.round(total * 50) : Math.round(total * 100); // cents
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_email: lead?.email || undefined,
+      line_items: [{
+        price_data: {
+          currency: "eur",
+          product_data: {
+            name: isSplit
+              ? "Primer pago (50%) — Proyecto Prototipalo"
+              : "Pago completo — Proyecto Prototipalo",
+          },
+          unit_amount: chargeAmount,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        lead_id: qr.lead_id,
+        quote_request_id: qr.id,
+        payment_type: isSplit ? "split_50" : "full",
+      },
+      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/payment/cancel`,
+    });
+
+    stripeCheckoutUrl = session.url;
+    await supabase
+      .from("quote_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", qr.id);
+  } catch (e) {
+    console.error("[submitBillingData] Stripe checkout creation failed:", e);
+  }
 
   await supabase.from("lead_activities").insert({
     lead_id: qr.lead_id,
-    activity_type: "status_change",
-    content: "Estado cambiado a won — cliente ha enviado datos de facturación",
-    metadata: { new_status: "won", auto: true, payment_option: data.payment_option },
+    activity_type: "note",
+    content: "Cliente ha enviado datos de facturación. Proforma generada y enviada con link de pago.",
+    metadata: { auto: true, payment_option: data.payment_option },
   });
 
-  // 7. Send proforma PDF by email
+  // 7. Send proforma PDF by email (with payment link)
   if (holdedProformaId && lead?.email) {
     try {
       const pdfBuffer = await getDocumentPdf("proform", holdedProformaId);
       const bookingUrl = "https://calendly.com/prototipalo/conoce-prototipalo";
 
+      const paymentHtml = stripeCheckoutUrl
+        ? `<p style="margin-top:16px;">
+            <a href="${stripeCheckoutUrl}" style="display:inline-block;padding:12px 24px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+              Proceder al pago
+            </a>
+          </p>
+          <p style="font-size:12px;color:#a1a1aa;">Tambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.</p>`
+        : "";
+
+      const paymentText = stripeCheckoutUrl
+        ? `\n\nPuedes proceder al pago en el siguiente enlace:\n${stripeCheckoutUrl}\n\nTambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.`
+        : "";
+
       await sendEmail({
         to: lead.email,
         subject: "Proforma — Prototipalo",
         signature: false,
-        text: `Hola ${lead.full_name},\n\nGracias por confirmar tu proyecto. Adjuntamos la proforma para proceder al pago y arrancar con la producción lo antes posible.\n\n${isFullPayment ? "Se ha aplicado un 5% de descuento por pago único." : "El pago se divide en dos plazos: 50% ahora y 50% a la entrega."}\n\nSi quieres, puedes reservar una reunión para poner todo en marcha:\n${bookingUrl}\n\nGracias,\nEl equipo de Prototipalo`,
+        text: `Hola ${lead.full_name},\n\nGracias por confirmar tu proyecto. Adjuntamos la proforma para proceder al pago y arrancar con la producción lo antes posible.\n\n${isFullPayment ? "Se ha aplicado un 5% de descuento por pago único." : "El pago se divide en dos plazos: 50% ahora y 50% a la entrega."}${paymentText}\n\nSi quieres, puedes reservar una reunión para poner todo en marcha:\n${bookingUrl}\n\nGracias,\nEl equipo de Prototipalo`,
         html: `
           <p>Hola ${lead.full_name},</p>
           <p>Gracias por confirmar tu proyecto. Adjuntamos la proforma para proceder al pago y arrancar con la producción lo antes posible.</p>
           <p style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:13px;color:#52525b;">
             ${isFullPayment
-              ? "💰 Se ha aplicado un <strong>5% de descuento</strong> por pago único."
-              : "💰 El pago se divide en dos plazos: <strong>50% ahora</strong> y <strong>50% a la entrega</strong>."}
+              ? "Se ha aplicado un <strong>5% de descuento</strong> por pago único."
+              : "El pago se divide en dos plazos: <strong>50% ahora</strong> y <strong>50% a la entrega</strong>."}
           </p>
-          <p>¿Quieres que hablemos sobre los detalles del proyecto? Reserva una reunión y lo ponemos todo en marcha:</p>
+          ${paymentHtml}
+          <p style="margin-top:16px;">¿Quieres que hablemos sobre los detalles del proyecto? Reserva una reunión:</p>
           <p>
-            <a href="${bookingUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">
+            <a href="${bookingUrl}" style="display:inline-block;padding:10px 20px;background:#27272a;color:white;border-radius:8px;text-decoration:none;font-weight:500;">
               Reservar reunión
             </a>
           </p>

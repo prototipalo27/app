@@ -1840,6 +1840,11 @@ export type Database = {
           id: string
           items: Json | null
           lead_id: string
+          paid_amount: number | null
+          paid_at: string | null
+          payment_status: string | null
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
           notes: string | null
           payment_option: string | null
           proforma_accepted_at: string | null
@@ -1870,6 +1875,11 @@ export type Database = {
           id?: string
           items?: Json | null
           lead_id: string
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           notes?: string | null
           payment_option?: string | null
           proforma_accepted_at?: string | null
@@ -1900,6 +1910,11 @@ export type Database = {
           id?: string
           items?: Json | null
           lead_id?: string
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_status?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           notes?: string | null
           payment_option?: string | null
           proforma_accepted_at?: string | null
