@@ -32,9 +32,7 @@ export async function GET(request: NextRequest) {
   if (section === "design" && !project.design_visible) {
     return NextResponse.json({ error: "Sección no disponible" }, { status: 403 });
   }
-  if (section === "deliverable" && !project.deliverable_visible) {
-    return NextResponse.json({ error: "Sección no disponible" }, { status: 403 });
-  }
+  // Deliverable is always accessible to the client
 
   const folderId = await resolveSectionFolder(project.google_drive_folder_id, section);
   if (!folderId) {

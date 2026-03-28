@@ -25,7 +25,6 @@ interface ClientPortalProps {
   isVerified: boolean;
   designVisible: boolean;
   designApprovedAt: string | null;
-  deliverableVisible: boolean;
   deliverableApprovedAt: string | null;
   paymentConfirmedAt: string | null;
 }
@@ -39,7 +38,6 @@ export default function ClientPortal({
   isVerified: initialVerified,
   designVisible,
   designApprovedAt: initialDesignApproved,
-  deliverableVisible,
   deliverableApprovedAt: initialDeliverableApproved,
   paymentConfirmedAt: initialPaymentConfirmed,
 }: ClientPortalProps) {
@@ -158,7 +156,7 @@ export default function ClientPortal({
     loadedRef.current = true;
     loadFiles("briefing");
     if (designVisible) loadFiles("design");
-    if (deliverableVisible) loadFiles("deliverable");
+    loadFiles("deliverable");
   }
 
   // ── Upload to Briefing ──
@@ -356,19 +354,7 @@ export default function ClientPortal({
         ) : !designLoaded ? (
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
-          <>
-            <FileList files={designFiles} section="design" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
-
-            {!designApproved && designFiles.length > 0 && (
-              <button
-                onClick={() => handleApprove("design")}
-                disabled={approving}
-                className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
-              >
-                {approving ? "Aprobando..." : "Aprobar diseños"}
-              </button>
-            )}
-          </>
+          <FileList files={designFiles} section="design" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
         )}
       </div>
 
@@ -381,9 +367,7 @@ export default function ClientPortal({
           {paymentConfirmed && <PaidBadge />}
         </h2>
 
-        {!deliverableVisible ? (
-          <PendingCard label="El equipo aún no ha compartido el entregable." />
-        ) : !deliverableLoaded ? (
+        {!deliverableLoaded ? (
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
           <>

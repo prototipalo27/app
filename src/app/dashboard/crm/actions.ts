@@ -1133,10 +1133,75 @@ export async function linkLeadToProject(leadId: string, projectId: string): Prom
 
   if (error) return { success: false, error: error.message };
 
+  // Copy lead attachments to Briefing folder (fire-and-forget)
+  copyLeadAttachmentsToBriefing(leadId, projectId, supabase).catch((err) => {
+    console.error("[linkLeadToProject] Failed to copy attachments:", err);
+  });
+
   revalidatePath(`/dashboard/crm/${leadId}`);
   revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+/** Copy lead attachment images to the project's Briefing folder in Drive */
+async function copyLeadAttachmentsToBriefing(
+  leadId: string,
+  projectId: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  const { uploadFile } = await import("@/lib/google-drive/client");
+  const { resolveSectionFolder } = await import("@/lib/google-drive/client");
+
+  // Get lead attachments URL
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("attachments")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.attachments) return;
+
+  // Get project Drive folder
+  const { data: project } = await supabase
+    .from("projects")
+    .select("google_drive_folder_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project?.google_drive_folder_id) return;
+
+  const briefingFolderId = await resolveSectionFolder(project.google_drive_folder_id, "briefing");
+  if (!briefingFolderId) return;
+
+  // Parse attachment URLs (same logic as AttachmentGallery)
+  const url = lead.attachments.trim();
+  const groupMatch = url.match(/~(\d+)\/?$/);
+  const fileCount = groupMatch ? parseInt(groupMatch[1]) : 0;
+  const baseUrl = url.replace(/\/$/, "");
+
+  const fileUrls =
+    fileCount > 0
+      ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
+      : [url];
+
+  // Download and upload each file
+  for (let i = 0; i < fileUrls.length; i++) {
+    try {
+      const res = await fetch(fileUrls[i]);
+      if (!res.ok) continue;
+      const contentType = res.headers.get("content-type") || "image/jpeg";
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+      const fileName = `adjunto-lead-${i + 1}.${ext}`;
+
+      await uploadFile(briefingFolderId, fileName, contentType, buffer);
+    } catch (err) {
+      console.error(`[copyLeadAttachmentsToBriefing] Failed to copy file ${i}:`, err);
+    }
+  }
 }
 
 // ── Save Quote Items (presupuesto) ──────────────────────

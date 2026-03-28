@@ -298,6 +298,13 @@ export default async function ProjectDetailPage({
         />
       </div>
 
+      {/* Negotiation Briefing (AI) */}
+      {project.lead_id && (
+        <div className="mb-6">
+          <NegotiationBriefing leadId={project.lead_id} />
+        </div>
+      )}
+
       {/* Checklist */}
       {checklistItems && checklistItems.length > 0 && (
         <div className="mb-6">

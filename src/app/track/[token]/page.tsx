@@ -394,7 +394,6 @@ export default async function TrackingPage({
               isVerified={isVerified}
               designVisible={project.design_visible}
               designApprovedAt={project.design_approved_at}
-              deliverableVisible={project.deliverable_visible}
               deliverableApprovedAt={project.deliverable_approved_at}
               paymentConfirmedAt={project.payment_confirmed_at}
             />
