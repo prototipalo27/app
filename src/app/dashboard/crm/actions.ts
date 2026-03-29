@@ -2055,10 +2055,15 @@ export async function sendProformaToClient(
   const payAmount = isSplit ? total * 0.5 : total;
   const formattedAmount = payAmount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const clientName = lead.company || lead.full_name;
   const proformaRef = proformaDocNumber ? ` ${proformaDocNumber}` : "";
-  const concepto = `${clientName} - Proforma${proformaRef}`;
-  const paymentLabel = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
+  const paymentDesc = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
+  const conceptoLine = (isSplit ? "Prototipalo – Inicio de proyecto (50%)" : "Prototipalo – Proyecto completo") + (proformaDocNumber ? ` – ${proformaDocNumber}` : "");
+  const introLine = isSplit
+    ? `Te adjuntamos la factura proforma correspondiente, para proceder al <strong>primer pago (50%)</strong> necesario para iniciar la produccion.`
+    : `Te adjuntamos la factura proforma correspondiente, para proceder al <strong>pago total</strong>${isFull ? " con un 5% de descuento por pago anticipado" : ""}.`;
+  const introText = isSplit
+    ? `Te adjuntamos la factura proforma correspondiente, para proceder al primer pago (50%) necesario para iniciar la produccion.`
+    : `Te adjuntamos la factura proforma correspondiente, para proceder al pago total${isFull ? " con un 5% de descuento por pago anticipado" : ""}.`;
 
   // Create Stripe Checkout link for online payment option
   let stripeCheckoutUrl: string | null = null;
@@ -2101,37 +2106,34 @@ export async function sendProformaToClient(
   // Build email with both payment options
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
-  const onlinePayBlock = stripeCheckoutUrl
-    ? `<p style="margin:24px 0 8px;">O si lo prefieres, puedes pagar con tarjeta:</p>
-       <p><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Pagar con tarjeta</a></p>`
-    : "";
-
   const onlinePayText = stripeCheckoutUrl
-    ? `\n\nO si lo prefieres, puedes pagar con tarjeta:\n${stripeCheckoutUrl}`
+    ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
     : "";
 
   try {
     await sendEmailOrSchedule({
       to: lead.email,
       subject: `Proforma${proformaRef} — Prototipalo`,
-      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma${proformaRef} correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €${onlinePayText}\n\nGracias,\nEl equipo de Prototipalo`,
+      text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto — estamos listos para empezar.\n\n${introText}\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nUna vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.\n\nQuedamos atentos a cualquier duda.`,
       html: `
         <p>Hola ${lead.full_name},</p>
-        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma${proformaDocNumber ? ` <strong>${proformaDocNumber}</strong>` : ""} correspondiente.</p>
-        <p>La forma de pago es por <strong>transferencia bancaria</strong>:</p>
+        <p>Muchas gracias por confirmar el proyecto — estamos listos para empezar.</p>
+        <p>${introLine}</p>
+        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Importe</td><td style="padding:0;font-weight:600;">${formattedAmount} €</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${conceptoLine}</td></tr>
+        </table>
+        <p>Puedes realizar el pago mediante <strong>transferencia bancaria</strong> utilizando la referencia indicada:</p>
         <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Banco</td><td style="padding:0;font-weight:600;">BBVA</td></tr>
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Titular</td><td style="padding:0;font-weight:600;">Prototipalo</td></tr>
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">IBAN</td><td style="padding:0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
-          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">SWIFT</td><td style="padding:0;font-weight:600;">BBVAESMM</td></tr>
-          <tr><td colspan="2" style="padding:6px 0 0;border-top:1px solid #e4e4e7;"></td></tr>
-          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${concepto}</td></tr>
-          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Cantidad</td><td style="padding:0;font-weight:600;">${formattedAmount} € <span style="font-weight:400;color:#71717a;">(${paymentLabel})</span></td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">SWIFT/BIC</td><td style="padding:0;font-weight:600;">BBVAESMM</td></tr>
         </table>
-        ${onlinePayBlock}
-        <p style="font-size:12px;color:#a1a1aa;margin-top:20px;">La proforma va adjunta a este email en formato PDF.</p>
-        <br>
-        <p>Gracias,<br>El equipo de Prototipalo</p>
+        <p>Tambien puedes completar el pago de forma rapida mediante tarjeta a traves del siguiente enlace:</p>
+        ${stripeCheckoutUrl ? `<p style="margin:16px 0;"><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Pagar con tarjeta</a></p>` : ""}
+        <p>Una vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.</p>
+        <p>Quedamos atentos a cualquier duda.</p>
       `,
       smtpConfig,
       attachments: pdfBuffer && pdfBuffer.length > 0
