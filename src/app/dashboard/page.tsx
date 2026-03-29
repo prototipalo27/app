@@ -2,7 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { KanbanBoard } from "./kanban-board";
-import { UpcomingProjects } from "./upcoming-projects";
 import { RealtimeProjectsListener } from "./realtime-projects";
 import { SyncHoldedButton } from "./sync-holded-button";
 import { AutoSync } from "./auto-sync";
@@ -16,17 +15,11 @@ export default async function DashboardPage() {
   }
 
   const [
-    { data: upcomingProjects },
     { data: confirmedProjects },
     { data: syncMeta },
     { data: zoneAssignments },
     { data: userProfiles },
   ] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("*, project_items(id, name, quantity, completed)")
-      .eq("project_type", "upcoming")
-      .order("created_at", { ascending: false }),
     supabase
       .from("projects")
       .select("*, project_items(id, name, quantity, completed)")
@@ -60,7 +53,7 @@ export default async function DashboardPage() {
 
   // Build holded invoice id → docNumber map from persisted data
   const invoiceDocNumbers: Record<string, string> = {};
-  for (const p of [...(upcomingProjects ?? []), ...(confirmedProjects ?? [])]) {
+  for (const p of (confirmedProjects ?? [])) {
     if (p.holded_invoice_id && p.invoice_doc_number) {
       invoiceDocNumbers[p.holded_invoice_id] = p.invoice_doc_number;
     }
@@ -90,8 +83,6 @@ export default async function DashboardPage() {
       </div>
 
       <RealtimeProjectsListener />
-
-      <UpcomingProjects projects={upcomingProjects ?? []} />
 
       {!confirmedProjects || confirmedProjects.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
