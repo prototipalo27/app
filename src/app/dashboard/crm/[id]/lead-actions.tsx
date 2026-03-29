@@ -761,7 +761,7 @@ export default function LeadActions({
                     }}
                     disabled={generatingPayLink}
                   >
-                    {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Generar link de pago"}
+                    {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Link pago tarjeta"}
                   </Button>
 
                   <Button

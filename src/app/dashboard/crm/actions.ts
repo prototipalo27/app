@@ -1978,7 +1978,7 @@ export async function sendProformaToClient(
 
   const { data: lead } = await supabase
     .from("leads")
-    .select("email, full_name")
+    .select("email, full_name, company, payment_condition")
     .eq("id", leadId)
     .single();
 
@@ -2039,78 +2039,42 @@ export async function sendProformaToClient(
     return { success: false, error: "Error al descargar el PDF de la proforma" };
   }
 
-  // Create Stripe Checkout link
-  let stripeCheckoutUrl: string | null = null;
-  try {
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  // Compute payment amount
+  const isFull = lead.payment_condition === "100-5";
+  const isSplit = lead.payment_condition === "50-50";
+  const discountFactor = isFull ? 0.95 : 1;
+  const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+  const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
+  const total = subtotal + taxTotal;
+  const payAmount = isSplit ? total * 0.5 : total;
+  const formattedAmount = payAmount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const isFull = qr.payment_option === "full";
-    const isSplit = qr.payment_option === "split";
-    const discountFactor = isFull ? 0.95 : 1;
-    const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
-    const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
-    const productName = isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo";
+  const clientName = lead.company || lead.full_name;
+  const concepto = `${clientName} - Proforma`;
+  const paymentLabel = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-
-    const baseParams = {
-      mode: "payment" as const,
-      line_items: [{
-        price_data: { currency: "eur", product_data: { name: productName }, unit_amount: chargeAmount },
-        quantity: 1,
-      }],
-      metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
-      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/payment/cancel`,
-    };
-
-    const existingCust = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCust = existingCust.data.length > 0
-      ? existingCust.data[0]
-      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
-
-    const session = await stripe.checkout.sessions.create({
-      ...baseParams,
-      customer: stripeCust.id,
-    });
-
-    stripeCheckoutUrl = session.url;
-    await supabase
-      .from("quote_requests")
-      .update({ stripe_checkout_session_id: session.id })
-      .eq("id", qr.id);
-  } catch (err) {
-    console.error("[sendProformaToClient] Stripe checkout failed:", err);
-  }
-
-  // Send email with payment link
+  // Send email with bank transfer details
   const smtpConfig = await getUserSmtpConfig(profile.id);
-
-  const paymentBlock = stripeCheckoutUrl
-    ? `<p style="margin:20px 0;">
-        <a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
-          Proceder al pago
-        </a>
-      </p>
-      <p style="font-size:12px;color:#a1a1aa;">Tambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.</p>`
-    : "";
-
-  const paymentTextBlock = stripeCheckoutUrl
-    ? `\n\nPara proceder al pago:\n${stripeCheckoutUrl}\n\nTambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.`
-    : "";
 
   try {
     await sendEmailOrSchedule({
       to: lead.email,
       subject: "Proforma — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nGracias por tu pedido. Te adjuntamos la proforma de tu proyecto.${paymentTextBlock}\n\nGracias,\nEl equipo de Prototipalo`,
+      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €\n\nGracias,\nEl equipo de Prototipalo`,
       html: `
         <p>Hola ${lead.full_name},</p>
-        <p>Gracias por tu pedido. Te adjuntamos la proforma de tu proyecto.</p>
-        ${paymentBlock}
+        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.</p>
+        <p>La forma de pago es por <strong>transferencia bancaria</strong>:</p>
+        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Banco</td><td style="padding:4px 0;font-weight:600;">BBVA</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Titular</td><td style="padding:4px 0;font-weight:600;">Prototipalo</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">IBAN</td><td style="padding:4px 0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">SWIFT</td><td style="padding:4px 0;font-weight:600;">BBVAESMM</td></tr>
+        </table>
+        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Concepto</td><td style="padding:4px 0;font-weight:600;">${concepto}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Cantidad (${paymentLabel})</td><td style="padding:4px 0;font-weight:600;">${formattedAmount} €</td></tr>
+        </table>
         <p style="font-size:12px;color:#a1a1aa;margin-top:16px;">La proforma va adjunta a este email en formato PDF.</p>
         <br>
         <p>Gracias,<br>El equipo de Prototipalo</p>
