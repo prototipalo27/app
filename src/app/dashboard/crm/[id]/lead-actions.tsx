@@ -11,7 +11,6 @@ import {
   updatePaymentCondition,
   updateDesiredDeliveryDate,
   updateLeadTag,
-  updateQualificationLevel,
   updateEstimationField,
   updateEstimatedValue,
   createLeadProforma,
@@ -30,7 +29,6 @@ import {
   QUANTITY_RANGES,
   COMPLEXITY_OPTIONS,
   URGENCY_OPTIONS,
-  QUALIFICATION_LEVELS,
   type LeadStatus,
 } from "@/lib/crm-config";
 import { Button } from "@/components/ui/button";
@@ -52,7 +50,6 @@ interface LeadActionsProps {
   estimatedComplexity: string | null;
   estimatedUrgency: string | null;
   estimatedValue: number | null;
-  qualificationLevel: number | null;
   desiredDeliveryDate: string | null;
   nextId: string | null;
   ownedBy: string | null;
@@ -82,7 +79,6 @@ export default function LeadActions({
   estimatedComplexity,
   estimatedUrgency,
   estimatedValue,
-  qualificationLevel,
   desiredDeliveryDate,
   nextId,
   ownedBy,
@@ -337,29 +333,6 @@ export default function LeadActions({
           ))}
         </select>
 
-        {commission && (
-          <div className="mt-2 space-y-1">
-            <Badge
-              variant="secondary"
-              className={
-                commission.isReturning
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-              }
-            >
-              {commission.isReturning ? "Recurrente 7.5%" : "Nuevo 15%"}
-            </Badge>
-            <p className="text-xs text-muted-foreground">
-              Comision: <span className="font-semibold text-foreground">{commission.commission.toFixed(2)} €</span>
-              <span className="ml-1 text-muted-foreground/70">(sobre {commission.quoteTotal.toFixed(2)} €)</span>
-            </p>
-            {commission.prepaidBonus > 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Incluye +{commission.prepaidBonus.toFixed(2)} € bonus pago 100%
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Payment condition */}
@@ -429,40 +402,6 @@ export default function LeadActions({
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Qualification level */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Nivel de cualificacion
-        </h3>
-        <div className="flex gap-1">
-          {QUALIFICATION_LEVELS.map((q) => (
-            <button
-              key={q.level}
-              onClick={() => {
-                startTransition(async () => {
-                  await updateQualificationLevel(leadId, q.level);
-                  router.refresh();
-                });
-              }}
-              disabled={isPending}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition-colors ${
-                qualificationLevel === q.level
-                  ? `${q.badge} border-current font-bold`
-                  : "border-input text-muted-foreground hover:bg-muted"
-              }`}
-              title={`Nivel ${q.level}: ${q.label}`}
-            >
-              {q.level}
-            </button>
-          ))}
-        </div>
-        {qualificationLevel != null && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {"★".repeat(qualificationLevel)} {QUALIFICATION_LEVELS.find((q) => q.level === qualificationLevel)?.label}
-          </p>
-        )}
       </div>
 
       {/* Estimation */}

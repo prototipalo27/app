@@ -78,7 +78,7 @@ export default async function ComisionesPage({
   const { data: wonLeads } = await supabase
     .from("leads")
     .select("id, full_name, company, email, owned_by, assigned_to, created_at, updated_at, payment_condition")
-    .eq("status", "won")
+    .eq("status", "paid")
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
     .order("updated_at", { ascending: true });
@@ -210,7 +210,7 @@ export default async function ComisionesPage({
         .from("leads")
         .select("id", { count: "exact", head: true })
         .ilike("email", lead.email)
-        .eq("status", "won")
+        .eq("status", "paid")
         .neq("id", lead.id)
         .lt("created_at", lead.created_at);
       isReturning = (count ?? 0) > 0;

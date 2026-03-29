@@ -149,7 +149,7 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
 
   // Fetch CRM won leads + Holded contacts in parallel
   const [{ data: wonLeads }, holdedContacts] = await Promise.all([
-    supabase.from("leads").select("id, full_name, company, email, phone").eq("status", "won").order("updated_at", { ascending: false }),
+    supabase.from("leads").select("id, full_name, company, email, phone").eq("status", "paid").order("updated_at", { ascending: false }),
     listContacts().catch(() => [] as HoldedContact[]),
   ]);
 
@@ -662,7 +662,7 @@ export async function getCommissionSummary(leadId: string): Promise<{
     .eq("id", leadId)
     .single();
 
-  if (!lead || lead.status !== "won") return null;
+  if (!lead || lead.status !== "paid") return null;
 
   const { data: qr } = await supabase
     .from("quote_requests")
@@ -683,7 +683,7 @@ export async function getCommissionSummary(leadId: string): Promise<{
       .from("leads")
       .select("id", { count: "exact", head: true })
       .ilike("email", lead.email)
-      .eq("status", "won")
+      .eq("status", "paid")
       .neq("id", lead.id)
       .lt("created_at", lead.created_at);
     isReturning = (count ?? 0) > 0;
@@ -712,7 +712,7 @@ export async function getCommissionSummary(leadId: string): Promise<{
       const { data: otherWon } = await supabase
         .from("leads")
         .select("id")
-        .eq("status", "won")
+        .eq("status", "paid")
         .eq("owned_by", lead.owned_by)
         .neq("id", lead.id)
         .gte("updated_at", monthStart)
@@ -1424,7 +1424,7 @@ export async function sendQuoteToClient(
     .eq("id", leadId)
     .single();
 
-  if (currentLead && currentLead.status !== "won") {
+  if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
     await supabase
       .from("leads")
       .update({ status: "quoted" })
@@ -2395,7 +2395,7 @@ async function getCloserAccumulated(
   const { data: closerLeads } = await supabase
     .from("leads")
     .select("id")
-    .eq("status", "won")
+    .eq("status", "paid")
     .eq("assigned_to", closerId)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate);
@@ -2440,7 +2440,7 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
   const { data: wonLeads } = await supabase
     .from("leads")
     .select("id, owned_by, assigned_to, email, created_at, payment_condition")
-    .eq("status", "won")
+    .eq("status", "paid")
     .eq(roleField, profile.id)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
@@ -2528,7 +2528,7 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
           .from("leads")
           .select("id", { count: "exact", head: true })
           .ilike("email", lead.email)
-          .eq("status", "won")
+          .eq("status", "paid")
           .neq("id", lead.id)
           .lt("created_at", lead.created_at);
         isReturning = (count ?? 0) > 0;
@@ -2603,7 +2603,7 @@ export async function getMyCommissionData(estimatedValue?: number | null): Promi
   const { data: wonLeads } = await supabase
     .from("leads")
     .select("id, owned_by, assigned_to, email, created_at, payment_condition")
-    .eq("status", "won")
+    .eq("status", "paid")
     .eq(roleField, profile.id)
     .gte("updated_at", startDate)
     .lt("updated_at", endDate)
@@ -2683,7 +2683,7 @@ export async function getMyCommissionData(estimatedValue?: number | null): Promi
           .from("leads")
           .select("id", { count: "exact", head: true })
           .ilike("email", lead.email)
-          .eq("status", "won")
+          .eq("status", "paid")
           .neq("id", lead.id)
           .lt("created_at", lead.created_at);
         isReturning = (count ?? 0) > 0;
@@ -2910,10 +2910,10 @@ export async function onPaymentConfirmed(
     });
   }
 
-  // 5. Change lead to "won"
+  // 5. Change lead to "paid"
   await supabase
     .from("leads")
-    .update({ status: "won" })
+    .update({ status: "paid" })
     .eq("id", lead.id);
 
   // 6. Log activity
@@ -2922,8 +2922,8 @@ export async function onPaymentConfirmed(
     activity_type: "status_change",
     content: "Pago confirmado. Factura enviada y proyecto creado automaticamente.",
     metadata: {
-      old_status: "quoted",
-      new_status: "won",
+      old_status: "won",
+      new_status: "paid",
       auto: true,
       project_id: newProject.id,
       holded_invoice_id: invoiceId,

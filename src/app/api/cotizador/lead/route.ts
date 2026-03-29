@@ -10,7 +10,7 @@ function getSupabase() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { email, name, message } = body;
+  const { email, name, message, stlUrl } = body;
 
   if (!email || !name) {
     return NextResponse.json({ error: "Email y nombre requeridos" }, { status: 400 });
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       email: email.trim(),
       message: message || null,
       source: "form",
+      attachments: stlUrl || null,
     })
     .select("id")
     .single();

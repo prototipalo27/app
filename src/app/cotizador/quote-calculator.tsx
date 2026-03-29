@@ -32,6 +32,7 @@ export function QuoteCalculator() {
   const [showForm, setShowForm] = useState(false);
   const [formSent, setFormSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [stlFile, setStlFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (file: File) => {
@@ -63,6 +64,7 @@ export function QuoteCalculator() {
       const estimatedPrice = Math.ceil((estimatedMinutes / 60) * PRICE_PER_HOUR * 100) / 100;
       const fileUrl = URL.createObjectURL(file);
 
+      setStlFile(file);
       setResult({
         volumeCm3,
         estimatedMinutes,
@@ -111,6 +113,29 @@ export function QuoteCalculator() {
 
     setSending(true);
     try {
+      // Upload STL to Supabase Storage
+      let stlUrl: string | null = null;
+      if (stlFile) {
+        const timestamp = Date.now();
+        const safeName = result.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${timestamp}_${safeName}`;
+
+        const uploadRes = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/cotizador/${path}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+              "Content-Type": "application/octet-stream",
+            },
+            body: stlFile,
+          },
+        );
+        if (uploadRes.ok) {
+          stlUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/cotizador/${path}`;
+        }
+      }
+
       const res = await fetch("/api/cotizador/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,6 +143,7 @@ export function QuoteCalculator() {
           email,
           name,
           message: `[Cotizador 3D] ${result.fileName}\nVolumen: ${result.volumeCm3.toFixed(1)} cm³\nTiempo estimado: ${totalMinutes} min\nUnidades: ${units}\nPrecio estimado: ${totalPrice.toFixed(2)}€\n\n${message}`,
+          stlUrl,
         }),
       });
       if (res.ok) {

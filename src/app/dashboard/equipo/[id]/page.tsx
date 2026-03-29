@@ -7,6 +7,7 @@ import SkillEditor from "../skill-editor";
 import EmployeeProfileForm from "./employee-profile-form";
 import EmployeeDocuments from "./employee-documents";
 import CareerPlanEditor from "./career-plan-editor";
+import EmployeeCommissions from "./employee-commissions";
 
 export default async function EmployeeDetailPage({
   params,
@@ -118,7 +119,17 @@ export default async function EmployeeDetailPage({
           )}
         </section>
 
-        {/* Section 3: Documents */}
+        {/* Section 3: Commissions (managers only) */}
+        {isManager && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Comisiones
+            </h2>
+            <EmployeeCommissions userId={employee.id} employeeName={displayName} />
+          </section>
+        )}
+
+        {/* Section 4: Documents */}
         <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             Documentos

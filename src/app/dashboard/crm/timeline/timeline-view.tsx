@@ -20,10 +20,9 @@ interface TimelineLead {
   company: string | null;
   email: string | null;
   phone: string | null;
-  status: "new" | "contacted" | "quoted";
+  status: string;
   estimated_value: number | null;
   project_type_tag: string | null;
-  qualification_level: number | null;
   created_at: string;
   assignee_name: string | null;
   last_activity_at: string | null;
@@ -224,7 +223,7 @@ export function TimelineView({ leads }: { leads: TimelineLead[] }) {
                         </Badge>
                       )}
                       <Badge variant="secondary" className="text-[10px]">
-                        {STATUS_LABELS[lead.status]}
+                        {STATUS_LABELS[lead.status as keyof typeof STATUS_LABELS] || lead.status}
                       </Badge>
                     </div>
                     {lead.company && (

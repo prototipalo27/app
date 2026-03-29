@@ -15,8 +15,8 @@ export default async function TimelinePage() {
   // Only active leads (not won/lost)
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, full_name, company, email, phone, status, estimated_value, assigned_to, created_at, project_type_tag, qualification_level")
-    .not("status", "in", "(won,lost)")
+    .select("id, full_name, company, email, phone, status, estimated_value, assigned_to, created_at, project_type_tag")
+    .not("status", "in", "(won,paid,lost)")
     .order("created_at", { ascending: false });
 
   // Fetch assignee emails
@@ -58,10 +58,9 @@ export default async function TimelinePage() {
       company: l.company,
       email: l.email,
       phone: l.phone,
-      status: l.status as "new" | "contacted" | "quoted",
+      status: l.status as "new" | "contacted" | "quoted" | "won",
       estimated_value: l.estimated_value,
       project_type_tag: l.project_type_tag,
-      qualification_level: l.qualification_level,
       created_at: l.created_at,
       assignee_name: l.assigned_to ? userEmailMap.get(l.assigned_to)?.split("@")[0] || null : null,
       last_activity_at: activity?.last_at || null,

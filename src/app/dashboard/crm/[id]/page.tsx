@@ -322,7 +322,6 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
           estimatedComplexity={lead.estimated_complexity}
           estimatedUrgency={lead.estimated_urgency}
           estimatedValue={lead.estimated_value}
-          qualificationLevel={lead.qualification_level}
           nextId={nextId}
           ownedBy={lead.owned_by}
           commission={commission}
@@ -355,8 +354,8 @@ export default async function LeadDetailPage({
 
   // Fast parallel: nav + commission (all we need for first paint)
   const [{ data: prevLeads }, { data: nextLeads }, myCommissionData] = await Promise.all([
-    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
-    supabase.from("leads").select("id").not("status", "eq", "won").not("status", "eq", "lost").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
+    supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
+    supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
     getMyCommissionData(lead.estimated_value),
   ]);
 
@@ -378,46 +377,6 @@ export default async function LeadDetailPage({
   return (
     <div className="mx-auto max-w-5xl">
       <LeadNav prevId={prevId} nextId={nextId} />
-
-      {/* Commission widget — renders with first paint */}
-      {preview && (
-        <div className="mb-4 flex items-stretch gap-2 md:gap-3">
-          <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
-            <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
-              Mi comision · {preview.ownerName}
-            </p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
-              {preview.monthlyCommission.toFixed(2)} €
-            </p>
-            <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
-              {preview.monthlyBilled.toLocaleString("es-ES")} € facturado este mes
-            </p>
-          </div>
-          {estimate && lead.status !== "won" && lead.status !== "lost" && (
-            <div className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
-              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                Si cierras esta oportunidad
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                +{estimate.commission.toFixed(2)} €
-              </p>
-              <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
-                {lead.estimated_value?.toLocaleString("es-ES")} € · {(estimate.rate * 100).toFixed(1)}%
-              </p>
-            </div>
-          )}
-          {estimate && lead.status !== "won" && lead.status !== "lost" && (
-            <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                Total mes si cierras
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {(preview.monthlyCommission + estimate.commission).toFixed(2)} €
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Left panel */}

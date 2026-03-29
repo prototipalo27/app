@@ -45,7 +45,7 @@ export function agingClasses(dateStr: string): string {
 
 /** Maturation hint based on status + days since last interaction */
 function maturationHint(status: string, lastInteractionDate: string): { text: string; className: string } | null {
-  if (status === "new" || status === "won" || status === "lost") return null;
+  if (status === "new" || status === "won" || status === "paid" || status === "lost") return null;
   const days = (Date.now() - new Date(lastInteractionDate).getTime()) / 86_400_000;
   if (days >= 7) {
     return { text: "Buscar el no", className: "text-red-600 dark:text-red-400" };
@@ -140,15 +140,6 @@ export function CrmCard({ lead, commissionRate }: CrmCardProps) {
         )}
       </div>
 
-      {/* Commission potential */}
-      {commissionRate != null && commissionRate > 0 && lead.estimated_value != null && lead.estimated_value > 0 && (
-        <div className="mt-1.5 flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 dark:bg-amber-950/30">
-          <span className="text-[10px] text-amber-600 dark:text-amber-400">Si lo cierras:</span>
-          <span className="text-[11px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
-            +{(lead.estimated_value * commissionRate).toFixed(2)} €
-          </span>
-        </div>
-      )}
     </div>
   );
 }

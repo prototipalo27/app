@@ -145,7 +145,7 @@ export default async function ControlPage() {
     (p) => p.online && (p.gcode_state === "RUNNING" || p.gcode_state === "PAUSE")
   );
   const queuedJobs = allJobs.filter((j) => j.status === "queued");
-  const openLeads = allLeads.filter((l) => l.status !== "won" && l.status !== "lost");
+  const openLeads = allLeads.filter((l) => l.status !== "won" && l.status !== "paid" && l.status !== "lost");
   const pendingShipments = allShipments.filter(
     (s) => s.shipment_status && s.shipment_status !== "delivered" && !s.shipment_status.includes("transit")
   );
@@ -262,7 +262,7 @@ export default async function ControlPage() {
     if (!campaign) continue;
     const entry = campaignMap.get(campaign) ?? { leads: 0, won: 0 };
     entry.leads++;
-    if (l.status === "won") entry.won++;
+    if (l.status === "won" || l.status === "paid") entry.won++;
     campaignMap.set(campaign, entry);
   }
   const campaignPerformance = Array.from(campaignMap.entries())
@@ -296,12 +296,13 @@ export default async function ControlPage() {
 
   /* ── Leads funnel ── */
 
-  const leadStatuses = ["new", "contacted", "quoted", "won"] as const;
+  const leadStatuses = ["new", "contacted", "quoted", "won", "paid"] as const;
   const leadStatusLabels: Record<string, string> = {
     new: "Nuevos",
     contacted: "Contactados",
     quoted: "Presupuestados",
     won: "Ganados",
+    paid: "Pagados",
   };
   const leadCounts: Record<string, number> = {};
   for (const s of [...leadStatuses, "lost" as const]) leadCounts[s] = 0;
@@ -309,8 +310,8 @@ export default async function ControlPage() {
     if (leadCounts[l.status] !== undefined) leadCounts[l.status]++;
   }
   const funnelMax = Math.max(...leadStatuses.map((s) => leadCounts[s]), 1);
-  const wonLost = leadCounts["won"] + leadCounts["lost"];
-  const conversionRate = wonLost > 0 ? Math.round((leadCounts["won"] / wonLost) * 100) : 0;
+  const wonLost = leadCounts["won"] + leadCounts["paid"] + leadCounts["lost"];
+  const conversionRate = wonLost > 0 ? Math.round(((leadCounts["won"] + leadCounts["paid"]) / wonLost) * 100) : 0;
 
   /* ── Shipments ── */
 

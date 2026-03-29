@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
-import { LEAD_COLUMNS, QUALIFICATION_LEVELS, type LeadStatus } from "@/lib/crm-config";
+import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { SwipeableLeadCard } from "./swipeable-lead-card";
 import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
@@ -162,10 +162,6 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     if (typeof window === "undefined") return "all";
     return localStorage.getItem("crm_filterType") || "all";
   });
-  const [filterLevel, setFilterLevel] = useState<string>(() => {
-    if (typeof window === "undefined") return "all";
-    return localStorage.getItem("crm_filterLevel") || "all";
-  });
   const [sortBy, setSortBy] = useState<string>(() => {
     if (typeof window === "undefined") return "newest";
     return localStorage.getItem("crm_sortBy") || "newest";
@@ -187,12 +183,11 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     localStorage.setItem("crm_filterManager", filterManager);
     localStorage.setItem("crm_filterOwner", filterOwner);
     localStorage.setItem("crm_filterType", filterType);
-    localStorage.setItem("crm_filterLevel", filterLevel);
     localStorage.setItem("crm_sortBy", sortBy);
     localStorage.setItem("crm_filterTime", filterTime);
     localStorage.setItem("crm_customFrom", customFrom);
     localStorage.setItem("crm_customTo", customTo);
-  }, [filterManager, filterOwner, filterType, filterLevel, sortBy, filterTime, customFrom, customTo]);
+  }, [filterManager, filterOwner, filterType, sortBy, filterTime, customFrom, customTo]);
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -371,10 +366,6 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
       if (filterType === "none" && l.project_type_tag) return false;
       if (filterType !== "none" && l.project_type_tag !== filterType) return false;
     }
-    if (filterLevel !== "all") {
-      const lvl = Number(filterLevel);
-      if (l.qualification_level !== lvl) return false;
-    }
     const range = getTimeFilterRange();
     if (range) {
       const created = new Date(l.created_at);
@@ -387,8 +378,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     if (sortBy === "price_desc") return (b.estimated_value ?? 0) - (a.estimated_value ?? 0);
     if (sortBy === "price_asc") return (a.estimated_value ?? 0) - (b.estimated_value ?? 0);
     if (sortBy === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    if (sortBy === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    return (b.qualification_level ?? 0) - (a.qualification_level ?? 0);
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   };
 
   const newLeads = filteredLeads
@@ -428,7 +418,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
           });
         const grandTotal = phases.reduce((s, p) => s + p.total, 0);
         return (
-          <div className="mb-4 grid grid-cols-4 gap-1.5 md:gap-3">
+          <div className="mb-4 grid grid-cols-5 gap-1.5 md:gap-3">
             {phases.map((p) => (
               <div key={p.id} className="rounded-lg bg-muted/60 px-2 py-2 text-center md:px-3 md:py-2.5">
                 <div className="flex items-center justify-center gap-1.5">
@@ -447,60 +437,6 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
         );
       })()}
 
-      {/* Angel's commission incentive banner — always visible */}
-      {myCommission && (() => {
-        // Potential from all non-won/lost leads in view
-        const openLeads = filteredLeads.filter(
-          (l) => l.status !== "won" && l.status !== "lost" && (l.estimated_value ?? 0) > 0
-        );
-        const potentialBilling = openLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
-        const potentialCommission = potentialBilling * myCommission.currentRate;
-
-        return (
-          <div className="mb-4 flex items-stretch gap-2 md:gap-3">
-            {/* Accumulated this month */}
-            <div className="flex-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/50 dark:bg-green-950/30">
-              <p className="text-[11px] font-medium text-green-700 dark:text-green-400">
-                Mi comision · {myCommission.ownerName}
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-green-700 dark:text-green-300">
-                {myCommission.monthlyCommission.toFixed(2)} €
-              </p>
-              <p className="text-[11px] tabular-nums text-green-600/70 dark:text-green-400/60">
-                {myCommission.monthlyBilled.toLocaleString("es-ES")} € facturado
-              </p>
-            </div>
-
-            {/* Potential if all open leads close */}
-            {potentialCommission > 0 && (
-              <div className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
-                <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                  Si cierras todo en vista
-                </p>
-                <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                  +{potentialCommission.toFixed(2)} €
-                </p>
-                <p className="text-[11px] tabular-nums text-amber-600/70 dark:text-amber-400/60">
-                  {openLeads.length} leads · ~{(myCommission.currentRate * 100).toFixed(0)}%
-                </p>
-              </div>
-            )}
-
-            {/* Total potential */}
-            <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                Potencial total mes
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {(myCommission.monthlyCommission + potentialCommission).toFixed(2)} €
-              </p>
-              <p className="text-[11px] tabular-nums text-emerald-600/70 dark:text-emerald-400/60">
-                {myCommission.configType === "tiered" ? "Tramos" : "Plano"} · {(myCommission.currentRate * 100).toFixed(0)}%
-              </p>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Search + Filters */}
       <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:gap-3">
@@ -562,20 +498,6 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
           </Select>
         )}
 
-        <Select value={filterLevel} onValueChange={(v) => v && setFilterLevel(v)}>
-          <SelectTrigger size="sm">
-            <SelectValue placeholder="Nivel" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los niveles</SelectItem>
-            {QUALIFICATION_LEVELS.map((q) => (
-              <SelectItem key={q.level} value={String(q.level)}>
-                {"★".repeat(q.level)} {q.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select value={filterTime} onValueChange={(v) => { if (v) { setFilterTime(v); if (v !== "custom") { setCustomFrom(""); setCustomTo(""); } } }}>
           <SelectTrigger size="sm">
             <SelectValue placeholder="Periodo" />
@@ -594,7 +516,6 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
             <SelectValue placeholder="Ordenar" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="qualification">Nivel (mayor primero)</SelectItem>
             <SelectItem value="price_desc">Precio estimado ↓</SelectItem>
             <SelectItem value="price_asc">Precio estimado ↑</SelectItem>
             <SelectItem value="newest">Mas recientes</SelectItem>
@@ -779,13 +700,13 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
-        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
+        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-5 md:auto-cols-auto md:gap-4">
           {kanbanColumns.map((column) => (
             <CrmColumn
               key={column.id}
               column={column}
               leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
-              commissionRate={column.id !== "won" && column.id !== "lost" ? myCommission?.currentRate : undefined}
+              commissionRate={column.id !== "won" && column.id !== "paid" && column.id !== "lost" ? myCommission?.currentRate : undefined}
             />
           ))}
         </div>
