@@ -199,9 +199,28 @@ export async function submitBillingData(
     const chargeAmount = isSplit ? Math.round(total * 50) : Math.round(total * 100); // cents
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+    // Find or create Stripe customer (required for bank transfers)
+    const existingCust = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({
+          email: lead?.email || undefined,
+          name: lead?.full_name || undefined,
+        });
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      customer_email: lead?.email || undefined,
+      customer: stripeCust.id,
+      payment_method_types: ["card", "customer_balance"],
+      payment_method_options: {
+        customer_balance: {
+          funding_type: "bank_transfer",
+          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+        },
+      },
       line_items: [{
         price_data: {
           currency: "eur",

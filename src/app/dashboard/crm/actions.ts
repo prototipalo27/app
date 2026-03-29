@@ -2052,9 +2052,28 @@ export async function sendProformaToClient(
     const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+    // Find or create Stripe customer (required for bank transfers)
+    const existingCust = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({
+          email: lead?.email || undefined,
+          name: lead?.full_name || undefined,
+        });
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      customer_email: lead.email,
+      customer: stripeCust.id,
+      payment_method_types: ["card", "customer_balance"],
+      payment_method_options: {
+        customer_balance: {
+          funding_type: "bank_transfer",
+          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+        },
+      },
       line_items: [{
         price_data: {
           currency: "eur",
@@ -2781,9 +2800,27 @@ export async function createStripeCheckout(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
+  // Find or create Stripe customer (required for bank transfers)
+  const existingCustomers = lead?.email
+    ? await stripe.customers.list({ email: lead.email, limit: 1 })
+    : { data: [] };
+  const stripeCustomer = existingCustomers.data.length > 0
+    ? existingCustomers.data[0]
+    : await stripe.customers.create({
+        email: lead?.email || undefined,
+        name: lead?.full_name || undefined,
+      });
+
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    customer_email: lead?.email || undefined,
+    customer: stripeCustomer.id,
+    payment_method_types: ["card", "customer_balance"],
+    payment_method_options: {
+      customer_balance: {
+        funding_type: "bank_transfer",
+        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+      },
+    },
     line_items: [{
       price_data: {
         currency: "eur",
