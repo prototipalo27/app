@@ -2030,13 +2030,19 @@ export async function sendProformaToClient(
     }
   }
 
-  // Download PDF
+  // Fetch proforma details (docNumber) + download PDF in parallel
   let pdfBuffer: Buffer | null = null;
+  let proformaDocNumber = "";
   try {
-    pdfBuffer = await getDocumentPdf("proform", proformaId);
+    const [pdf, proformaDoc] = await Promise.all([
+      getDocumentPdf("proform", proformaId),
+      getDocument("proform", proformaId),
+    ]);
+    pdfBuffer = pdf;
+    proformaDocNumber = proformaDoc.docNumber || "";
   } catch (err) {
-    console.error("[sendProformaToClient] PDF download failed:", err);
-    return { success: false, error: "Error al descargar el PDF de la proforma" };
+    console.error("[sendProformaToClient] PDF/doc fetch failed:", err);
+    return { success: false, error: "Error al descargar la proforma de Holded" };
   }
 
   // Compute payment amount
@@ -2050,7 +2056,8 @@ export async function sendProformaToClient(
   const formattedAmount = payAmount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const clientName = lead.company || lead.full_name;
-  const concepto = `${clientName} - Proforma`;
+  const proformaRef = proformaDocNumber ? ` ${proformaDocNumber}` : "";
+  const concepto = `${clientName} - Proforma${proformaRef}`;
   const paymentLabel = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
 
   // Create Stripe Checkout link for online payment option
@@ -2106,11 +2113,11 @@ export async function sendProformaToClient(
   try {
     await sendEmailOrSchedule({
       to: lead.email,
-      subject: "Proforma — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €${onlinePayText}\n\nGracias,\nEl equipo de Prototipalo`,
+      subject: `Proforma${proformaRef} — Prototipalo`,
+      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma${proformaRef} correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €${onlinePayText}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `
         <p>Hola ${lead.full_name},</p>
-        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.</p>
+        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma <strong>${proformaDocNumber || ""}</strong> correspondiente.</p>
         <p>La forma de pago es por <strong>transferencia bancaria</strong>:</p>
         <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
           <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Banco</td><td style="padding:4px 0;font-weight:600;">BBVA</td></tr>
@@ -2129,7 +2136,7 @@ export async function sendProformaToClient(
       `,
       smtpConfig,
       attachments: pdfBuffer && pdfBuffer.length > 0
-        ? [{ filename: "Proforma-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+        ? [{ filename: `Proforma${proformaRef.replace(/\s/g, "-")}-Prototipalo.pdf`, content: pdfBuffer, contentType: "application/pdf" }]
         : undefined,
     }, { createdBy: profile.id });
   } catch {
@@ -2140,7 +2147,7 @@ export async function sendProformaToClient(
   await supabase.from("lead_activities").insert({
     lead_id: leadId,
     activity_type: "email_sent",
-    content: "Proforma enviada al cliente",
+    content: `Proforma${proformaRef} enviada al cliente`,
     metadata: {
       email_to: lead.email,
       email_subject: "Proforma — Prototipalo",
