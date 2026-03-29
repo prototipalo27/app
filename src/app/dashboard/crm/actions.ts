@@ -2117,20 +2117,19 @@ export async function sendProformaToClient(
       text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma${proformaRef} correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €${onlinePayText}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `
         <p>Hola ${lead.full_name},</p>
-        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma <strong>${proformaDocNumber || ""}</strong> correspondiente.</p>
+        <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma${proformaDocNumber ? ` <strong>${proformaDocNumber}</strong>` : ""} correspondiente.</p>
         <p>La forma de pago es por <strong>transferencia bancaria</strong>:</p>
-        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Banco</td><td style="padding:4px 0;font-weight:600;">BBVA</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Titular</td><td style="padding:4px 0;font-weight:600;">Prototipalo</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">IBAN</td><td style="padding:4px 0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">SWIFT</td><td style="padding:4px 0;font-weight:600;">BBVAESMM</td></tr>
-        </table>
-        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Concepto</td><td style="padding:4px 0;font-weight:600;">${concepto}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Cantidad (${paymentLabel})</td><td style="padding:4px 0;font-weight:600;">${formattedAmount} €</td></tr>
+        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Banco</td><td style="padding:0;font-weight:600;">BBVA</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Titular</td><td style="padding:0;font-weight:600;">Prototipalo</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">IBAN</td><td style="padding:0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">SWIFT</td><td style="padding:0;font-weight:600;">BBVAESMM</td></tr>
+          <tr><td colspan="2" style="padding:6px 0 0;border-top:1px solid #e4e4e7;"></td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${concepto}</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Cantidad</td><td style="padding:0;font-weight:600;">${formattedAmount} € <span style="font-weight:400;color:#71717a;">(${paymentLabel})</span></td></tr>
         </table>
         ${onlinePayBlock}
-        <p style="font-size:12px;color:#a1a1aa;margin-top:16px;">La proforma va adjunta a este email en formato PDF.</p>
+        <p style="font-size:12px;color:#a1a1aa;margin-top:20px;">La proforma va adjunta a este email en formato PDF.</p>
         <br>
         <p>Gracias,<br>El equipo de Prototipalo</p>
       `,
