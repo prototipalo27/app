@@ -222,39 +222,20 @@ export async function submitBillingData(
       cancel_url: `${baseUrl}/payment/cancel`,
     };
 
-    // Try with bank transfer first, fallback to card-only
-    try {
-      const existingCust = lead?.email
-        ? await stripe.customers.list({ email: lead.email, limit: 1 })
-        : { data: [] };
-      const stripeCust = existingCust.data.length > 0
-        ? existingCust.data[0]
-        : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+    const existingCust = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
 
-      const session = await stripe.checkout.sessions.create({
-        ...checkoutParams,
-        customer: stripeCust.id,
-        payment_method_types: ["card", "customer_balance"],
-        payment_method_options: {
-          customer_balance: {
-            funding_type: "bank_transfer",
-            bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-          },
-        },
-      } as Parameters<typeof stripe.checkout.sessions.create>[0]);
+    const session = await stripe.checkout.sessions.create({
+      ...checkoutParams,
+      customer: stripeCust.id,
+    } as Parameters<typeof stripe.checkout.sessions.create>[0]);
 
-      stripeCheckoutUrl = session.url;
-      await supabase.from("quote_requests").update({ stripe_checkout_session_id: session.id }).eq("id", qr.id);
-    } catch {
-      // Fallback: card only
-      const session = await stripe.checkout.sessions.create({
-        ...checkoutParams,
-        customer_email: lead?.email || undefined,
-      } as Parameters<typeof stripe.checkout.sessions.create>[0]);
-
-      stripeCheckoutUrl = session.url;
-      await supabase.from("quote_requests").update({ stripe_checkout_session_id: session.id }).eq("id", qr.id);
-    }
+    stripeCheckoutUrl = session.url;
+    await supabase.from("quote_requests").update({ stripe_checkout_session_id: session.id }).eq("id", qr.id);
   } catch (e) {
     console.error("[submitBillingData] Stripe checkout creation failed:", e);
   }

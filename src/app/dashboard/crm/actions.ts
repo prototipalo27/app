@@ -2065,33 +2065,17 @@ export async function sendProformaToClient(
       cancel_url: `${baseUrl}/payment/cancel`,
     };
 
-    // Try with bank transfer, fallback to card-only
-    let session;
-    try {
-      const existingCust = lead?.email
-        ? await stripe.customers.list({ email: lead.email, limit: 1 })
-        : { data: [] };
-      const stripeCust = existingCust.data.length > 0
-        ? existingCust.data[0]
-        : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+    const existingCust = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
 
-      session = await stripe.checkout.sessions.create({
-        ...baseParams,
-        customer: stripeCust.id,
-        payment_method_types: ["card", "customer_balance"],
-        payment_method_options: {
-          customer_balance: {
-            funding_type: "bank_transfer",
-            bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-          },
-        },
-      });
-    } catch {
-      session = await stripe.checkout.sessions.create({
-        ...baseParams,
-        customer_email: lead?.email || undefined,
-      });
-    }
+    const session = await stripe.checkout.sessions.create({
+      ...baseParams,
+      customer: stripeCust.id,
+    });
 
     stripeCheckoutUrl = session.url;
     await supabase
@@ -2811,33 +2795,17 @@ export async function createStripeCheckout(
     cancel_url: `${baseUrl}/payment/cancel`,
   };
 
-  // Try with bank transfer, fallback to card-only
-  let session;
-  try {
-    const existingCustomers = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCustomer = existingCustomers.data.length > 0
-      ? existingCustomers.data[0]
-      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+  const existingCustomers = lead?.email
+    ? await stripe.customers.list({ email: lead.email, limit: 1 })
+    : { data: [] };
+  const stripeCustomer = existingCustomers.data.length > 0
+    ? existingCustomers.data[0]
+    : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
 
-    session = await stripe.checkout.sessions.create({
-      ...baseParams,
-      customer: stripeCustomer.id,
-      payment_method_types: ["card", "customer_balance"],
-      payment_method_options: {
-        customer_balance: {
-          funding_type: "bank_transfer",
-          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-        },
-      },
-    });
-  } catch {
-    session = await stripe.checkout.sessions.create({
-      ...baseParams,
-      customer_email: lead?.email || undefined,
-    });
-  }
+  const session = await stripe.checkout.sessions.create({
+    ...baseParams,
+    customer: stripeCustomer.id,
+  });
 
   await supabase
     .from("quote_requests")
