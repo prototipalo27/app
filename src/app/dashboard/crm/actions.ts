@@ -2050,48 +2050,48 @@ export async function sendProformaToClient(
     const discountFactor = isFull ? 0.95 : 1;
     const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
     const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
+    const productName = isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo";
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
-    // Find or create Stripe customer (required for bank transfers)
-    const existingCust = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCust = existingCust.data.length > 0
-      ? existingCust.data[0]
-      : await stripe.customers.create({
-          email: lead?.email || undefined,
-          name: lead?.full_name || undefined,
-        });
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer: stripeCust.id,
-      payment_method_types: ["card", "customer_balance"],
-      payment_method_options: {
-        customer_balance: {
-          funding_type: "bank_transfer",
-          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-        },
-      },
+    const baseParams = {
+      mode: "payment" as const,
       line_items: [{
-        price_data: {
-          currency: "eur",
-          product_data: {
-            name: isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo",
-          },
-          unit_amount: chargeAmount,
-        },
+        price_data: { currency: "eur", product_data: { name: productName }, unit_amount: chargeAmount },
         quantity: 1,
       }],
-      metadata: {
-        lead_id: leadId,
-        quote_request_id: qr.id,
-        payment_type: isSplit ? "split_50" : "full",
-      },
+      metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
       success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/payment/cancel`,
-    });
+    };
+
+    // Try with bank transfer, fallback to card-only
+    let session;
+    try {
+      const existingCust = lead?.email
+        ? await stripe.customers.list({ email: lead.email, limit: 1 })
+        : { data: [] };
+      const stripeCust = existingCust.data.length > 0
+        ? existingCust.data[0]
+        : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+
+      session = await stripe.checkout.sessions.create({
+        ...baseParams,
+        customer: stripeCust.id,
+        payment_method_types: ["card", "customer_balance"],
+        payment_method_options: {
+          customer_balance: {
+            funding_type: "bank_transfer",
+            bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+          },
+        },
+      });
+    } catch {
+      session = await stripe.checkout.sessions.create({
+        ...baseParams,
+        customer_email: lead?.email || undefined,
+      });
+    }
 
     stripeCheckoutUrl = session.url;
     await supabase
@@ -2800,43 +2800,44 @@ export async function createStripeCheckout(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
-  // Find or create Stripe customer (required for bank transfers)
-  const existingCustomers = lead?.email
-    ? await stripe.customers.list({ email: lead.email, limit: 1 })
-    : { data: [] };
-  const stripeCustomer = existingCustomers.data.length > 0
-    ? existingCustomers.data[0]
-    : await stripe.customers.create({
-        email: lead?.email || undefined,
-        name: lead?.full_name || undefined,
-      });
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer: stripeCustomer.id,
-    payment_method_types: ["card", "customer_balance"],
-    payment_method_options: {
-      customer_balance: {
-        funding_type: "bank_transfer",
-        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-      },
-    },
+  const baseParams = {
+    mode: "payment" as const,
     line_items: [{
-      price_data: {
-        currency: "eur",
-        product_data: { name: label },
-        unit_amount: chargeAmount,
-      },
+      price_data: { currency: "eur", product_data: { name: label }, unit_amount: chargeAmount },
       quantity: 1,
     }],
-    metadata: {
-      lead_id: leadId,
-      quote_request_id: qr.id,
-      payment_type: isSplit ? "split_50" : "full",
-    },
+    metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
     success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/payment/cancel`,
-  });
+  };
+
+  // Try with bank transfer, fallback to card-only
+  let session;
+  try {
+    const existingCustomers = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCustomer = existingCustomers.data.length > 0
+      ? existingCustomers.data[0]
+      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+
+    session = await stripe.checkout.sessions.create({
+      ...baseParams,
+      customer: stripeCustomer.id,
+      payment_method_types: ["card", "customer_balance"],
+      payment_method_options: {
+        customer_balance: {
+          funding_type: "bank_transfer",
+          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
+        },
+      },
+    });
+  } catch {
+    session = await stripe.checkout.sessions.create({
+      ...baseParams,
+      customer_email: lead?.email || undefined,
+    });
+  }
 
   await supabase
     .from("quote_requests")
