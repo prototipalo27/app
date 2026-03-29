@@ -2053,14 +2053,61 @@ export async function sendProformaToClient(
   const concepto = `${clientName} - Proforma`;
   const paymentLabel = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
 
-  // Send email with bank transfer details
+  // Create Stripe Checkout link for online payment option
+  let stripeCheckoutUrl: string | null = null;
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+    const chargeAmount = Math.round(payAmount * 100);
+    const productName = isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+    const existingCust = lead?.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{
+        price_data: { currency: "eur", product_data: { name: productName }, unit_amount: chargeAmount },
+        quantity: 1,
+      }],
+      metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
+      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/payment/cancel`,
+      customer: stripeCust.id,
+    });
+
+    stripeCheckoutUrl = session.url;
+    await supabase
+      .from("quote_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", qr.id);
+  } catch (err) {
+    console.error("[sendProformaToClient] Stripe checkout failed:", err);
+  }
+
+  // Build email with both payment options
   const smtpConfig = await getUserSmtpConfig(profile.id);
+
+  const onlinePayBlock = stripeCheckoutUrl
+    ? `<p style="margin:24px 0 8px;">O si lo prefieres, puedes pagar con tarjeta:</p>
+       <p><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Pagar con tarjeta</a></p>`
+    : "";
+
+  const onlinePayText = stripeCheckoutUrl
+    ? `\n\nO si lo prefieres, puedes pagar con tarjeta:\n${stripeCheckoutUrl}`
+    : "";
 
   try {
     await sendEmailOrSchedule({
       to: lead.email,
       subject: "Proforma — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €\n\nGracias,\nEl equipo de Prototipalo`,
+      text: `Hola ${lead.full_name},\n\nGracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.\n\nLa forma de pago es por transferencia bancaria:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT: BBVAESMM\n\nConcepto: ${concepto}\nCantidad (${paymentLabel}): ${formattedAmount} €${onlinePayText}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `
         <p>Hola ${lead.full_name},</p>
         <p>Gracias por confirmar el proyecto. Te adjuntamos la proforma correspondiente.</p>
@@ -2075,6 +2122,7 @@ export async function sendProformaToClient(
           <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Concepto</td><td style="padding:4px 0;font-weight:600;">${concepto}</td></tr>
           <tr><td style="padding:4px 12px 4px 0;color:#71717a;">Cantidad (${paymentLabel})</td><td style="padding:4px 0;font-weight:600;">${formattedAmount} €</td></tr>
         </table>
+        ${onlinePayBlock}
         <p style="font-size:12px;color:#a1a1aa;margin-top:16px;">La proforma va adjunta a este email en formato PDF.</p>
         <br>
         <p>Gracias,<br>El equipo de Prototipalo</p>
