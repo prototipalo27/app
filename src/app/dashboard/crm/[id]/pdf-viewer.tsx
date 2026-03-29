@@ -82,7 +82,7 @@ export function PdfPreviewButton({
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex h-[90vh] max-w-[90vw] w-[900px] flex-col gap-0 p-0 overflow-hidden">
+        <DialogContent className="flex h-[95vh] max-w-[95vw] w-full flex-col gap-0 p-0 overflow-hidden">
           <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
             <DialogTitle className="text-base font-semibold">{label}</DialogTitle>
           </div>
