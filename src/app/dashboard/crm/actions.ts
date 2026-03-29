@@ -1988,7 +1988,7 @@ export async function sendProformaToClient(
 
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, holded_contact_id, holded_proforma_id, items, notes")
+    .select("id, holded_contact_id, holded_proforma_id, items, notes, payment_option")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -2039,14 +2039,79 @@ export async function sendProformaToClient(
     return { success: false, error: "Error al descargar el PDF de la proforma" };
   }
 
-  // Send email
+  // Create Stripe Checkout link
+  let stripeCheckoutUrl: string | null = null;
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+    const isFull = qr.payment_option === "full";
+    const isSplit = qr.payment_option === "split";
+    const discountFactor = isFull ? 0.95 : 1;
+    const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+    const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: lead.email,
+      line_items: [{
+        price_data: {
+          currency: "eur",
+          product_data: {
+            name: isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo",
+          },
+          unit_amount: chargeAmount,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        lead_id: leadId,
+        quote_request_id: qr.id,
+        payment_type: isSplit ? "split_50" : "full",
+      },
+      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/payment/cancel`,
+    });
+
+    stripeCheckoutUrl = session.url;
+    await supabase
+      .from("quote_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", qr.id);
+  } catch (err) {
+    console.error("[sendProformaToClient] Stripe checkout failed:", err);
+  }
+
+  // Send email with payment link
   const smtpConfig = await getUserSmtpConfig(profile.id);
+
+  const paymentBlock = stripeCheckoutUrl
+    ? `<p style="margin:20px 0;">
+        <a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+          Proceder al pago
+        </a>
+      </p>
+      <p style="font-size:12px;color:#a1a1aa;">Tambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.</p>`
+    : "";
+
+  const paymentTextBlock = stripeCheckoutUrl
+    ? `\n\nPara proceder al pago:\n${stripeCheckoutUrl}\n\nTambien puedes pagar por transferencia bancaria a los datos indicados en la proforma adjunta.`
+    : "";
+
   try {
     await sendEmailOrSchedule({
       to: lead.email,
       subject: "Proforma — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nTe adjuntamos la proforma de tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
-      html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la proforma de tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      text: `Hola ${lead.full_name},\n\nGracias por tu pedido. Te adjuntamos la proforma de tu proyecto.${paymentTextBlock}\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `
+        <p>Hola ${lead.full_name},</p>
+        <p>Gracias por tu pedido. Te adjuntamos la proforma de tu proyecto.</p>
+        ${paymentBlock}
+        <p style="font-size:12px;color:#a1a1aa;margin-top:16px;">La proforma va adjunta a este email en formato PDF.</p>
+        <br>
+        <p>Gracias,<br>El equipo de Prototipalo</p>
+      `,
       smtpConfig,
       attachments: pdfBuffer && pdfBuffer.length > 0
         ? [{ filename: "Proforma-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
@@ -2716,27 +2781,9 @@ export async function createStripeCheckout(
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
 
-  // Create or find Stripe customer (required for bank_transfer)
-  const customers = lead?.email
-    ? await stripe.customers.list({ email: lead.email, limit: 1 })
-    : { data: [] };
-  const customer = customers.data.length > 0
-    ? customers.data[0]
-    : await stripe.customers.create({
-        email: lead?.email || undefined,
-        name: lead?.full_name || undefined,
-      });
-
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    customer: customer.id,
-    payment_method_types: ["card", "customer_balance"],
-    payment_method_options: {
-      customer_balance: {
-        funding_type: "bank_transfer",
-        bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-      },
-    },
+    customer_email: lead?.email || undefined,
     line_items: [{
       price_data: {
         currency: "eur",

@@ -201,14 +201,7 @@ export async function submitBillingData(
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card", "customer_balance"],
-      payment_method_options: {
-        customer_balance: {
-          funding_type: "bank_transfer",
-          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-        },
-      },
-      customer_creation: "always",
+      customer_email: lead?.email || undefined,
       line_items: [{
         price_data: {
           currency: "eur",
