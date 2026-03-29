@@ -196,39 +196,19 @@ export async function submitBillingData(
     const isSplit = data.payment_option === "split";
     const discountFactor = isFullPayment ? 0.95 : 1;
     const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
-    const chargeAmount = isSplit ? Math.round(total * 50) : Math.round(total * 100); // cents
+    const chargeAmount = Math.round((isSplit ? total * 0.5 : total) * 100); // cents
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+    const productName = isSplit
+      ? "Primer pago (50%) — Proyecto Prototipalo"
+      : "Pago completo — Proyecto Prototipalo";
 
-    // Find or create Stripe customer (required for bank transfers)
-    const existingCust = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCust = existingCust.data.length > 0
-      ? existingCust.data[0]
-      : await stripe.customers.create({
-          email: lead?.email || undefined,
-          name: lead?.full_name || undefined,
-        });
-
-    const session = await stripe.checkout.sessions.create({
+    const checkoutParams: Record<string, unknown> = {
       mode: "payment",
-      customer: stripeCust.id,
-      payment_method_types: ["card", "customer_balance"],
-      payment_method_options: {
-        customer_balance: {
-          funding_type: "bank_transfer",
-          bank_transfer: { type: "eu_bank_transfer", eu_bank_transfer: { country: "ES" } },
-        },
-      },
       line_items: [{
         price_data: {
           currency: "eur",
-          product_data: {
-            name: isSplit
-              ? "Primer pago (50%) — Proyecto Prototipalo"
-              : "Pago completo — Proyecto Prototipalo",
-          },
+          product_data: { name: productName },
           unit_amount: chargeAmount,
         },
         quantity: 1,
