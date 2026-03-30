@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { sendMessage, markConversationAsRead, startNewConversation } from "./actions";
+import { sendMessage, markConversationAsRead, startNewConversation, createLeadFromWhatsApp, checkLeadByPhone } from "./actions";
+import Link from "next/link";
 
 type Conversation = {
   id: string;
@@ -47,6 +48,8 @@ export default function WhatsAppChat({
   const selectedIdRef = useRef<string | null>(null);
   // Mobile: track whether we're viewing a chat
   const [mobileShowChat, setMobileShowChat] = useState(false);
+  // Lead creation from WhatsApp
+  const [leadState, setLeadState] = useState<{ status: "idle" | "loading" | "created" | "exists" | "error"; leadId?: string; error?: string }>({ status: "idle" });
 
   const selected = conversations.find((c) => c.id === selectedId);
 
@@ -60,6 +63,7 @@ export default function WhatsAppChat({
     if (!selectedId) return;
 
     setLoadingMessages(true);
+    setLeadState({ status: "idle" });
     const supabase = createClient();
 
     supabase
@@ -72,6 +76,16 @@ export default function WhatsAppChat({
         setMessages(data || []);
         setLoadingMessages(false);
       });
+
+    // Check if this contact already has a lead
+    const conv = conversations.find((c) => c.id === selectedId);
+    if (conv?.contact_phone) {
+      checkLeadByPhone(conv.contact_phone).then((result) => {
+        if (result.exists) {
+          setLeadState({ status: "exists", leadId: result.leadId });
+        }
+      });
+    }
 
     // Mark as read (fire-and-forget, no revalidation needed)
     markConversationAsRead(selectedId);
@@ -401,7 +415,7 @@ export default function WhatsAppChat({
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-sm font-bold text-green-700 dark:bg-green-900 dark:text-green-300">
                 {(selected.contact_name || selected.contact_phone || "?")?.[0]?.toUpperCase()}
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-zinc-900 dark:text-white">
                   {selected.contact_name || selected.contact_phone || "Desconocido"}
                 </p>
@@ -409,6 +423,39 @@ export default function WhatsAppChat({
                   +{selected.contact_phone}
                 </p>
               </div>
+              {/* Lead creation button */}
+              {leadState.status === "exists" || leadState.status === "created" ? (
+                <Link
+                  href={`/dashboard/crm/${leadState.leadId}`}
+                  className="shrink-0 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
+                >
+                  {leadState.status === "created" ? "Lead creado" : "Ver lead"}
+                </Link>
+              ) : leadState.status === "error" ? (
+                <span className="shrink-0 text-xs text-red-500">{leadState.error}</span>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setLeadState({ status: "loading" });
+                    const result = await createLeadFromWhatsApp(
+                      selected.contact_name,
+                      selected.contact_phone
+                    );
+                    if (result.success) {
+                      setLeadState({ status: "created", leadId: result.leadId });
+                    } else if (result.leadId) {
+                      setLeadState({ status: "exists", leadId: result.leadId });
+                    } else {
+                      setLeadState({ status: "error", error: result.error });
+                    }
+                  }}
+                  disabled={leadState.status === "loading"}
+                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  title="Crear lead en CRM"
+                >
+                  {leadState.status === "loading" ? "Creando..." : "+ Lead"}
+                </button>
+              )}
             </div>
 
             {/* Messages */}

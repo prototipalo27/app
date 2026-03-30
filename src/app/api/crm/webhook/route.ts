@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     const emailSubjectTag = findField(data, [
       "email_subject_tag", "emailSubjectTag",
     ]);
-    const VALID_SOURCES = ["webflow", "email", "whatsapp", "manual", "other"] as const;
+    const VALID_SOURCES = ["webflow", "email", "whatsapp", "manual", "phone", "in_person", "other"] as const;
     const rawSource = findField(data, ["source"]);
     const source = VALID_SOURCES.includes(rawSource as any) ? rawSource! : "webflow";
     const submissionId =

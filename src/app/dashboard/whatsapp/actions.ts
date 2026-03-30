@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { sendTextMessage } from "@/lib/evolution-api";
+import { revalidatePath } from "next/cache";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "prototipalo";
 
@@ -152,4 +154,79 @@ export async function getUnreadCount(): Promise<number> {
 
   if (!data) return 0;
   return data.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+}
+
+const MANU_USER_ID = "1acae8cc-e872-4513-8133-27cbbf05d6ba";
+
+export async function createLeadFromWhatsApp(
+  contactName: string | null,
+  contactPhone: string | null
+): Promise<{ success: boolean; error?: string; leadId?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!contactName && !contactPhone) {
+    return { success: false, error: "No hay datos de contacto" };
+  }
+
+  // Check if a lead with this phone already exists (match last 9 digits)
+  if (contactPhone) {
+    const last9 = contactPhone.replace(/\D/g, "").slice(-9);
+    if (last9.length >= 9) {
+      const { data: existing } = await supabase
+        .from("leads")
+        .select("id")
+        .ilike("phone", `%${last9}`)
+        .limit(1)
+        .single();
+
+      if (existing) {
+        return { success: false, error: "Ya existe un lead con este teléfono", leadId: existing.id };
+      }
+    }
+  }
+
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .insert({
+      full_name: contactName || contactPhone || "WhatsApp",
+      phone: contactPhone,
+      source: "whatsapp",
+      status: "new",
+      owned_by: MANU_USER_ID,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  sendPushToAll({
+    title: `💬 ${contactName || contactPhone}`,
+    body: "Nuevo lead desde WhatsApp",
+    url: `/dashboard/crm/${lead.id}`,
+    phone: contactPhone || undefined,
+  }).catch((err) => console.error("Push notification error:", err));
+
+  revalidatePath("/dashboard/crm");
+  return { success: true, leadId: lead.id };
+}
+
+export async function checkLeadByPhone(
+  phone: string | null
+): Promise<{ exists: boolean; leadId?: string }> {
+  if (!phone) return { exists: false };
+  const supabase = await createClient();
+
+  const last9 = phone.replace(/\D/g, "").slice(-9);
+  if (last9.length < 9) return { exists: false };
+
+  const { data } = await supabase
+    .from("leads")
+    .select("id")
+    .ilike("phone", `%${last9}`)
+    .limit(1)
+    .single();
+
+  if (data) return { exists: true, leadId: data.id };
+  return { exists: false };
 }

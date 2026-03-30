@@ -84,6 +84,10 @@ export async function createLead(formData: FormData) {
   const estimatedUrgency = (formData.get("estimated_urgency") as string)?.trim() || null;
   const message = (formData.get("message") as string)?.trim() || null;
 
+  const VALID_MANUAL_SOURCES = ["manual", "phone", "in_person", "email", "whatsapp"] as const;
+  const rawSource = (formData.get("source") as string)?.trim() || "manual";
+  const source = (VALID_MANUAL_SOURCES as readonly string[]).includes(rawSource) ? rawSource : "manual";
+
   // DB trigger auto_estimate_lead handles:
   // - auto-fill quantity from message if not provided
   // - default complexity/urgency
@@ -96,7 +100,7 @@ export async function createLead(formData: FormData) {
       email: (formData.get("email") as string)?.trim() || null,
       phone: (formData.get("phone") as string)?.trim() || null,
       message: message,
-      source: "manual",
+      source,
       assigned_to: assignedTo,
       owned_by: ownedBy,
       estimated_quantity: estimatedQuantity,

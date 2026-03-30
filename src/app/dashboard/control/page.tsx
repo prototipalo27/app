@@ -102,7 +102,7 @@ export default async function ControlPage() {
     supabase.from("project_items").select("id, project_id, quantity, completed, print_time_minutes"),
     supabase.from("print_jobs").select("id, status, estimated_minutes, printer_id, started_at, completed_at"),
     supabase.from("printers").select("id, name, online, gcode_state, print_percent, remaining_minutes, current_file").order("name"),
-    supabase.from("leads").select("id, status, source, created_at"),
+    supabase.from("leads").select("id, status, source, created_at").gte("created_at", "2026-03-30T14:00:00Z"),
     supabase
       .from("shipping_info")
       .select("id, shipment_status, shipped_at, delivered_at, price, project_id, created_at")
@@ -113,7 +113,7 @@ export default async function ControlPage() {
     supabase
       .from("leads")
       .select("created_at")
-      .gte("created_at", thirtyDaysAgo.toISOString())
+      .gte("created_at", "2026-03-30T14:00:00Z")
       .order("created_at", { ascending: true }),
     supabase
       .from("lead_utm_data")

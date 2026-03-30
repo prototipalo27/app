@@ -4,11 +4,6 @@ import { NextResponse, type NextRequest } from "next/server";
 const ALLOWED_DOMAIN = "prototipalo.com";
 
 export async function middleware(request: NextRequest) {
-  // Dev bypass: skip all auth checks in development
-  if (process.env.NODE_ENV === "development") {
-    return NextResponse.next({ request });
-  }
-
   const { pathname } = request.nextUrl;
   const isPublic =
     pathname === "/" ||

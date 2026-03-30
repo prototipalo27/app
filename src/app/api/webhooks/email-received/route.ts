@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
+import { sendPushToAll } from "@/lib/push-notifications/server";
 
 function getSupabase() {
   return createClient(
@@ -28,11 +29,13 @@ async function logWebhook(
   }
 }
 
+const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
+
 /**
  * POST /api/webhooks/email-received?secret=EMAIL_WEBHOOK_SECRET
  *
  * Receives email data from n8n (IMAP trigger) and logs activities on existing leads.
- * Does NOT auto-create leads — leads only enter via Webflow form or manual creation.
+ * If no matching lead exists, auto-creates one with source="email".
  *
  * Body:
  * {
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
       "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
       "newsletter", "newsletters", "news", "mailer", "mailer-daemon",
       "notifications", "notification", "alert", "alerts",
-      "marketing", "promo", "promotions", "info", "updates",
+      "marketing", "promo", "promotions", "updates",
       "bounce", "postmaster", "daemon",
     ];
     if (spamLocalParts.some((p) => fromLocal === p || fromLocal.startsWith(p + "+"))) {
@@ -140,17 +143,62 @@ export async function POST(request: NextRequest) {
       .single();
 
     let leadId: string;
+    let isNewLead = false;
 
     if (lead) {
       leadId = lead.id;
     } else {
-      // No auto-create leads from email — leads only enter via Webflow or manual creation.
-      // n8n does not send the "to" field so we can't distinguish info@ from manu@ or spam.
-      return NextResponse.json({
-        ok: true,
-        skipped: true,
-        reason: "no_matching_lead",
-      });
+      // Auto-create lead from email
+      // Deduplication: check if a lead with this email was created in the last 5 minutes
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recentLead } = await supabase
+        .from("leads")
+        .select("id")
+        .ilike("email", from)
+        .gte("created_at", fiveMinAgo)
+        .limit(1)
+        .single();
+
+      if (recentLead) {
+        leadId = recentLead.id;
+      } else {
+        const { data: newLead, error: insertError } = await supabase
+          .from("leads")
+          .insert({
+            full_name: fromName !== from ? fromName : from.split("@")[0],
+            email: from,
+            message: `[${subject}]\n\n${body}`.slice(0, 5000),
+            source: "email",
+            status: "new",
+            owned_by: GONZALO_USER_ID,
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          if (insertError.code === "23505") {
+            // Race condition: lead was just created by another request
+            const { data: existing } = await supabase
+              .from("leads")
+              .select("id")
+              .ilike("email", from)
+              .limit(1)
+              .single();
+            if (existing) {
+              leadId = existing.id;
+            } else {
+              console.error("Email webhook lead insert error:", insertError);
+              return NextResponse.json({ error: insertError.message }, { status: 500 });
+            }
+          } else {
+            console.error("Email webhook lead insert error:", insertError);
+            return NextResponse.json({ error: insertError.message }, { status: 500 });
+          }
+        } else {
+          leadId = newLead.id;
+          isNewLead = true;
+        }
+      }
     }
 
     // Resolve thread_id
@@ -207,7 +255,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-detect project type tag if lead doesn't have one
-    if (!lead.project_type_tag) {
+    if (isNewLead || !lead?.project_type_tag) {
       detectProjectTypeTag(body)
         .then(async (tag) => {
           if (tag) {
@@ -233,10 +281,21 @@ export async function POST(request: NextRequest) {
       }
     })().catch((err) => console.error("AI draft error:", err));
 
+    // Send push notification for new leads created from email
+    if (isNewLead) {
+      const displayName = fromName !== from ? fromName : from.split("@")[0];
+      sendPushToAll({
+        title: `📧 ${displayName}`,
+        body: subject.slice(0, 120) || "Nuevo lead por email",
+        url: `/dashboard/crm/${leadId}`,
+      }).catch((err) => console.error("Push notification error:", err));
+    }
+
     return NextResponse.json({
       ok: true,
       lead_id: leadId,
       thread_id: threadId,
+      created: isNewLead,
     });
   } catch (err) {
     console.error("Email webhook error:", err);

@@ -136,6 +136,19 @@ export default async function NewLeadPage() {
               </div>
             </div>
 
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Origen
+              </label>
+              <select name="source" defaultValue="manual" className={selectClass}>
+                <option value="manual">Manual / Directo</option>
+                <option value="phone">Teléfono</option>
+                <option value="in_person">Presencial</option>
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground">

@@ -10,6 +10,9 @@ export type TrafficSource =
   | "LinkedIn"
   | "Email"
   | "WhatsApp"
+  | "Teléfono"
+  | "Presencial"
+  | "Web Orgánico"
   | "Directo"
   | "Referral"
   | "Otros Paid"
@@ -37,8 +40,12 @@ export function classifyTrafficSource(
   // Non-web sources take priority
   if (leadSource === "whatsapp") return "WhatsApp";
   if (leadSource === "email") return "Email";
+  if (leadSource === "phone") return "Teléfono";
+  if (leadSource === "in_person") return "Presencial";
   if (leadSource === "manual") return "Directo";
 
+  // Webflow leads without UTM data
+  if (leadSource === "webflow" && !utm) return "Web Orgánico";
   if (!utm) return "Directo";
 
   const source = (utm.utm_source ?? "").toLowerCase();
@@ -89,6 +96,9 @@ export const SOURCE_COLORS: Record<TrafficSource, string> = {
   "LinkedIn": "#0a66c2",
   "Email": "#f59e0b",
   "WhatsApp": "#25d366",
+  "Teléfono": "#0ea5e9",
+  "Presencial": "#f97316",
+  "Web Orgánico": "#14b8a6",
   "Directo": "#6b7280",
   "Referral": "#8b5cf6",
   "Otros Paid": "#ef4444",
@@ -103,6 +113,9 @@ export const ALL_SOURCES: TrafficSource[] = [
   "LinkedIn",
   "Email",
   "WhatsApp",
+  "Teléfono",
+  "Presencial",
+  "Web Orgánico",
   "Directo",
   "Referral",
   "Otros Paid",
