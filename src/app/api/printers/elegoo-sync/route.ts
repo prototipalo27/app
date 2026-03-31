@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { recordPrintingTime } from "@/lib/printer-stats";
 import { autoCompleteByKeyword } from "@/lib/auto-complete-jobs";
 
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       if (!printer.print_error) continue;
       const prevError = prevErrorMap.get(printer.serial_number) ?? 0;
       if (prevError !== printer.print_error) {
-        sendPushToAll({
+        sendPushForEvent("printer_alert", {
           title: "Alerta impresora",
           body: `${printer.name}: error de impresion`,
           url: "/dashboard/printers",

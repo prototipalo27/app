@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 function getSupabase() {
   return createClient(
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
     // Send push notification for new leads created from email
     if (isNewLead) {
       const displayName = fromName !== from ? fromName : from.split("@")[0];
-      sendPushToAll({
+      sendPushForEvent("email_received", {
         title: `📧 ${displayName}`,
         body: subject.slice(0, 120) || "Nuevo lead por email",
         url: `/dashboard/crm/${leadId}`,

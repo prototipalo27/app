@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole, getUserProfile } from "@/lib/rbac";
-import { sendPushToUser } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 const PATH = "/dashboard/purchases";
 
@@ -70,15 +70,13 @@ export async function addPurchaseItem(formData: FormData) {
     .select("id")
     .single();
 
-  // Notify ALL managers (not just the task assignee)
-  if (task && managers?.length) {
-    for (const mgr of managers) {
-      sendPushToUser(mgr.id, {
-        title: "Nueva solicitud de compra",
-        body: taskTitle,
-        url: `/dashboard/purchases`,
-      }).catch(() => {});
-    }
+  // Notify about the purchase request (config handles who gets it)
+  if (task) {
+    sendPushForEvent("purchase_request", {
+      title: "Nueva solicitud de compra",
+      body: taskTitle,
+      url: `/dashboard/purchases`,
+    }).catch(() => {});
   }
 
   revalidatePath(PATH);
@@ -129,11 +127,11 @@ export async function markAsPurchased(
 
   // Notify the person who requested the purchase
   if (item?.created_by && item.created_by !== profile.id) {
-    sendPushToUser(item.created_by, {
+    sendPushForEvent("purchase_processed", {
       title: "Tu compra ha sido procesada",
       body: item.description,
       url: PATH,
-    }).catch(() => {});
+    }, item.created_by).catch(() => {});
   }
 
   revalidatePath(PATH);

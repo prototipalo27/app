@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getTracking } from "@/lib/gls/api";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 /**
  * GET /api/gls/sync
@@ -117,13 +117,13 @@ export async function GET(request: NextRequest) {
         }
 
         // Send push notification
-        sendPushToAll({
+        sendPushForEvent("shipment_update", {
           title: "Paquete entregado",
           body: `GLS ${barcode} entregado${shipment.recipient_name ? ` a ${shipment.recipient_name}` : ""}`,
           url: "/dashboard/shipments",
         }).catch(() => {});
       } else if (newStatus === "in_transit") {
-        sendPushToAll({
+        sendPushForEvent("shipment_update", {
           title: "Paquete en reparto",
           body: `GLS ${barcode}${shipment.recipient_name ? ` para ${shipment.recipient_name}` : ""}`,
           url: "/dashboard/shipments",

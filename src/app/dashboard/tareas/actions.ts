@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { sendPushToUser } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 async function isSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data } = await supabase
@@ -53,11 +53,11 @@ export async function createTask(formData: FormData) {
   if (assignedTo) {
     const isSelf = assignedTo === userData.user.id;
     if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
-      sendPushToUser(assignedTo, {
+      sendPushForEvent("task_assigned", {
         title: "Nueva tarea asignada",
         body: title.trim(),
         url: `/dashboard/tareas/${task.id}`,
-      }).catch(() => {});
+      }, assignedTo).catch(() => {});
     }
   }
 
@@ -112,11 +112,11 @@ export async function updateTask(formData: FormData) {
   if (assignedTo && assignedTo !== current?.assigned_to) {
     const isSelf = assignedTo === userData.user.id;
     if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
-      sendPushToUser(assignedTo, {
+      sendPushForEvent("task_assigned", {
         title: "Tarea asignada",
         body: title.trim(),
         url: `/dashboard/tareas/${id}`,
-      }).catch(() => {});
+      }, assignedTo).catch(() => {});
     }
   }
 
@@ -156,11 +156,11 @@ export async function updateTaskStatus(
   if (status === "done" && task?.created_by) {
     const isSelf = task.created_by === userData.user.id;
     if (!isSelf || await isSuperAdmin(supabase, userData.user.id)) {
-      sendPushToUser(task.created_by, {
+      sendPushForEvent("task_completed", {
         title: "Tarea completada",
         body: task.title,
         url: `/dashboard/tareas/${id}`,
-      }).catch(() => {});
+      }, task.created_by).catch(() => {});
     }
   }
 

@@ -4,7 +4,7 @@ import {
   getOrCreateClientFolder,
   createProjectFolder,
 } from "@/lib/google-drive/client";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { classifyAndApplyTemplate } from "@/lib/ai-classify-project";
 
 export interface SyncResult {
@@ -121,7 +121,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     // Notify about new project
-    sendPushToAll({
+    sendPushForEvent("new_project", {
       title: "Nuevo proyecto",
       body: proforma.contactName,
       url: project ? `/dashboard/projects/${project.id}` : "/dashboard",
@@ -329,7 +329,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
     }
 
     // Notify about new project from invoice
-    sendPushToAll({
+    sendPushForEvent("new_order", {
       title: "Nuevo pedido (factura)",
       body: invoice.contactName,
       url: project ? `/dashboard/projects/${project.id}` : "/dashboard",

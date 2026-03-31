@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getUserProfile, hasRole } from "@/lib/rbac";
-import { sendPushToAll, sendPushToUser } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 // ── Create Request ──────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export async function createRequest(formData: FormData) {
     throw new Error(error.message);
   }
 
-  sendPushToAll({
+  sendPushForEvent("improvement_request", {
     title: "Nueva solicitud de mejora",
     body: `${profile.email.split("@")[0]}: ${title.trim()}`,
     url: `/dashboard/requests/${data.id}`,
@@ -78,11 +78,11 @@ export async function acceptRequest(id: string, priority: string) {
 
   if (error) throw new Error(error.message);
 
-  sendPushToUser(request.requested_by, {
+  sendPushForEvent("request_accepted", {
     title: "Solicitud aceptada",
     body: `Tu solicitud "${request.title}" ha sido aceptada`,
     url: `/dashboard/requests/${id}`,
-  }).catch(() => {});
+  }, request.requested_by).catch(() => {});
 
   revalidatePath(`/dashboard/requests/${id}`);
   revalidatePath("/dashboard/requests");
@@ -119,11 +119,11 @@ export async function rejectRequest(id: string, notes: string) {
 
   if (error) throw new Error(error.message);
 
-  sendPushToUser(request.requested_by, {
+  sendPushForEvent("request_rejected", {
     title: "Solicitud rechazada",
     body: `Tu solicitud "${request.title}" ha sido rechazada`,
     url: `/dashboard/requests/${id}`,
-  }).catch(() => {});
+  }, request.requested_by).catch(() => {});
 
   revalidatePath(`/dashboard/requests/${id}`);
   revalidatePath("/dashboard/requests");
@@ -160,11 +160,11 @@ export async function resolveRequest(id: string, notes: string) {
 
   if (error) throw new Error(error.message);
 
-  sendPushToUser(request.requested_by, {
+  sendPushForEvent("request_resolved", {
     title: "Solicitud resuelta",
     body: `Tu solicitud "${request.title}" ha sido resuelta. Confirma que estas conforme.`,
     url: `/dashboard/requests/${id}`,
-  }).catch(() => {});
+  }, request.requested_by).catch(() => {});
 
   revalidatePath(`/dashboard/requests/${id}`);
   revalidatePath("/dashboard/requests");
@@ -237,7 +237,7 @@ export async function reopenRequest(id: string) {
 
   if (error) throw new Error(error.message);
 
-  sendPushToAll({
+  sendPushForEvent("improvement_request", {
     title: "Solicitud reabierta",
     body: `"${request.title}" ha sido reabierta por el solicitante`,
     url: `/dashboard/requests/${id}`,

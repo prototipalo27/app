@@ -2,7 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { updateContact } from "@/lib/holded/api";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 interface BillingData {
   billing_name: string;
@@ -125,7 +125,7 @@ export async function acceptProforma(
     }
 
     // 4. Send push notification to team
-    await sendPushToAll({
+    await sendPushForEvent("proforma_accepted", {
       title: "Proforma aceptada",
       body: `El cliente ha aceptado el presupuesto de "${project.name}"`,
       url: `/dashboard/projects/${project.id}`,

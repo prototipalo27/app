@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncPrinters } from "@/lib/bambu/mqtt-sync";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { recordPrintingTime } from "@/lib/printer-stats";
 import { autoCompleteByKeyword } from "@/lib/auto-complete-jobs";
 import { autoTrackPrintJobs } from "@/lib/auto-track-jobs";
@@ -114,7 +114,7 @@ async function runSync() {
       if (!printer.print_error) continue;
       const prevError = prevErrorMap.get(printer.serial_number) ?? 0;
       if (prevError !== printer.print_error) {
-        sendPushToAll({
+        sendPushForEvent("printer_alert", {
           title: "Alerta impresora",
           body: `${printer.name}: error de impresion`,
           url: "/dashboard/printers",

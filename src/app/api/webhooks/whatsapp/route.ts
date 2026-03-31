@@ -1,6 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 
@@ -350,7 +350,7 @@ async function maybeCreateLeadFromPresu(
 
     // Notify all users
     const titleParts = [fullName, company].filter(Boolean);
-    sendPushToAll({
+    sendPushForEvent("whatsapp_received", {
       title: `📩 WhatsApp presu: ${titleParts.join(" - ")}`,
       body: message?.slice(0, 120) || "Nuevo lead desde WhatsApp",
       url: `/dashboard/crm/${lead.id}`,

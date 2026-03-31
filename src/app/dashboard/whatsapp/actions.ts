@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { sendTextMessage } from "@/lib/evolution-api";
 import { revalidatePath } from "next/cache";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 const INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "prototipalo";
 
@@ -200,7 +200,7 @@ export async function createLeadFromWhatsApp(
 
   if (error) return { success: false, error: error.message };
 
-  sendPushToAll({
+  sendPushForEvent("whatsapp_received", {
     title: `💬 ${contactName || contactPhone}`,
     body: "Nuevo lead desde WhatsApp",
     url: `/dashboard/crm/${lead.id}`,

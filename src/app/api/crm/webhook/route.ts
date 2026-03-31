@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { sendPushToAll } from "@/lib/push-notifications/server";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 // AI estimation is now handled by Postgres trigger auto_estimate_lead
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
 
     // Send push notification
     const titleParts = [fullName.trim(), company?.trim()].filter(Boolean);
-    await sendPushToAll({
+    await sendPushForEvent("new_lead", {
       title: `📩 ${titleParts.join(" - ")}`,
       body: message?.trim()?.slice(0, 120) || "Nuevo lead recibido",
       url: `/dashboard/crm/${lead.id}`,

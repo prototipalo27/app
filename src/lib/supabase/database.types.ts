@@ -1797,6 +1797,42 @@ export type Database = {
           },
         ]
       }
+      notification_event_config: {
+        Row: {
+          event_type: string
+          label: string
+          description: string | null
+          category: string
+          target_roles: string[]
+          target_user_ids: string[]
+          enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          event_type: string
+          label: string
+          description?: string | null
+          category?: string
+          target_roles?: string[]
+          target_user_ids?: string[]
+          enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          event_type?: string
+          label?: string
+          description?: string | null
+          category?: string
+          target_roles?: string[]
+          target_user_ids?: string[]
+          enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1823,6 +1859,48 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_notification_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          event_type: string
+          push_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_type: string
+          push_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          event_type?: string
+          push_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_notification_preferences_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: false
+            referencedRelation: "notification_event_config"
+            referencedColumns: ["event_type"]
+          },
+        ]
       }
       quote_requests: {
         Row: {
