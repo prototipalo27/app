@@ -501,6 +501,69 @@ export default async function ControlPage() {
         <LeadsChart data={leadsPerDay} />
       </div>
 
+      {/* ── Lead Source Table ── */}
+      {sourceDistribution.length > 0 && (() => {
+        const now = new Date();
+        const curMonth = now.getMonth();
+        const curYear = now.getFullYear();
+        const prevMonth = curMonth === 0 ? 11 : curMonth - 1;
+        const prevMonthYear = curMonth === 0 ? curYear - 1 : curYear;
+
+        const rows = sourceDistribution.map((s) => {
+          const leadsForSource = leadSourceClassified.filter((l) => l.trafficSource === s.source);
+          const thisMonth = leadsForSource.filter((l) => { const d = new Date(l.created_at); return d.getMonth() === curMonth && d.getFullYear() === curYear; }).length;
+          const lastMonth = leadsForSource.filter((l) => { const d = new Date(l.created_at); return d.getMonth() === prevMonth && d.getFullYear() === prevMonthYear; }).length;
+          const won = leadsForSource.filter((l) => l.status === "won" || l.status === "paid").length;
+          const rate = s.count > 0 ? Math.round((won / s.count) * 100) : 0;
+          return { source: s.source, color: s.color, total: s.count, thisMonth, lastMonth, won, rate };
+        });
+
+        return (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Origen de leads</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                    <th className="pb-2 font-medium text-zinc-500 dark:text-zinc-400">Fuente</th>
+                    <th className="pb-2 text-right font-medium text-zinc-500 dark:text-zinc-400">Total</th>
+                    <th className="pb-2 text-right font-medium text-zinc-500 dark:text-zinc-400">Este mes</th>
+                    <th className="pb-2 text-right font-medium text-zinc-500 dark:text-zinc-400">Mes anterior</th>
+                    <th className="pb-2 text-right font-medium text-zinc-500 dark:text-zinc-400">Ganados</th>
+                    <th className="pb-2 text-right font-medium text-zinc-500 dark:text-zinc-400">Conversion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.source} className="border-b border-zinc-50 last:border-0 dark:border-zinc-800/50">
+                      <td className="py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{row.source}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{row.total}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{row.thisMonth}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{row.lastMonth}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{row.won}</td>
+                      <td className="py-2 text-right">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          row.rate >= 20 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : row.rate >= 10 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                        }`}>
+                          {row.rate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Lead Source Analytics ── */}
       <LeadAnalytics
         sourceDistribution={sourceDistribution}
@@ -622,56 +685,7 @@ export default async function ControlPage() {
         </div>
       </div>
 
-      {/* ── 6. Envíos ── */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Pendientes</h2>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{shipmentsPending.length}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">En tránsito</h2>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{shipmentsInTransit.length}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Entregados este mes</h2>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{shipmentsDelivered.length}</p>
-        </div>
-      </div>
 
-      {/* Recent shipments */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Envíos recientes</h2>
-        {recentShipments.length === 0 ? (
-          <p className="text-sm text-zinc-400">No hay envíos</p>
-        ) : (
-          <div className="space-y-2">
-            {recentShipments.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-2 dark:border-zinc-800"
-              >
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                  {s.created_at ? new Date(s.created_at).toLocaleDateString("es-ES") : "—"}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    s.shipment_status === "delivered"
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : s.shipment_status?.toLowerCase().includes("transit")
-                        ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400"
-                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}
-                >
-                  {s.shipment_status ?? "—"}
-                </span>
-                {s.price != null && (
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{formatEur(s.price)}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

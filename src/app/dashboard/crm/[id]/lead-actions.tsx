@@ -18,6 +18,8 @@ import {
   sendInvoiceToClient,
   createStripeCheckout,
   markAsPaid,
+  searchHoldedInvoices,
+  linkInvoiceToLead,
   updateLeadOwner,
   sendQuoteToClient,
   sendNdaToClient,
@@ -101,6 +103,11 @@ export default function LeadActions({
   const [generatingPayLink, setGeneratingPayLink] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [invoiceResults, setInvoiceResults] = useState<{ id: string; docNumber: string; contactName: string; total: number; date: number }[]>([]);
+  const [searchingInvoices, setSearchingInvoices] = useState(false);
+  const [linkingInvoice, setLinkingInvoice] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const [editedValue, setEditedValue] = useState(estimatedValue?.toString() ?? "");
@@ -355,6 +362,7 @@ export default function LeadActions({
           <option value="">Sin definir</option>
           <option value="50-50">50-50 (dos plazos)</option>
           <option value="100-5">100% (-5% dto)</option>
+          <option value="cash">Efectivo</option>
         </select>
       </div>
 
@@ -807,6 +815,105 @@ export default function LeadActions({
           </div>
         </div>
       )}
+
+      {/* Link Holded invoice */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">Vincular factura</h3>
+        {!showInvoiceSearch ? (
+          <button
+            onClick={() => setShowInvoiceSearch(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Buscar factura en Holded
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={invoiceQuery}
+                onChange={(e) => setInvoiceQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && invoiceQuery.trim()) {
+                    setSearchingInvoices(true);
+                    searchHoldedInvoices(invoiceQuery.trim()).then((results) => {
+                      setInvoiceResults(results);
+                      setSearchingInvoices(false);
+                    });
+                  }
+                }}
+                placeholder="Numero o nombre..."
+                className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  if (!invoiceQuery.trim()) return;
+                  setSearchingInvoices(true);
+                  searchHoldedInvoices(invoiceQuery.trim()).then((results) => {
+                    setInvoiceResults(results);
+                    setSearchingInvoices(false);
+                  });
+                }}
+                disabled={searchingInvoices || !invoiceQuery.trim()}
+              >
+                {searchingInvoices ? "..." : "Buscar"}
+              </Button>
+              <button
+                onClick={() => { setShowInvoiceSearch(false); setInvoiceResults([]); setInvoiceQuery(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            {invoiceResults.length > 0 && (
+              <div className="max-h-48 overflow-y-auto rounded-md border">
+                {invoiceResults.map((inv) => (
+                  <button
+                    key={inv.id}
+                    onClick={async () => {
+                      setLinkingInvoice(true);
+                      const result = await linkInvoiceToLead(leadId, inv.id);
+                      setLinkingInvoice(false);
+                      if (result.success) {
+                        setShowInvoiceSearch(false);
+                        setInvoiceResults([]);
+                        setInvoiceQuery("");
+                        router.refresh();
+                      } else {
+                        setQuoteError(result.error || "Error");
+                      }
+                    }}
+                    disabled={linkingInvoice}
+                    className="flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-0 hover:bg-muted/50 disabled:opacity-50"
+                  >
+                    <div>
+                      <p className="text-xs font-medium text-foreground">{inv.docNumber}</p>
+                      <p className="text-[11px] text-muted-foreground">{inv.contactName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold tabular-nums">{inv.total.toFixed(2)} €</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(inv.date * 1000).toLocaleDateString("es-ES")}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {invoiceResults.length === 0 && invoiceQuery && !searchingInvoices && (
+              <p className="text-xs text-muted-foreground">Sin resultados</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Add note */}
       <div>

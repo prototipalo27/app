@@ -48,7 +48,7 @@ export function LeadsChart({ data }: LeadsChartProps) {
             const isHovered = hoveredIdx === i;
             return (
               <rect
-                key={d.date}
+                key={i}
                 x={i * barWidth + barWidth * 0.15}
                 y={40 - h}
                 width={barWidth * 0.7}
@@ -72,8 +72,8 @@ export function LeadsChart({ data }: LeadsChartProps) {
         <div className="mt-1 flex justify-between text-[10px] text-zinc-400 dark:text-zinc-500">
           {data
             .filter((_, i) => i % 7 === 0 || i === data.length - 1)
-            .map((d) => (
-              <span key={d.date}>{formatDateShort(d.date)}</span>
+            .map((d, i) => (
+              <span key={i}>{formatDateShort(d.date)}</span>
             ))}
         </div>
       </div>

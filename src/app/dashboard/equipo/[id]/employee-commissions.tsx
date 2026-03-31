@@ -15,33 +15,38 @@ export default async function EmployeeCommissions({ userId, employeeName }: Prop
     .eq("user_id", userId)
     .maybeSingle();
 
-  // Get won leads this month where this user is owner or closer
+  // Get paid quote_requests this month (paid_at = invoice date = commission month)
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-  const { data: wonLeads } = await supabase
-    .from("leads")
-    .select("id, full_name, company, estimated_value, source, owned_by, assigned_to")
-    .eq("status", "paid")
-    .gte("updated_at", startOfMonth)
-    .lte("updated_at", endOfMonth)
-    .or(`owned_by.eq.${userId},assigned_to.eq.${userId}`);
+  const { data: paidQuotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, items, paid_at")
+    .eq("payment_status", "paid")
+    .gte("paid_at", startOfMonth)
+    .lte("paid_at", endOfMonth);
 
-  // Get quote totals for won leads
-  const leadIds = (wonLeads || []).map((l) => l.id);
-  let quotes: { lead_id: string; items: unknown }[] = [];
+  const leadIds = [...new Set((paidQuotes || []).map((q) => q.lead_id))];
+
+  let wonLeads: { id: string; full_name: string; company: string | null; source: string | null; owned_by: string | null; assigned_to: string | null }[] = [];
   if (leadIds.length > 0) {
     const { data } = await supabase
-      .from("quote_requests")
-      .select("lead_id, items")
-      .in("lead_id", leadIds);
-    quotes = data || [];
+      .from("leads")
+      .select("id, full_name, company, source, owned_by, assigned_to")
+      .in("id", leadIds)
+      .or(`owned_by.eq.${userId},assigned_to.eq.${userId}`);
+    wonLeads = data || [];
   }
 
+  const quotes = paidQuotes || [];
+
   // Calculate commissions
-  const newRate = config?.new_rate ?? 0;
-  const returningRate = config?.returning_rate ?? 0;
+  // Rates may be stored as percentage (15) or decimal (0.15) — normalize to percentage
+  const rawNew = config?.new_rate ?? 0;
+  const rawReturning = config?.returning_rate ?? 0;
+  const newRate = rawNew > 0 && rawNew < 1 ? rawNew * 100 : rawNew;
+  const returningRate = rawReturning > 0 && rawReturning < 1 ? rawReturning * 100 : rawReturning;
 
   type DealLine = {
     clientName: string;
@@ -90,14 +95,14 @@ export default async function EmployeeCommissions({ userId, employeeName }: Prop
       {config ? (
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-            Nuevo: {config.new_rate}%
+            Nuevo: {config.new_rate < 1 ? (config.new_rate * 100) : config.new_rate}%
           </span>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-            Recurrente: {config.returning_rate}%
+            Recurrente: {config.returning_rate < 1 ? (config.returning_rate * 100) : config.returning_rate}%
           </span>
           {config.prepaid_bonus > 0 && (
             <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              Bonus prepago: {config.prepaid_bonus}%
+              Bonus prepago: {config.prepaid_bonus < 1 ? (config.prepaid_bonus * 100) : config.prepaid_bonus}%
             </span>
           )}
         </div>

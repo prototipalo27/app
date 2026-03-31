@@ -73,31 +73,41 @@ export function NewOrderModal({
   const selectedItems = products.filter((p) => p.selected);
   const total = selectedItems.reduce((s, p) => s + p.price * p.units, 0);
 
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const handleCreate = async () => {
     if (!selectedClient) return;
     setCreating(true);
+    setCreateError(null);
     const items = selectedItems.map((p) => ({
       concept: p.concept,
       price: p.price,
       units: p.units,
       tax: p.tax,
     }));
-    const result = await createRepeatOrder(
-      selectedClient.id,
-      {
-        fullName: selectedClient.fullName,
-        company: selectedClient.company,
-        email: selectedClient.email,
-        phone: selectedClient.phone,
-        holdedContactId: selectedClient.holdedContactId,
-      },
-      items,
-      message,
-    );
-    setCreating(false);
-    if (result.success && result.leadId) {
-      onClose();
-      router.push(`/dashboard/crm/${result.leadId}`);
+    try {
+      const result = await createRepeatOrder(
+        selectedClient.id,
+        {
+          fullName: selectedClient.fullName,
+          company: selectedClient.company,
+          email: selectedClient.email,
+          phone: selectedClient.phone,
+          holdedContactId: selectedClient.holdedContactId,
+        },
+        items,
+        message,
+      );
+      setCreating(false);
+      if (result.success && result.leadId) {
+        onClose();
+        router.push(`/dashboard/crm/${result.leadId}`);
+      } else {
+        setCreateError(result.error || "Error al crear el pedido");
+      }
+    } catch (e) {
+      setCreating(false);
+      setCreateError(e instanceof Error ? e.message : "Error inesperado");
     }
   };
 
@@ -267,6 +277,9 @@ export function NewOrderModal({
                 ? `Crear pedido (${selectedItems.length} producto${selectedItems.length !== 1 ? "s" : ""})`
                 : "Crear pedido sin productos"}
             </Button>
+            {createError && (
+              <p className="text-xs text-red-500">{createError}</p>
+            )}
           </div>
         )}
       </DialogContent>

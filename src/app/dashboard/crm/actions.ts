@@ -1764,7 +1764,7 @@ export async function updatePaymentCondition(
   await requireRole("manager");
   const supabase = await createClient();
 
-  const value = condition && ["50-50", "100-5"].includes(condition) ? condition : null;
+  const value = condition && ["50-50", "100-5", "cash"].includes(condition) ? condition : null;
 
   const { error } = await supabase
     .from("leads")
@@ -2762,6 +2762,103 @@ export async function getMyCommissionData(estimatedValue?: number | null): Promi
   }
 
   return { preview, estimate };
+}
+
+// ── Search & Link Holded Invoice ─────────────────────────
+
+export async function searchHoldedInvoices(
+  query: string,
+): Promise<{ id: string; docNumber: string; contactName: string; total: number; date: number }[]> {
+  await requireRole("manager");
+
+  const invoices = await listDocuments("invoice");
+  const q = query.toLowerCase();
+
+  return invoices
+    .filter((inv) =>
+      inv.contactName?.toLowerCase().includes(q) ||
+      inv.docNumber?.toLowerCase().includes(q)
+    )
+    .slice(0, 15)
+    .map((inv) => ({
+      id: inv.id,
+      docNumber: inv.docNumber,
+      contactName: inv.contactName,
+      total: inv.total,
+      date: inv.date,
+    }));
+}
+
+export async function linkInvoiceToLead(
+  leadId: string,
+  invoiceId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  // Get the invoice from Holded
+  const invoice = await getDocument("invoice", invoiceId);
+
+  // Build items from invoice products
+  const items = invoice.products.map((p) => ({
+    concept: p.name,
+    price: p.price,
+    units: p.units,
+    tax: p.tax,
+  }));
+
+  // Check if quote_request already exists for this lead
+  const { data: existing } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    // Update existing quote_request
+    await supabase
+      .from("quote_requests")
+      .update({
+        holded_invoice_id: invoiceId,
+        holded_contact_id: invoice.contact,
+        items: items as unknown as import("@/lib/supabase/database.types").Json,
+        payment_status: "paid",
+        paid_at: new Date(invoice.date * 1000).toISOString(),
+        paid_amount: invoice.total,
+      })
+      .eq("id", existing.id);
+  } else {
+    // Create new quote_request
+    await supabase.from("quote_requests").insert({
+      lead_id: leadId,
+      holded_invoice_id: invoiceId,
+      holded_contact_id: invoice.contact,
+      items: items as unknown as import("@/lib/supabase/database.types").Json,
+      status: "submitted",
+      payment_status: "paid",
+      paid_at: new Date(invoice.date * 1000).toISOString(),
+      paid_amount: invoice.total,
+    });
+  }
+
+  // Update lead estimated_value with invoice total (subtotal without tax)
+  await supabase
+    .from("leads")
+    .update({ estimated_value: invoice.subtotal })
+    .eq("id", leadId);
+
+  // Log activity
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "note",
+    content: `Factura ${invoice.docNumber} vinculada (${invoice.total.toFixed(2)} €)`,
+    metadata: { holded_invoice_id: invoiceId, doc_number: invoice.docNumber },
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
 }
 
 // ── Stripe Checkout ─────────────────────────────────────
