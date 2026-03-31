@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { CrmKanban } from "./crm-kanban";
+import { CrmKanban } from "./crm-kanban-wrapper";
 import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
 import { getBasePrices, getMyCommissionData } from "./actions";

@@ -146,30 +146,18 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
   const [search, setSearch] = useState("");
 
-  const [filterManager, setFilterManager] = useState("all");
-  const [filterOwner, setFilterOwner] = useState("all");
-  const [filterType, setFilterType] = useState("all");
-  const [sortBy, setSortBy] = useState("newest");
-  const [filterTime, setFilterTime] = useState("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-
-  // Restore filters from localStorage on mount
-  useEffect(() => {
-    setFilterManager(localStorage.getItem("crm_filterManager") || "all");
-    const storedOwner = localStorage.getItem("crm_filterOwner");
-    if (storedOwner) {
-      setFilterOwner(storedOwner);
-    } else {
-      const gonzalo = owners.find((o) => o.name.toLowerCase() === DEFAULT_OWNER);
-      setFilterOwner(gonzalo ? gonzalo.id : "all");
-    }
-    setFilterType(localStorage.getItem("crm_filterType") || "all");
-    setSortBy(localStorage.getItem("crm_sortBy") || "newest");
-    setFilterTime(localStorage.getItem("crm_filterTime") || "all");
-    setCustomFrom(localStorage.getItem("crm_customFrom") || "");
-    setCustomTo(localStorage.getItem("crm_customTo") || "");
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [filterManager, setFilterManager] = useState(() => localStorage.getItem("crm_filterManager") || "all");
+  const [filterOwner, setFilterOwner] = useState(() => {
+    const stored = localStorage.getItem("crm_filterOwner");
+    if (stored) return stored;
+    const gonzalo = owners.find((o) => o.name.toLowerCase() === DEFAULT_OWNER);
+    return gonzalo ? gonzalo.id : "all";
+  });
+  const [filterType, setFilterType] = useState(() => localStorage.getItem("crm_filterType") || "all");
+  const [sortBy, setSortBy] = useState(() => localStorage.getItem("crm_sortBy") || "newest");
+  const [filterTime, setFilterTime] = useState(() => localStorage.getItem("crm_filterTime") || "all");
+  const [customFrom, setCustomFrom] = useState(() => localStorage.getItem("crm_customFrom") || "");
+  const [customTo, setCustomTo] = useState(() => localStorage.getItem("crm_customTo") || "");
 
   // Persist filters to localStorage
   useEffect(() => {
