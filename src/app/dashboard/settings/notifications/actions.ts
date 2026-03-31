@@ -10,7 +10,8 @@ export async function getNotificationEvents() {
   const { data, error } = await supabase
     .from("notification_event_config")
     .select("*")
-    .order("category, label");
+    .order("category")
+    .order("label");
 
   if (error) return { success: false, error: error.message, data: null };
   return { success: true, error: null, data };

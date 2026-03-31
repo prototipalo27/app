@@ -46,7 +46,8 @@ INSERT INTO notification_event_config (event_type, label, description, category,
   ('new_order',           'Nuevo pedido',              'Se ha recibido un nuevo pedido (factura)',              'Proyectos',     '{"super_admin","manager","comercial","employee"}'),
   ('new_project',         'Nuevo proyecto',            'Se ha creado un nuevo proyecto',                       'Proyectos',     '{"super_admin","manager","comercial","employee"}'),
   ('shipment_update',     'Actualización de envío',    'Un envío ha cambiado de estado',                       'Envíos',        '{"super_admin","manager","comercial","employee"}'),
-  ('printer_alert',       'Alerta de impresora',       'Una impresora requiere atención',                      'Impresoras',    '{"super_admin","manager","comercial","employee"}')
+  ('printer_alert',       'Alerta de impresora',       'Una impresora requiere atención',                      'Impresoras',    '{"super_admin","manager","comercial","employee"}'),
+  ('payment_received',    'Pago recibido',             'Un cliente ha realizado un pago por Stripe',           'Ventas',        '{"super_admin","manager","comercial"}')
 ON CONFLICT (event_type) DO NOTHING;
 
 -- RLS policies

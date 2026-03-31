@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -55,6 +56,14 @@ export async function POST(request: NextRequest) {
           : null,
       })
       .eq("id", quoteRequestId);
+
+    // Get customer info for notification
+    const customerEmail = session.customer_details?.email || session.customer_email || "Cliente";
+    sendPushForEvent("payment_received", {
+      title: "💰 Pago recibido",
+      body: `${customerEmail} ha pagado ${amountTotal.toFixed(2)} €`,
+      url: "/dashboard/crm",
+    });
 
     // Trigger the auto-pipeline (invoice + project creation)
     // We import dynamically to use the server action's logic
