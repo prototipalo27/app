@@ -86,9 +86,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Skip emails from internal or notification senders
+    // ── SPAM / MARKETING FILTER ──────────────────────────────────
     const fromDomain = from.split("@")[1] || "";
     const fromLocal = from.split("@")[0] || "";
+
+    // 1. Skip internal domains
     const skipDomains = [
       "prototipalo.com",
       "webflow.com",
@@ -102,19 +104,81 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Skip noreply, newsletters, and automated senders
+    // 2. Skip known marketing/automated local parts
     const spamLocalParts = [
       "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
       "newsletter", "newsletters", "news", "mailer", "mailer-daemon",
       "notifications", "notification", "alert", "alerts",
       "marketing", "promo", "promotions", "updates",
-      "bounce", "postmaster", "daemon",
+      "bounce", "postmaster", "daemon", "info", "comunicacion",
+      "comunicaciones", "digest", "suscripciones", "subscriptions",
     ];
     if (spamLocalParts.some((p) => fromLocal === p || fromLocal.startsWith(p + "+"))) {
       return NextResponse.json({
         ok: true,
         skipped: true,
         reason: "automated_sender",
+      });
+    }
+
+    // 3. Skip marketing subdomains (message.X, mail.X, email.X, news.X, etc.)
+    const marketingSubdomainPrefixes = [
+      "message.", "messages.", "mail.", "email.", "e-mail.",
+      "news.", "newsletter.", "marketing.", "promo.", "campaign.",
+      "campaigns.", "bulk.", "send.", "sender.", "mailing.",
+      "notify.", "notification.", "bounce.", "track.", "click.",
+      "links.", "go.", "t.", "em.", "em-", "post.",
+    ];
+    if (marketingSubdomainPrefixes.some((p) => fromDomain.startsWith(p))) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "marketing_subdomain",
+      });
+    }
+
+    // 4. Skip known mass-email platform domains
+    const spamDomains = [
+      "mailchimp.com", "mandrillapp.com", "sendgrid.net", "sendgrid.com",
+      "sendinblue.com", "brevo.com", "mailgun.org", "mailgun.com",
+      "constantcontact.com", "hubspot.com", "hubspotmail.com",
+      "amazonses.com", "mailjet.com", "campaignmonitor.com",
+      "getresponse.com", "activecampaign.com", "convertkit.com",
+      "klaviyo.com", "drip.com", "mailerlite.com", "benchmark.email",
+      "exacttarget.com", "salesforce.com", "pardot.com",
+      "createsend.com", "cmail19.com", "cmail20.com",
+      "outreach.io", "salesloft.com",
+    ];
+    if (spamDomains.some((d) => fromDomain === d || fromDomain.endsWith("." + d))) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "mass_email_platform",
+      });
+    }
+
+    // 5. Skip by spam keywords in subject (case-insensitive)
+    const subjectLower = subject.toLowerCase();
+    const spamSubjectKeywords = [
+      "unsubscribe", "darse de baja", "anular suscripci",
+      "webinar", "newsletter", "invitaci\u00f3n webinar",
+      "has been added to", "te has suscrito",
+    ];
+    if (spamSubjectKeywords.some((kw) => subjectLower.includes(kw))) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "spam_subject_keyword",
+      });
+    }
+
+    // 6. Skip reply-to addresses that look like bulk hashes (reply-XXXXXXXXXXX@...)
+    const replyTo = (payload.reply_to || payload.in_reply_to_address || "").toLowerCase();
+    if (/^reply-[a-z0-9]{16,}@/.test(replyTo)) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "bulk_reply_to_hash",
       });
     }
 
