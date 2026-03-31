@@ -106,25 +106,25 @@ export default async function CrmPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/timeline" />}>
-            <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <Link href="/dashboard/crm/timeline" className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             Tracker
-          </Button>
-          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/comisiones" />}>
+          </Link>
+          <Link href="/dashboard/crm/comisiones" className="hidden sm:inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             Comisiones
-          </Button>
-          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" render={<Link href="/dashboard/crm/list" />}>
-            <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          </Link>
+          <Link href="/dashboard/crm/list" className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
             Lista
-          </Button>
+          </Link>
           <NewOrderButton />
-          <Button render={<Link href="/dashboard/crm/new" />} className="bg-brand text-white hover:bg-brand-dark">
+          <Link href="/dashboard/crm/new" className="inline-flex items-center rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark">
             + Nuevo lead
-          </Button>
+          </Link>
         </div>
       </div>
 

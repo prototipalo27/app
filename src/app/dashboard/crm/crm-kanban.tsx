@@ -67,7 +67,7 @@ function CrmColumn({
         </Badge>
       </div>
       {totalValue > 0 && (
-        <div className="px-3 pb-1">
+        <div suppressHydrationWarning className="px-3 pb-1">
           <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
             {totalValue.toLocaleString("es-ES")} €
           </span>
@@ -146,39 +146,32 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
   const [search, setSearch] = useState("");
 
-  const [filterManager, setFilterManager] = useState<string>(() => {
-    if (typeof window === "undefined") return "all";
-    return localStorage.getItem("crm_filterManager") || "all";
-  });
-  const [filterOwner, setFilterOwner] = useState<string>(() => {
-    if (typeof window === "undefined") return DEFAULT_OWNER;
-    const stored = localStorage.getItem("crm_filterOwner");
-    if (stored) return stored;
-    // Default to gonzalo's ID if available
-    const gonzalo = owners.find((o) => o.name.toLowerCase() === DEFAULT_OWNER);
-    return gonzalo ? gonzalo.id : "all";
-  });
-  const [filterType, setFilterType] = useState<string>(() => {
-    if (typeof window === "undefined") return "all";
-    return localStorage.getItem("crm_filterType") || "all";
-  });
-  const [sortBy, setSortBy] = useState<string>(() => {
-    if (typeof window === "undefined") return "newest";
-    return localStorage.getItem("crm_sortBy") || "newest";
-  });
-  const [filterTime, setFilterTime] = useState<string>(() => {
-    if (typeof window === "undefined") return "all";
-    return localStorage.getItem("crm_filterTime") || "all";
-  });
-  const [customFrom, setCustomFrom] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("crm_customFrom") || "";
-  });
-  const [customTo, setCustomTo] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("crm_customTo") || "";
-  });
+  const [filterManager, setFilterManager] = useState("all");
+  const [filterOwner, setFilterOwner] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [filterTime, setFilterTime] = useState("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
+  // Restore filters from localStorage on mount
+  useEffect(() => {
+    setFilterManager(localStorage.getItem("crm_filterManager") || "all");
+    const storedOwner = localStorage.getItem("crm_filterOwner");
+    if (storedOwner) {
+      setFilterOwner(storedOwner);
+    } else {
+      const gonzalo = owners.find((o) => o.name.toLowerCase() === DEFAULT_OWNER);
+      setFilterOwner(gonzalo ? gonzalo.id : "all");
+    }
+    setFilterType(localStorage.getItem("crm_filterType") || "all");
+    setSortBy(localStorage.getItem("crm_sortBy") || "newest");
+    setFilterTime(localStorage.getItem("crm_filterTime") || "all");
+    setCustomFrom(localStorage.getItem("crm_customFrom") || "");
+    setCustomTo(localStorage.getItem("crm_customTo") || "");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist filters to localStorage
   useEffect(() => {
     localStorage.setItem("crm_filterManager", filterManager);
     localStorage.setItem("crm_filterOwner", filterOwner);
@@ -425,10 +418,10 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
                   <span className={`h-2 w-2 rounded-full ${p.accent}`} />
                   <span className="text-[11px] font-medium text-muted-foreground md:text-xs">{p.label}</span>
                 </div>
-                <p className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-green-600 dark:text-green-400 md:text-xl">
+                <p suppressHydrationWarning className="mt-1 whitespace-nowrap text-sm font-bold tabular-nums text-green-600 dark:text-green-400 md:text-xl">
                   {p.total > 0 ? `${Math.round(p.total).toLocaleString("es-ES")}\u00A0€` : "—"}
                 </p>
-                <p className="text-[11px] font-medium tabular-nums text-muted-foreground md:text-xs">
+                <p suppressHydrationWarning className="text-[11px] font-medium tabular-nums text-muted-foreground md:text-xs">
                   {p.count} {p.count === 1 ? "lead" : "leads"}
                 </p>
               </div>
@@ -468,8 +461,8 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
         </Select>
 
         <Select value={filterOwner} onValueChange={(v) => v && setFilterOwner(v)}>
-          <SelectTrigger size="sm">
-            <SelectValue placeholder="Captador">
+          <SelectTrigger size="sm" suppressHydrationWarning>
+            <SelectValue placeholder="Captador" suppressHydrationWarning>
               {filterOwner === "all"
                 ? "Todos los captadores"
                 : owners.find((o) => o.id === filterOwner)?.name ?? "Captador"}

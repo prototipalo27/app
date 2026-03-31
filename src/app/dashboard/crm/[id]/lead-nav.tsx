@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 
 interface LeadNavProps {
   prevId: string | null;
@@ -45,28 +44,34 @@ export default function LeadNav({ prevId, nextId }: LeadNavProps) {
         &larr; {backLabel}
       </Link>
 
-      <div className="flex items-center gap-3">
-        <div className="flex gap-1">
-          {prevId ? (
-            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${prevId}${suffix}`} title="Anterior (k)" />}>
-              &larr; Ant
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              &larr; Ant
-            </Button>
-          )}
+      <div className="flex items-center gap-1">
+        {prevId ? (
+          <Link
+            href={`/dashboard/crm/${prevId}${suffix}`}
+            title="Anterior (k)"
+            className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            &larr; Ant
+          </Link>
+        ) : (
+          <span className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-muted-foreground opacity-50">
+            &larr; Ant
+          </span>
+        )}
 
-          {nextId ? (
-            <Button variant="outline" size="sm" render={<Link href={`/dashboard/crm/${nextId}${suffix}`} title="Siguiente (j)" />}>
-              Sig &rarr;
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              Sig &rarr;
-            </Button>
-          )}
-        </div>
+        {nextId ? (
+          <Link
+            href={`/dashboard/crm/${nextId}${suffix}`}
+            title="Siguiente (j)"
+            className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            Sig &rarr;
+          </Link>
+        ) : (
+          <span className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-muted-foreground opacity-50">
+            Sig &rarr;
+          </span>
+        )}
       </div>
     </div>
   );
