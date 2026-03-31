@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
@@ -2941,8 +2941,9 @@ export async function createStripeCheckout(
 
 export async function onPaymentConfirmed(
   quoteRequestId: string,
+  { useServiceRole = false }: { useServiceRole?: boolean } = {},
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
-  const supabase = await createClient();
+  const supabase = useServiceRole ? createServiceClient() : await createClient();
 
   // Get quote request with lead data
   const { data: qr } = await supabase

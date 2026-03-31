@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     // We import dynamically to use the server action's logic
     try {
       const { onPaymentConfirmed } = await import("@/app/dashboard/crm/actions");
-      await onPaymentConfirmed(quoteRequestId);
+      await onPaymentConfirmed(quoteRequestId, { useServiceRole: true });
     } catch (err) {
       console.error("[Stripe Webhook] onPaymentConfirmed failed:", err);
     }
