@@ -1805,6 +1805,12 @@ export type Database = {
           phone: string | null
           equity_pct: number
           invested_amount: number
+          shares: number
+          share_number_from: number | null
+          share_number_to: number | null
+          nominal_value: number
+          premium_total: number
+          premium_per_share: number
           join_date: string | null
           notes: string | null
           is_active: boolean
@@ -1818,6 +1824,12 @@ export type Database = {
           phone?: string | null
           equity_pct?: number
           invested_amount?: number
+          shares?: number
+          share_number_from?: number | null
+          share_number_to?: number | null
+          nominal_value?: number
+          premium_total?: number
+          premium_per_share?: number
           join_date?: string | null
           notes?: string | null
           is_active?: boolean
@@ -1831,6 +1843,12 @@ export type Database = {
           phone?: string | null
           equity_pct?: number
           invested_amount?: number
+          shares?: number
+          share_number_from?: number | null
+          share_number_to?: number | null
+          nominal_value?: number
+          premium_total?: number
+          premium_per_share?: number
           join_date?: string | null
           notes?: string | null
           is_active?: boolean

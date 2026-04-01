@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 
@@ -10,7 +10,7 @@ const PATH = "/dashboard/inversores";
 
 export async function getInvestors() {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("investors")
     .select("*")
@@ -22,7 +22,7 @@ export async function getInvestors() {
 
 export async function createInvestor(formData: FormData) {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { error } = await supabase.from("investors").insert({
     full_name: formData.get("full_name") as string,
@@ -41,7 +41,7 @@ export async function createInvestor(formData: FormData) {
 
 export async function updateInvestor(id: string, formData: FormData) {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { error } = await supabase
     .from("investors")
@@ -65,7 +65,7 @@ export async function updateInvestor(id: string, formData: FormData) {
 
 export async function deleteInvestor(id: string) {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { error } = await supabase.from("investors").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
@@ -77,7 +77,7 @@ export async function deleteInvestor(id: string) {
 
 export async function getQuarterlyReports() {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("quarterly_reports")
     .select("*")
@@ -90,7 +90,7 @@ export async function getQuarterlyReports() {
 
 export async function upsertQuarterlyReport(formData: FormData) {
   const profile = await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const quarter = parseInt(formData.get("quarter") as string);
   const year = parseInt(formData.get("year") as string);
@@ -131,7 +131,7 @@ export async function upsertQuarterlyReport(formData: FormData) {
 
 export async function deleteQuarterlyReport(id: string) {
   await requireRole("super_admin");
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { error } = await supabase.from("quarterly_reports").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
