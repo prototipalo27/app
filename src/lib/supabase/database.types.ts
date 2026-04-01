@@ -1797,6 +1797,48 @@ export type Database = {
           },
         ]
       }
+      investors: {
+        Row: {
+          id: string
+          full_name: string
+          email: string | null
+          phone: string | null
+          equity_pct: number
+          invested_amount: number
+          join_date: string | null
+          notes: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          full_name: string
+          email?: string | null
+          phone?: string | null
+          equity_pct?: number
+          invested_amount?: number
+          join_date?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          full_name?: string
+          email?: string | null
+          phone?: string | null
+          equity_pct?: number
+          invested_amount?: number
+          join_date?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_event_config: {
         Row: {
           event_type: string
@@ -1899,6 +1941,71 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "notification_event_config"
             referencedColumns: ["event_type"]
+          },
+        ]
+      }
+      quarterly_reports: {
+        Row: {
+          id: string
+          quarter: number
+          year: number
+          revenue: number
+          expenses: number
+          net_profit: number
+          cash_balance: number
+          projects_completed: number
+          new_clients: number
+          summary: string | null
+          highlights: string | null
+          challenges: string | null
+          next_quarter_goals: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          quarter: number
+          year: number
+          revenue?: number
+          expenses?: number
+          net_profit?: number
+          cash_balance?: number
+          projects_completed?: number
+          new_clients?: number
+          summary?: string | null
+          highlights?: string | null
+          challenges?: string | null
+          next_quarter_goals?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          quarter?: number
+          year?: number
+          revenue?: number
+          expenses?: number
+          net_profit?: number
+          cash_balance?: number
+          projects_completed?: number
+          new_clients?: number
+          summary?: string | null
+          highlights?: string | null
+          challenges?: string | null
+          next_quarter_goals?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quarterly_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
           },
         ]
       }

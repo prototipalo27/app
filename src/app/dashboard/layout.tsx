@@ -120,7 +120,7 @@ export default async function DashboardLayout({
       )}
 
       {/* Mobile sidebar + top bar */}
-      <MobileSidebar isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0}>{bottomSection}</MobileSidebar>
+      <MobileSidebar isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount ?? 0}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
       <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:flex dark:border-zinc-800 dark:bg-zinc-950 ${isImpersonating ? "pt-10" : ""}`}>
@@ -131,7 +131,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
 
-        <DesktopNav isManager={isManager} pendingTaskCount={pendingTaskCount ?? 0} />
+        <DesktopNav isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount ?? 0} />
 
         <div className="shrink-0 border-t border-zinc-200/80 p-2 dark:border-zinc-800/50">
           {bottomSection}

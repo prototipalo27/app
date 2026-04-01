@@ -57,7 +57,7 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-export default function DesktopNav({ isManager, pendingTaskCount = 0 }: { isManager: boolean; pendingTaskCount?: number }) {
+export default function DesktopNav({ isManager, isSuperAdmin, pendingTaskCount = 0 }: { isManager: boolean; isSuperAdmin?: boolean; pendingTaskCount?: number }) {
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto p-3 [&::-webkit-scrollbar]:hidden">
       {/* ── VENTAS ── */}
@@ -249,6 +249,17 @@ export default function DesktopNav({ isManager, pendingTaskCount = 0 }: { isMana
               </svg>
             }
           />
+          {isSuperAdmin && (
+            <NavLink
+              href="/dashboard/inversores"
+              label="Inversores"
+              icon={
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              }
+            />
+          )}
         </>
       )}
 

@@ -8,10 +8,12 @@ import Link from "next/link";
 export default function MobileSidebar({
   children,
   isManager,
+  isSuperAdmin,
   pendingTaskCount = 0,
 }: {
   children: React.ReactNode;
   isManager?: boolean;
+  isSuperAdmin?: boolean;
   pendingTaskCount?: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -371,6 +373,22 @@ export default function MobileSidebar({
                   </svg>
                 </Link>
               </div>
+              {isSuperAdmin && (
+                <Link
+                  href="/dashboard/inversores"
+                  onClick={handleNavClick}
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                    pathname?.startsWith("/dashboard/inversores")
+                      ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+                      : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
+                  }`}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Inversores
+                </Link>
+              )}
             </>
           )}
 
