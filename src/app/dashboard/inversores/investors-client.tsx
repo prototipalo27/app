@@ -7,6 +7,8 @@ import {
   deleteInvestor,
   upsertQuarterlyReport,
   deleteQuarterlyReport,
+  getQuarterClients,
+  type QuarterClient,
 } from "./actions";
 
 type Investor = {
@@ -450,6 +452,9 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                     )}
                   </div>
 
+                  {/* Clients section (auto-calculated) */}
+                  <QuarterClientsSection quarter={report.quarter} year={report.year} />
+
                   {/* Actions */}
                   <div className="mt-4 flex gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                     <button
@@ -495,6 +500,142 @@ function TextSection({ label, content }: { label: string; content: string }) {
     <div>
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className="mt-1 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{content}</p>
+    </div>
+  );
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  webflow: "Web",
+  email: "Email",
+  whatsapp: "WhatsApp",
+  phone: "Teléfono",
+  referral: "Referido",
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
+  directo: "Directo",
+  manual: "Manual",
+};
+
+function QuarterClientsSection({ quarter, year }: { quarter: number; year: number }) {
+  const [clients, setClients] = useState<QuarterClient[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [shown, setShown] = useState(false);
+
+  async function loadClients() {
+    if (clients) {
+      setShown(!shown);
+      return;
+    }
+    setLoading(true);
+    const result = await getQuarterClients(quarter, year);
+    setClients(result.data ?? []);
+    setShown(true);
+    setLoading(false);
+  }
+
+  const recurring = clients?.filter((c) => c.is_recurring).length ?? 0;
+  const newClients = clients ? clients.length - recurring : 0;
+
+  // Count by source
+  const sourceCounts: Record<string, number> = {};
+  if (clients) {
+    for (const c of clients) {
+      const src = c.source || "directo";
+      sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+      <button
+        onClick={loadClients}
+        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+      >
+        <svg
+          className={`h-3 w-3 transition-transform ${shown ? "rotate-90" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        Clientes del trimestre
+        {loading && <span className="text-zinc-400">cargando...</span>}
+      </button>
+
+      {shown && clients && (
+        <div className="mt-3 space-y-3">
+          {/* Summary badges */}
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {clients.length} clientes
+            </span>
+            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              {newClients} nuevos
+            </span>
+            {recurring > 0 && (
+              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                {recurring} recurrentes
+              </span>
+            )}
+            {Object.entries(sourceCounts).map(([source, count]) => (
+              <span
+                key={source}
+                className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+              >
+                {SOURCE_LABELS[source] || source}: {count}
+              </span>
+            ))}
+          </div>
+
+          {/* Client table */}
+          {clients.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-zinc-50 text-xs font-medium uppercase text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2">Cliente</th>
+                    <th className="px-3 py-2">Canal</th>
+                    <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2">Proyectos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {clients.map((client, i) => (
+                    <tr key={i} className="text-zinc-700 dark:text-zinc-300">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-zinc-900 dark:text-white">{client.client_name}</p>
+                        {client.client_email && (
+                          <p className="text-xs text-zinc-400">{client.client_email}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                          {SOURCE_LABELS[client.source] || client.source}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {client.is_recurring ? (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            Recurrente
+                          </span>
+                        ) : (
+                          <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            Nuevo
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-zinc-500">
+                        {client.project_names.join(", ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-400">No hay proyectos en este trimestre.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

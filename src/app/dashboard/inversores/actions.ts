@@ -129,6 +129,98 @@ export async function upsertQuarterlyReport(formData: FormData) {
   return { success: true, error: null };
 }
 
+// ─── Auto-calculated client data for a quarter ───────────────────
+
+export type QuarterClient = {
+  client_name: string;
+  client_email: string | null;
+  source: string;
+  is_recurring: boolean;
+  project_count: number;
+  project_names: string[];
+};
+
+export async function getQuarterClients(quarter: number, year: number) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  // Quarter date range
+  const startMonth = (quarter - 1) * 3; // 0, 3, 6, 9
+  const startDate = new Date(year, startMonth, 1).toISOString();
+  const endDate = new Date(year, startMonth + 3, 1).toISOString();
+
+  // Get projects created in this quarter with their lead source
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, name, client_name, client_email, lead_id, created_at")
+    .gte("created_at", startDate)
+    .lt("created_at", endDate)
+    .order("created_at", { ascending: false });
+
+  if (!projects?.length) return { success: true, data: [] };
+
+  // Get lead sources for these projects
+  const leadIds = projects
+    .map((p) => p.lead_id)
+    .filter((id): id is string => !!id);
+
+  let leadSourceMap: Record<string, string> = {};
+  if (leadIds.length > 0) {
+    const { data: leads } = await supabase
+      .from("leads")
+      .select("id, source")
+      .in("id", leadIds);
+
+    if (leads) {
+      leadSourceMap = Object.fromEntries(leads.map((l) => [l.id, l.source]));
+    }
+  }
+
+  // Check which clients are recurring (have projects BEFORE this quarter)
+  const clientEmails = projects
+    .map((p) => p.client_email)
+    .filter((e): e is string => !!e);
+
+  let recurringEmails = new Set<string>();
+  if (clientEmails.length > 0) {
+    const { data: previousProjects } = await supabase
+      .from("projects")
+      .select("client_email")
+      .in("client_email", clientEmails)
+      .lt("created_at", startDate);
+
+    if (previousProjects) {
+      recurringEmails = new Set(
+        previousProjects.map((p) => p.client_email!).filter(Boolean)
+      );
+    }
+  }
+
+  // Group by client
+  const clientMap = new Map<string, QuarterClient>();
+  for (const p of projects) {
+    const key = p.client_email || p.client_name || "Desconocido";
+    const existing = clientMap.get(key);
+    const source = p.lead_id ? leadSourceMap[p.lead_id] || "directo" : "directo";
+
+    if (existing) {
+      existing.project_count++;
+      existing.project_names.push(p.name);
+    } else {
+      clientMap.set(key, {
+        client_name: p.client_name || "Sin nombre",
+        client_email: p.client_email,
+        source,
+        is_recurring: p.client_email ? recurringEmails.has(p.client_email) : false,
+        project_count: 1,
+        project_names: [p.name],
+      });
+    }
+  }
+
+  return { success: true, data: Array.from(clientMap.values()) };
+}
+
 export async function deleteQuarterlyReport(id: string) {
   await requireRole("super_admin");
   const supabase = createServiceClient();
