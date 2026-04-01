@@ -7,8 +7,13 @@ import {
   deleteInvestor,
   upsertQuarterlyReport,
   deleteQuarterlyReport,
-  getQuarterClients,
-  type QuarterClient,
+  getReportClients,
+  populateReportClients,
+  updateReportClient,
+  addReportClient,
+  deleteReportClient,
+  type ReportClient,
+  type ClientProject,
 } from "./actions";
 
 type Investor = {
@@ -452,8 +457,8 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                     )}
                   </div>
 
-                  {/* Clients section (auto-calculated) */}
-                  <QuarterClientsSection quarter={report.quarter} year={report.year} />
+                  {/* Clients section (editable) */}
+                  <QuarterClientsSection reportId={report.id} quarter={report.quarter} year={report.year} />
 
                   {/* Actions */}
                   <div className="mt-4 flex gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
@@ -505,44 +510,68 @@ function TextSection({ label, content }: { label: string; content: string }) {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  webflow: "Web",
-  email: "Email",
-  whatsapp: "WhatsApp",
-  phone: "Teléfono",
-  referral: "Referido",
-  instagram: "Instagram",
-  linkedin: "LinkedIn",
-  directo: "Directo",
-  manual: "Manual",
+  webflow: "Web", email: "Email", whatsapp: "WhatsApp", phone: "Teléfono",
+  referral: "Referido", instagram: "Instagram", linkedin: "LinkedIn",
+  directo: "Directo", manual: "Manual",
 };
+const SOURCE_OPTIONS = Object.entries(SOURCE_LABELS);
 
-function QuarterClientsSection({ quarter, year }: { quarter: number; year: number }) {
-  const [clients, setClients] = useState<QuarterClient[] | null>(null);
+function QuarterClientsSection({ reportId, quarter, year }: { reportId: string; quarter: number; year: number }) {
+  const [clients, setClients] = useState<ReportClient[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [shown, setShown] = useState(false);
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   async function loadClients() {
-    if (clients) {
-      setShown(!shown);
-      return;
-    }
+    if (clients) { setShown(!shown); return; }
     setLoading(true);
-    const result = await getQuarterClients(quarter, year);
-    setClients(result.data ?? []);
+    const result = await getReportClients(reportId);
+    setClients((result.data ?? []) as ReportClient[]);
     setShown(true);
     setLoading(false);
   }
 
-  const recurring = clients?.filter((c) => c.is_recurring).length ?? 0;
-  const newClients = clients ? clients.length - recurring : 0;
+  function handlePopulate() {
+    startTransition(async () => {
+      const result = await populateReportClients(reportId, quarter, year);
+      if (result.error) { alert(result.error); return; }
+      const fresh = await getReportClients(reportId);
+      setClients((fresh.data ?? []) as ReportClient[]);
+    });
+  }
 
-  // Count by source
+  function handleAddClient() {
+    startTransition(async () => {
+      await addReportClient(reportId);
+      const fresh = await getReportClients(reportId);
+      setClients((fresh.data ?? []) as ReportClient[]);
+    });
+  }
+
+  function handleDeleteClient(id: string) {
+    if (!confirm("Eliminar este cliente?")) return;
+    startTransition(async () => {
+      await deleteReportClient(id);
+      setClients((prev) => prev?.filter((c) => c.id !== id) ?? null);
+    });
+  }
+
+  function handleUpdateClient(id: string, updates: Parameters<typeof updateReportClient>[1]) {
+    // Optimistic
+    setClients((prev) =>
+      prev?.map((c) => (c.id === id ? { ...c, ...updates } as ReportClient : c)) ?? null
+    );
+    startTransition(async () => {
+      await updateReportClient(id, updates);
+    });
+  }
+
+  const recurring = clients?.filter((c) => c.is_recurring).length ?? 0;
+  const totalQuarterValue = clients?.reduce((s, c) => s + Number(c.quarter_value), 0) ?? 0;
   const sourceCounts: Record<string, number> = {};
   if (clients) {
-    for (const c of clients) {
-      const src = c.source || "directo";
-      sourceCounts[src] = (sourceCounts[src] || 0) + 1;
-    }
+    for (const c of clients) sourceCounts[c.source || "directo"] = (sourceCounts[c.source || "directo"] || 0) + 1;
   }
 
   return (
@@ -551,89 +580,198 @@ function QuarterClientsSection({ quarter, year }: { quarter: number; year: numbe
         onClick={loadClients}
         className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
       >
-        <svg
-          className={`h-3 w-3 transition-transform ${shown ? "rotate-90" : ""}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
+        <svg className={`h-3 w-3 transition-transform ${shown ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
         Clientes del trimestre
         {loading && <span className="text-zinc-400">cargando...</span>}
       </button>
 
-      {shown && clients && (
-        <div className="mt-3 space-y-3">
-          {/* Summary badges */}
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-              {clients.length} clientes
-            </span>
-            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-              {newClients} nuevos
-            </span>
-            {recurring > 0 && (
-              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                {recurring} recurrentes
-              </span>
-            )}
-            {Object.entries(sourceCounts).map(([source, count]) => (
-              <span
-                key={source}
-                className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-              >
-                {SOURCE_LABELS[source] || source}: {count}
+      {shown && clients !== null && (
+        <div className={`mt-3 space-y-3 ${isPending ? "opacity-70 pointer-events-none" : ""}`}>
+          {/* Summary */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">{clients.length} clientes</span>
+            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">{clients.length - recurring} nuevos</span>
+            {recurring > 0 && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">{recurring} recurrentes</span>}
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{formatCurrency(totalQuarterValue)} trimestre</span>
+            {Object.entries(sourceCounts).map(([src, n]) => (
+              <span key={src} className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                {SOURCE_LABELS[src] || src}: {n}
               </span>
             ))}
           </div>
 
-          {/* Client table */}
-          {clients.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-50 text-xs font-medium uppercase text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                  <tr>
-                    <th className="px-3 py-2">Cliente</th>
-                    <th className="px-3 py-2">Canal</th>
-                    <th className="px-3 py-2">Tipo</th>
-                    <th className="px-3 py-2">Proyectos</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {clients.map((client, i) => (
-                    <tr key={i} className="text-zinc-700 dark:text-zinc-300">
-                      <td className="px-3 py-2">
-                        <p className="font-medium text-zinc-900 dark:text-white">{client.client_name}</p>
-                        {client.client_email && (
-                          <p className="text-xs text-zinc-400">{client.client_email}</p>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                          {SOURCE_LABELS[client.source] || client.source}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {client.is_recurring ? (
-                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                            Recurrente
-                          </span>
-                        ) : (
-                          <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            Nuevo
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-zinc-500">
-                        {client.project_names.join(", ")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-400">No hay proyectos en este trimestre.</p>
-          )}
+          {/* Actions */}
+          <div className="flex gap-2">
+            {clients.length === 0 && (
+              <button onClick={handlePopulate} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                Cargar desde proyectos
+              </button>
+            )}
+            <button onClick={handleAddClient} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              + Añadir cliente
+            </button>
+          </div>
+
+          {/* Client list */}
+          {clients.map((client) => {
+            const projects = (Array.isArray(client.projects) ? client.projects : []) as ClientProject[];
+            const isExpanded = expandedClient === client.id;
+
+            return (
+              <div key={client.id} className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                {/* Client row */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  {/* Expand toggle */}
+                  <button
+                    onClick={() => setExpandedClient(isExpanded ? null : client.id)}
+                    className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  >
+                    <svg className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Name (editable) */}
+                  <div className="min-w-0 flex-1">
+                    <input
+                      className="w-full bg-transparent text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
+                      defaultValue={client.client_name}
+                      onBlur={(e) => handleUpdateClient(client.id, { client_name: e.target.value })}
+                    />
+                    {client.client_email && <p className="text-xs text-zinc-400">{client.client_email}</p>}
+                  </div>
+
+                  {/* Source */}
+                  <select
+                    className="rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                    value={client.source}
+                    onChange={(e) => handleUpdateClient(client.id, { source: e.target.value })}
+                  >
+                    {SOURCE_OPTIONS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                  </select>
+
+                  {/* Recurring toggle */}
+                  <button
+                    onClick={() => handleUpdateClient(client.id, { is_recurring: !client.is_recurring })}
+                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${
+                      client.is_recurring
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    }`}
+                  >
+                    {client.is_recurring ? "Recurrente" : "Nuevo"}
+                  </button>
+
+                  {/* Quarter value */}
+                  <div className="text-right">
+                    <p className="text-[10px] text-zinc-400">Trimestre</p>
+                    <input
+                      type="number" step="0.01"
+                      className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
+                      defaultValue={Number(client.quarter_value)}
+                      onBlur={(e) => handleUpdateClient(client.id, { quarter_value: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+
+                  {/* Lifetime value */}
+                  <div className="text-right">
+                    <p className="text-[10px] text-zinc-400">Lifetime</p>
+                    <input
+                      type="number" step="0.01"
+                      className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
+                      defaultValue={Number(client.lifetime_value)}
+                      onBlur={(e) => handleUpdateClient(client.id, { lifetime_value: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+
+                  {/* Projects count */}
+                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                    {projects.length} proy.
+                  </span>
+
+                  {/* Delete */}
+                  <button onClick={() => handleDeleteClient(client.id)} className="shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Expanded: projects */}
+                {isExpanded && (
+                  <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="space-y-2">
+                      {projects.map((proj, idx) => (
+                        <div key={idx} className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <input
+                              className="w-full bg-transparent text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
+                              defaultValue={proj.name}
+                              placeholder="Nombre del proyecto"
+                              onBlur={(e) => {
+                                const updated = [...projects];
+                                updated[idx] = { ...updated[idx], name: e.target.value };
+                                handleUpdateClient(client.id, { projects: updated });
+                              }}
+                            />
+                            <textarea
+                              className="w-full resize-none bg-transparent text-xs text-zinc-600 placeholder-zinc-400 focus:outline-none dark:text-zinc-400 dark:placeholder-zinc-600"
+                              rows={2}
+                              defaultValue={proj.description}
+                              placeholder="Descripción del proyecto..."
+                              onBlur={(e) => {
+                                const updated = [...projects];
+                                updated[idx] = { ...updated[idx], description: e.target.value };
+                                handleUpdateClient(client.id, { projects: updated });
+                              }}
+                            />
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[10px] text-zinc-400">Valor</p>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number" step="0.01"
+                                className="w-20 bg-transparent text-right text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
+                                defaultValue={proj.value}
+                                onBlur={(e) => {
+                                  const updated = [...projects];
+                                  updated[idx] = { ...updated[idx], value: parseFloat(e.target.value) || 0 };
+                                  handleUpdateClient(client.id, { projects: updated });
+                                }}
+                              />
+                              <span className="text-xs text-zinc-400">EUR</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const updated = projects.filter((_, i) => i !== idx);
+                              handleUpdateClient(client.id, { projects: updated });
+                            }}
+                            className="mt-1 shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const updated = [...projects, { name: "Nuevo proyecto", description: "", value: 0 }];
+                        handleUpdateClient(client.id, { projects: updated });
+                      }}
+                      className="mt-2 text-xs font-medium text-green-600 hover:text-green-700 dark:text-green-400"
+                    >
+                      + Añadir proyecto
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

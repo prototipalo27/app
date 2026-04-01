@@ -129,96 +129,217 @@ export async function upsertQuarterlyReport(formData: FormData) {
   return { success: true, error: null };
 }
 
-// ─── Auto-calculated client data for a quarter ───────────────────
+// ─── Report Clients (editable) ────────────────────────────────────
 
-export type QuarterClient = {
+export type ClientProject = {
+  name: string;
+  description: string;
+  value: number;
+};
+
+export type ReportClient = {
+  id: string;
+  report_id: string;
   client_name: string;
   client_email: string | null;
   source: string;
   is_recurring: boolean;
-  project_count: number;
-  project_names: string[];
+  quarter_value: number;
+  lifetime_value: number;
+  projects: ClientProject[];
 };
 
-export async function getQuarterClients(quarter: number, year: number) {
+export async function getReportClients(reportId: string) {
   await requireRole("super_admin");
   const supabase = createServiceClient();
 
+  const { data, error } = await supabase
+    .from("quarterly_report_clients")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("sort_order");
+
+  if (error) return { success: false, error: error.message, data: null };
+  return { success: true, error: null, data: data as unknown as ReportClient[] };
+}
+
+// Auto-populate clients from projects for a given report
+export async function populateReportClients(reportId: string, quarter: number, year: number) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  // Check if already populated
+  const { count } = await supabase
+    .from("quarterly_report_clients")
+    .select("id", { count: "exact", head: true })
+    .eq("report_id", reportId);
+
+  if (count && count > 0) {
+    return { success: false, error: "Ya hay clientes cargados. Elimínalos primero para recargar." };
+  }
+
   // Quarter date range
-  const startMonth = (quarter - 1) * 3; // 0, 3, 6, 9
+  const startMonth = (quarter - 1) * 3;
   const startDate = new Date(year, startMonth, 1).toISOString();
   const endDate = new Date(year, startMonth + 3, 1).toISOString();
 
-  // Get projects created in this quarter with their lead source
+  // Get projects
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, client_name, client_email, lead_id, created_at")
+    .select("id, name, client_name, client_email, lead_id, price, created_at")
     .gte("created_at", startDate)
     .lt("created_at", endDate)
-    .order("created_at", { ascending: false });
+    .order("created_at");
 
-  if (!projects?.length) return { success: true, data: [] };
+  if (!projects?.length) return { success: true, error: null };
 
-  // Get lead sources for these projects
-  const leadIds = projects
-    .map((p) => p.lead_id)
-    .filter((id): id is string => !!id);
-
+  // Lead sources
+  const leadIds = projects.map((p) => p.lead_id).filter((id): id is string => !!id);
   let leadSourceMap: Record<string, string> = {};
   if (leadIds.length > 0) {
-    const { data: leads } = await supabase
-      .from("leads")
-      .select("id, source")
-      .in("id", leadIds);
-
-    if (leads) {
-      leadSourceMap = Object.fromEntries(leads.map((l) => [l.id, l.source]));
-    }
+    const { data: leads } = await supabase.from("leads").select("id, source").in("id", leadIds);
+    if (leads) leadSourceMap = Object.fromEntries(leads.map((l) => [l.id, l.source]));
   }
 
-  // Check which clients are recurring (have projects BEFORE this quarter)
-  const clientEmails = projects
-    .map((p) => p.client_email)
-    .filter((e): e is string => !!e);
-
+  // Recurring check
+  const clientEmails = projects.map((p) => p.client_email).filter((e): e is string => !!e);
   let recurringEmails = new Set<string>();
   if (clientEmails.length > 0) {
-    const { data: previousProjects } = await supabase
+    const { data: prev } = await supabase
       .from("projects")
       .select("client_email")
       .in("client_email", clientEmails)
       .lt("created_at", startDate);
+    if (prev) recurringEmails = new Set(prev.map((p) => p.client_email!).filter(Boolean));
+  }
 
-    if (previousProjects) {
-      recurringEmails = new Set(
-        previousProjects.map((p) => p.client_email!).filter(Boolean)
-      );
+  // Lifetime value per client email
+  const lifetimeMap: Record<string, number> = {};
+  if (clientEmails.length > 0) {
+    const { data: allProjects } = await supabase
+      .from("projects")
+      .select("client_email, price")
+      .in("client_email", clientEmails);
+    if (allProjects) {
+      for (const p of allProjects) {
+        if (p.client_email) {
+          lifetimeMap[p.client_email] = (lifetimeMap[p.client_email] || 0) + (p.price || 0);
+        }
+      }
     }
   }
 
   // Group by client
-  const clientMap = new Map<string, QuarterClient>();
+  const clientMap = new Map<string, {
+    client_name: string;
+    client_email: string | null;
+    source: string;
+    is_recurring: boolean;
+    quarter_value: number;
+    lifetime_value: number;
+    projects: ClientProject[];
+  }>();
+
   for (const p of projects) {
     const key = p.client_email || p.client_name || "Desconocido";
-    const existing = clientMap.get(key);
     const source = p.lead_id ? leadSourceMap[p.lead_id] || "directo" : "directo";
+    const existing = clientMap.get(key);
+    const projectEntry: ClientProject = {
+      name: p.name,
+      description: "",
+      value: p.price || 0,
+    };
 
     if (existing) {
-      existing.project_count++;
-      existing.project_names.push(p.name);
+      existing.quarter_value += p.price || 0;
+      existing.projects.push(projectEntry);
     } else {
       clientMap.set(key, {
         client_name: p.client_name || "Sin nombre",
         client_email: p.client_email,
         source,
         is_recurring: p.client_email ? recurringEmails.has(p.client_email) : false,
-        project_count: 1,
-        project_names: [p.name],
+        quarter_value: p.price || 0,
+        lifetime_value: p.client_email ? lifetimeMap[p.client_email] || 0 : p.price || 0,
+        projects: [projectEntry],
       });
     }
   }
 
-  return { success: true, data: Array.from(clientMap.values()) };
+  // Insert all
+  const rows = Array.from(clientMap.values()).map((c, i) => ({
+    report_id: reportId,
+    client_name: c.client_name,
+    client_email: c.client_email,
+    source: c.source,
+    is_recurring: c.is_recurring,
+    quarter_value: c.quarter_value,
+    lifetime_value: c.lifetime_value,
+    projects: JSON.stringify(c.projects),
+    sort_order: i,
+  }));
+
+  const { error } = await supabase.from("quarterly_report_clients").insert(rows);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(PATH);
+  return { success: true, error: null };
+}
+
+export async function updateReportClient(
+  id: string,
+  updates: {
+    client_name?: string;
+    source?: string;
+    is_recurring?: boolean;
+    quarter_value?: number;
+    lifetime_value?: number;
+    projects?: ClientProject[];
+  }
+) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.client_name !== undefined) payload.client_name = updates.client_name;
+  if (updates.source !== undefined) payload.source = updates.source;
+  if (updates.is_recurring !== undefined) payload.is_recurring = updates.is_recurring;
+  if (updates.quarter_value !== undefined) payload.quarter_value = updates.quarter_value;
+  if (updates.lifetime_value !== undefined) payload.lifetime_value = updates.lifetime_value;
+  if (updates.projects !== undefined) payload.projects = JSON.stringify(updates.projects);
+
+  const { error } = await supabase
+    .from("quarterly_report_clients")
+    .update(payload)
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function addReportClient(reportId: string) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const { error } = await supabase.from("quarterly_report_clients").insert({
+    report_id: reportId,
+    client_name: "Nuevo cliente",
+    projects: JSON.stringify([{ name: "Proyecto", description: "", value: 0 }]),
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(PATH);
+  return { success: true, error: null };
+}
+
+export async function deleteReportClient(id: string) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const { error } = await supabase.from("quarterly_report_clients").delete().eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath(PATH);
+  return { success: true, error: null };
 }
 
 export async function deleteQuarterlyReport(id: string) {

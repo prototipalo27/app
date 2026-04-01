@@ -1962,6 +1962,59 @@ export type Database = {
           },
         ]
       }
+      quarterly_report_clients: {
+        Row: {
+          id: string
+          report_id: string
+          client_name: string
+          client_email: string | null
+          source: string
+          is_recurring: boolean
+          quarter_value: number
+          lifetime_value: number
+          projects: Json
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          client_name: string
+          client_email?: string | null
+          source?: string
+          is_recurring?: boolean
+          quarter_value?: number
+          lifetime_value?: number
+          projects?: Json
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          client_name?: string
+          client_email?: string | null
+          source?: string
+          is_recurring?: boolean
+          quarter_value?: number
+          lifetime_value?: number
+          projects?: Json
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quarterly_report_clients_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "quarterly_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quarterly_reports: {
         Row: {
           id: string
