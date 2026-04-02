@@ -41,6 +41,8 @@ const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
  * {
  *   "from": "cliente@example.com",
  *   "from_name": "Juan",
+ *   "to": "info@prototipalo.com",
+ *   "cc": "",
  *   "subject": "Re: Presupuesto",
  *   "body": "Hola, me interesa...",
  *   "message_id": "<abc@gmail.com>",
@@ -84,6 +86,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── RECIPIENT FILTER ────────────────────────────────────────
+    // Only process emails sent to info@prototipalo.com (the shared inbox).
+    // Emails to personal addresses (manu@, gonzalo@, etc.) are ignored.
+    const to = (payload.to || "").toLowerCase().trim();
+    const cc = (payload.cc || "").toLowerCase().trim();
+    const allRecipients = `${to}, ${cc}`;
+    const ACCEPTED_INBOXES = ["info@prototipalo.com"];
+    const isTargetedToInfo = ACCEPTED_INBOXES.some((inbox) => allRecipients.includes(inbox));
+
+    if (!isTargetedToInfo) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "not_addressed_to_info",
+      });
+    }
+
     const supabase = getSupabase();
 
     // ── SPAM / MARKETING FILTER ──────────────────────────────────
@@ -112,6 +131,14 @@ export async function POST(request: NextRequest) {
       "marketing", "promo", "promotions", "updates",
       "bounce", "postmaster", "daemon", "info", "comunicacion",
       "comunicaciones", "digest", "suscripciones", "subscriptions",
+      "support", "soporte", "billing", "facturacion", "invoice",
+      "receipts", "receipt", "account", "accounts", "team",
+      "hello", "hola", "contacto", "contact", "ventas", "sales",
+      "automailer", "auto", "system", "sistema", "admin",
+      "security", "seguridad", "verify", "confirm", "welcome",
+      "bienvenido", "feedback", "survey", "encuesta",
+      "orden", "order", "orders", "pedido", "pedidos",
+      "envio", "envios", "shipping", "delivery", "tracking",
     ];
     if (spamLocalParts.some((p) => fromLocal === p || fromLocal.startsWith(p + "+"))) {
       return NextResponse.json({
@@ -128,6 +155,8 @@ export async function POST(request: NextRequest) {
       "campaigns.", "bulk.", "send.", "sender.", "mailing.",
       "notify.", "notification.", "bounce.", "track.", "click.",
       "links.", "go.", "t.", "em.", "em-", "post.",
+      "updates.", "alerts.", "info.", "service.", "noreply.",
+      "auto.", "system.", "mailer.", "transactional.",
     ];
     if (marketingSubdomainPrefixes.some((p) => fromDomain.startsWith(p))) {
       return NextResponse.json({
@@ -137,8 +166,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 4. Skip known mass-email platform domains
+    // 4. Skip known mass-email platform domains AND service/SaaS notification domains
     const spamDomains = [
+      // Mass email platforms
       "mailchimp.com", "mandrillapp.com", "sendgrid.net", "sendgrid.com",
       "sendinblue.com", "brevo.com", "mailgun.org", "mailgun.com",
       "constantcontact.com", "hubspot.com", "hubspotmail.com",
@@ -148,6 +178,58 @@ export async function POST(request: NextRequest) {
       "exacttarget.com", "salesforce.com", "pardot.com",
       "createsend.com", "cmail19.com", "cmail20.com",
       "outreach.io", "salesloft.com",
+      // Google / workspace
+      "google.com", "googlemail.com", "google.es",
+      "accounts.google.com", "calendar-notification.google.com",
+      // Social media
+      "linkedin.com", "linkedinmail.com",
+      "facebookmail.com", "facebook.com", "meta.com",
+      "twitter.com", "x.com",
+      "instagram.com",
+      "tiktok.com",
+      "pinterest.com",
+      // Microsoft
+      "microsoft.com", "microsoftonline.com", "office365.com",
+      "office.com", "outlook.com", "teams.microsoft.com",
+      // Apple
+      "apple.com", "icloud.com",
+      // Dev / SaaS
+      "github.com", "gitlab.com", "bitbucket.org", "atlassian.com",
+      "jira.com", "confluence.com",
+      "notion.so", "slack.com", "slackbot.com",
+      "figma.com", "canva.com",
+      "vercel.com", "netlify.com", "heroku.com", "render.com",
+      "supabase.io", "supabase.com",
+      "stripe.com", "paypal.com", "paypal.es",
+      "intercom.io", "intercom.com", "zendesk.com", "freshdesk.com",
+      "notion.so", "airtable.com", "monday.com", "asana.com",
+      "trello.com", "clickup.com",
+      "zoom.us", "zoom.com",
+      "calendly.com",
+      "typeform.com",
+      "docusign.com", "docusign.net",
+      "dropbox.com", "box.com",
+      // Banks / finance
+      "bbva.com", "bbva.es", "santander.com", "santander.es",
+      "caixabank.com", "caixabank.es", "bankinter.com",
+      "ing.es", "ing.com", "openbank.es",
+      "wise.com", "revolut.com", "n26.com",
+      // Shipping / logistics
+      "dhl.com", "fedex.com", "ups.com", "usps.com",
+      "correos.es", "correos.com",
+      "seur.com", "seur.es", "mrw.es", "nacex.es", "gls-spain.es",
+      "amazon.com", "amazon.es",
+      // Hosting / registrars
+      "godaddy.com", "namecheap.com", "ovh.com", "ovh.es",
+      "ionos.com", "ionos.es", "arsys.es", "dinahosting.com",
+      "cloudflare.com",
+      // Government / legal
+      "agenciatributaria.es", "seg-social.es", "hacienda.gob.es",
+      "boe.es",
+      // Misc services
+      "uber.com", "cabify.com", "glovo.com",
+      "spotify.com", "netflix.com",
+      "holded.com",
     ];
     if (spamDomains.some((d) => fromDomain === d || fromDomain.endsWith("." + d))) {
       return NextResponse.json({
@@ -160,9 +242,31 @@ export async function POST(request: NextRequest) {
     // 5. Skip by spam keywords in subject (case-insensitive)
     const subjectLower = subject.toLowerCase();
     const spamSubjectKeywords = [
+      // Unsubscribe / newsletters
       "unsubscribe", "darse de baja", "anular suscripci",
-      "webinar", "newsletter", "invitaci\u00f3n webinar",
+      "webinar", "newsletter", "invitación webinar",
       "has been added to", "te has suscrito",
+      // Notifications
+      "notificación de", "notification from", "alerta de",
+      "recordatorio:", "reminder:",
+      "your receipt", "tu recibo", "your invoice", "tu factura",
+      "payment received", "pago recibido",
+      "password reset", "restablecer contraseña", "cambiar contraseña",
+      "verify your email", "verifica tu email", "confirma tu email",
+      "confirm your account", "confirma tu cuenta",
+      "welcome to", "bienvenido a",
+      "your order", "tu pedido", "tu envío", "your shipment",
+      "out of office", "fuera de la oficina", "autoreply", "auto-reply",
+      "respuesta automática",
+      // Marketing
+      "oferta especial", "special offer", "descuento exclusivo",
+      "última oportunidad", "last chance", "act now",
+      "free trial", "prueba gratis", "prueba gratuita",
+      "black friday", "cyber monday",
+      // Security alerts
+      "suspicious sign-in", "inicio de sesión sospechoso",
+      "new sign-in", "nuevo inicio de sesión",
+      "security alert", "alerta de seguridad",
     ];
     if (spamSubjectKeywords.some((kw) => subjectLower.includes(kw))) {
       return NextResponse.json({
@@ -179,6 +283,27 @@ export async function POST(request: NextRequest) {
         ok: true,
         skipped: true,
         reason: "bulk_reply_to_hash",
+      });
+    }
+
+    // 7. Skip emails with unsubscribe indicators in the body
+    const bodyLower = body.toLowerCase();
+    const spamBodyIndicators = [
+      "unsubscribe", "darse de baja", "click here to unsubscribe",
+      "email preferences", "preferencias de email",
+      "manage your subscription", "gestionar suscripción",
+      "you are receiving this email because",
+      "recibes este email porque", "recibes este correo porque",
+      "this is an automated message", "este es un mensaje automático",
+      "do not reply to this email", "no respondas a este correo",
+      "list-unsubscribe",
+    ];
+    const bodyIndicatorCount = spamBodyIndicators.filter((ind) => bodyLower.includes(ind)).length;
+    if (bodyIndicatorCount >= 2) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "spam_body_indicators",
       });
     }
 
