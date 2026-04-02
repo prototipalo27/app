@@ -195,8 +195,10 @@ export async function submitBillingData(
 
     const isSplit = data.payment_option === "split";
     const discountFactor = isFullPayment ? 0.95 : 1;
-    const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
-    const chargeAmount = Math.round((isSplit ? total * 0.5 : total) * 100); // cents
+    const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+    const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
+    const total = subtotal + taxTotal;
+    const chargeAmount = Math.round((isSplit ? total * 0.5 : total) * 100); // cents, IVA incluido
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
     const productName = isSplit
