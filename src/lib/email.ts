@@ -57,6 +57,7 @@ export interface EmailAttachment {
 
 export interface SendEmailOptions {
   to: string;
+  cc?: string;
   subject: string;
   text: string;
   html?: string;
@@ -171,6 +172,7 @@ export async function sendEmail(options: SendEmailOptions) {
   const result = await transporter.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
     to: options.to,
+    cc: options.cc || undefined,
     subject: options.subject,
     text,
     html,

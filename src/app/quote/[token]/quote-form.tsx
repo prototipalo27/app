@@ -26,6 +26,7 @@ export default function QuoteForm({
   const [needsShipping, setNeedsShipping] = useState(false);
   const [items, setItems] = useState<QuoteItem[]>(initialItems);
   const [paymentOption, setPaymentOption] = useState<"full" | "split">("full");
+  const [ccEmails, setCcEmails] = useState<{ email: string; label: string }[]>([]);
   const billingPostalRef = useRef<HTMLInputElement>(null);
   const billingCityRef = useRef<HTMLInputElement>(null);
   const billingProvinceRef = useRef<HTMLInputElement>(null);
@@ -79,6 +80,7 @@ export default function QuoteForm({
         shipping_country: needsShipping ? ((fd.get("shipping_country") as string) || "España") : null,
         items,
         payment_option: paymentOption,
+        cc_emails: ccEmails.filter((e) => e.email.trim()),
       });
 
       if (result.success) {
@@ -301,6 +303,62 @@ export default function QuoteForm({
               <input ref={billingCountryRef} name="billing_country" type="text" defaultValue="España" className={inputClass} />
             </div>
           </div>
+        </div>
+
+        {/* Additional emails (CC) */}
+        <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Emails adicionales
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Compras, facturación u otros departamentos que deban recibir la documentación.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCcEmails((prev) => [...prev, { email: "", label: "" }])}
+              className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              + Añadir email
+            </button>
+          </div>
+          {ccEmails.map((entry, i) => (
+            <div key={i} className="mb-2 flex items-center gap-2">
+              <input
+                type="email"
+                value={entry.email}
+                onChange={(e) =>
+                  setCcEmails((prev) =>
+                    prev.map((item, j) => (j === i ? { ...item, email: e.target.value } : item)),
+                  )
+                }
+                placeholder="compras@empresa.com"
+                className={inputClass + " flex-1"}
+              />
+              <input
+                type="text"
+                value={entry.label}
+                onChange={(e) =>
+                  setCcEmails((prev) =>
+                    prev.map((item, j) => (j === i ? { ...item, label: e.target.value } : item)),
+                  )
+                }
+                placeholder="Dpto. (opcional)"
+                className={inputClass + " w-36"}
+              />
+              <button
+                type="button"
+                onClick={() => setCcEmails((prev) => prev.filter((_, j) => j !== i))}
+                className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
         </div>
 
         {/* Shipping toggle */}

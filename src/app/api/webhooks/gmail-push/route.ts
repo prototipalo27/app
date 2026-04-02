@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getGmailClient, parseMessage } from "@/lib/gmail/client";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
 
 const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
 const ACCEPTED_INBOXES = ["info@prototipalo.com"];
@@ -41,19 +34,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, reason: "no_history_id" });
     }
 
-    const supabase = getSupabase();
+    const supabase = createServiceClient();
 
     // Get the last processed historyId
-    const { data: state } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: state } = await (supabase as any)
       .from("app_state")
       .select("value")
       .eq("key", "gmail_history_id")
       .single();
 
-    const lastHistoryId = state?.value || null;
+    const lastHistoryId = (state as { value: string } | null)?.value || null;
 
     // Save new historyId immediately to avoid reprocessing on retries
-    await supabase.from("app_state").upsert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("app_state").upsert({
       key: "gmail_history_id",
       value: newHistoryId,
       updated_at: new Date().toISOString(),
@@ -289,7 +284,7 @@ function isSpam(email: { from: string; subject: string; body: string }): boolean
 // ── LEAD PROCESSING ─────────────────────────────────────────────
 
 async function processEmailAsLead(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createServiceClient>,
   email: {
     from: string;
     from_name: string;
@@ -380,9 +375,13 @@ async function processEmailAsLead(
   // Resolve thread_id — prefer Gmail's native threadId for reliable conversation grouping
   let threadId: string | null = null;
 
+  // JSONB arrow filters (metadata->>key) require untyped client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const untypedSupabase = supabase as any;
+
   if (gmailThreadId) {
     // Check if we already have activities with this Gmail threadId
-    const { data: existingThread } = await supabase
+    const { data: existingThread } = await untypedSupabase
       .from("lead_activities")
       .select("thread_id")
       .eq("metadata->>gmail_thread_id", gmailThreadId)
@@ -390,16 +389,16 @@ async function processEmailAsLead(
       .limit(1)
       .single();
 
-    threadId = existingThread?.thread_id || `gmail-${gmailThreadId}`;
+    threadId = (existingThread as { thread_id: string } | null)?.thread_id || `gmail-${gmailThreadId}`;
   } else if (email.in_reply_to) {
-    const { data: parentActivity } = await supabase
+    const { data: parentActivity } = await untypedSupabase
       .from("lead_activities")
       .select("thread_id")
       .eq("metadata->>message_id", email.in_reply_to)
       .not("thread_id", "is", null)
       .limit(1)
       .single();
-    if (parentActivity) threadId = parentActivity.thread_id;
+    if (parentActivity) threadId = (parentActivity as { thread_id: string }).thread_id;
   }
 
   if (!threadId) {

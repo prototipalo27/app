@@ -22,6 +22,7 @@ interface BillingData {
   shipping_country: string | null;
   items?: QuoteItem[];
   payment_option: "full" | "split";
+  cc_emails?: { email: string; label: string }[];
 }
 
 interface QuoteItem {
@@ -58,6 +59,7 @@ export async function submitBillingData(
     billing_postal_code: data.billing_postal_code.trim(),
     billing_province: data.billing_province.trim(),
     billing_country: data.billing_country.trim(),
+    cc_emails: (data.cc_emails || []).filter((e) => e.email.trim()),
   };
 
   // Save updated items (client may have changed units)
@@ -275,8 +277,14 @@ export async function submitBillingData(
         ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
         : "";
 
+      const ccList = (data.cc_emails || [])
+        .map((e) => e.email.trim().toLowerCase())
+        .filter((e) => e && e !== lead!.email);
+      const ccString = ccList.length > 0 ? ccList.join(", ") : undefined;
+
       await sendEmail({
         to: lead.email,
+        cc: ccString,
         subject: "Proforma — Prototipalo",
         signature: false,
         text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto — estamos listos para empezar.\n\n${introText}\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nUna vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.\n\nQuedamos atentos a cualquier duda.`,
