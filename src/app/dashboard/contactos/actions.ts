@@ -22,6 +22,10 @@ export type CachedContact = {
   note: string | null;
   captador: string | null;
   owner: string | null;
+  /** "holded" for Holded contacts, "lead" for CRM leads */
+  _source: "holded" | "lead";
+  /** Lead ID (only for leads) */
+  _lead_id?: string;
 };
 
 export type TeamMember = { id: string; name: string };
@@ -30,8 +34,9 @@ export async function getAllContactos(): Promise<CachedContact[]> {
   await requireRole("manager");
   const supabase = createServiceClient();
 
+  // 1. Fetch Holded contacts
   const PAGE_SIZE = 1000;
-  let all: CachedContact[] = [];
+  let holdedContacts: CachedContact[] = [];
   let from = 0;
 
   while (true) {
@@ -44,10 +49,60 @@ export async function getAllContactos(): Promise<CachedContact[]> {
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
 
-    all = all.concat(data);
+    holdedContacts = holdedContacts.concat(data.map((c) => ({ ...c, _source: "holded" as const })));
     if (data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
+
+  // 2. Fetch leads that are NOT already linked to a Holded contact
+  // A lead is "linked" when its quote_request has a holded_contact_id
+  const { data: linkedLeadIds } = await supabase
+    .from("quote_requests")
+    .select("lead_id")
+    .not("holded_contact_id", "is", null);
+
+  const linkedIds = new Set((linkedLeadIds || []).map((r) => r.lead_id));
+
+  // Also exclude leads whose email already exists in Holded contacts
+  const holdedEmails = new Set(
+    holdedContacts
+      .filter((c) => c.email)
+      .map((c) => c.email!.toLowerCase()),
+  );
+
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("id, full_name, email, phone, company, owned_by, status")
+    .not("status", "eq", "lost")
+    .order("full_name");
+
+  const leadContacts: CachedContact[] = (leads || [])
+    .filter((l) => !linkedIds.has(l.id))
+    .filter((l) => !l.email || !holdedEmails.has(l.email.toLowerCase()))
+    .map((l) => ({
+      holded_id: `lead-${l.id}`,
+      name: l.full_name,
+      trade_name: l.company,
+      code: null,
+      email: l.email,
+      phone: l.phone,
+      mobile: null,
+      contact_type: "lead",
+      address: null,
+      city: null,
+      postal_code: null,
+      province: null,
+      country: null,
+      note: null,
+      captador: l.owned_by,
+      owner: l.owned_by,
+      _source: "lead" as const,
+      _lead_id: l.id,
+    }));
+
+  // 3. Merge and sort by name
+  const all = [...holdedContacts, ...leadContacts];
+  all.sort((a, b) => a.name.localeCompare(b.name, "es"));
 
   return all;
 }

@@ -446,6 +446,37 @@ export async function updateLeadTag(
   return { success: true };
 }
 
+// ── Update Lead Contact Info ────────────────────────────
+
+export async function updateLeadContactInfo(
+  id: string,
+  fields: {
+    full_name: string;
+    email: string | null;
+    phone: string | null;
+    company: string | null;
+  },
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("leads")
+    .update({
+      full_name: fields.full_name,
+      email: fields.email,
+      phone: fields.phone,
+      company: fields.company,
+    })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
 // ── Update Lead Status ───────────────────────────────────
 
 export async function updateLeadStatus(

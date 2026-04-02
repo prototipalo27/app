@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from "react";
 import { updateContacto, deleteContacto, refreshContactCache, type CachedContact, type TeamMember } from "./actions";
+import { updateLeadContactInfo } from "../crm/actions";
 import { Button } from "@/components/ui/button";
 
 const COLUMNS = [
@@ -135,7 +136,21 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
       return;
     }
 
-    const result = await updateContacto(selected.holded_id, fields);
+    let result: { success: boolean; error?: string };
+
+    if (selected._source === "lead" && selected._lead_id) {
+      // Update lead in CRM
+      result = await updateLeadContactInfo(selected._lead_id, {
+        full_name: form.name?.trim() || selected.name,
+        email: form.email?.trim() || null,
+        phone: form.phone?.trim() || null,
+        company: form.code?.trim() || null, // NIF field maps to company for leads
+      });
+    } else {
+      // Update Holded contact
+      result = await updateContacto(selected.holded_id, fields);
+    }
+
     if (result.success) {
       const updated = { ...selected, ...fields } as CachedContact;
       setSelected(updated);
@@ -199,7 +214,11 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
       <div className="mb-2 flex shrink-0 items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-bold text-foreground">Contactos</h1>
-          <span className="text-xs text-muted-foreground">{contacts.length} en Holded</span>
+          <span className="text-xs text-muted-foreground">
+            {contacts.filter((c) => c._source === "holded").length} Holded
+            {" + "}
+            {contacts.filter((c) => c._source === "lead").length} leads
+          </span>
         </div>
         <Button variant="ghost" size="sm" onClick={handleSync} disabled={syncing} className="text-xs">
           {syncing ? "Sincronizando..." : "Sincronizar"}
@@ -308,6 +327,9 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
                       {c.trade_name && c.trade_name !== c.name && (
                         <span className="ml-1.5 text-[11px] text-muted-foreground">{c.trade_name}</span>
                       )}
+                      {c._source === "lead" && (
+                        <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">lead</span>
+                      )}
                     </td>
                     <td className="truncate px-3 py-1.5 text-muted-foreground" style={{ width: colWidths[1] }}>{c.code || "—"}</td>
                     <td className="truncate px-3 py-1.5 text-muted-foreground" style={{ width: colWidths[2] }}>{c.email || "—"}</td>
@@ -352,11 +374,15 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
                   )}
                 </div>
               </div>
-              {selected.contact_type && (
+              {selected._source === "lead" ? (
+                <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  Lead CRM
+                </span>
+              ) : selected.contact_type ? (
                 <span className="mt-1 inline-block rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                   {selected.contact_type}
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="space-y-2.5 p-4">
               {/* Captador & Owner — always visible, editable inline */}
@@ -433,22 +459,33 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
                     </div>
                   )}
                   <div className="border-t border-input pt-2.5 flex items-center justify-between">
-                    <a
-                      href={`https://app.holded.com/contacts/${selected.holded_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      Ver en Holded &rarr;
-                    </a>
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={saving}
-                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
-                    >
-                      Eliminar
-                    </button>
+                    {selected._source === "lead" && selected._lead_id ? (
+                      <a
+                        href={`/dashboard/crm/${selected._lead_id}`}
+                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Ver en CRM &rarr;
+                      </a>
+                    ) : (
+                      <a
+                        href={`https://app.holded.com/contacts/${selected.holded_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Ver en Holded &rarr;
+                      </a>
+                    )}
+                    {selected._source === "holded" && (
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={saving}
+                        className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        Eliminar
+                      </button>
+                    )}
                   </div>
                 </>
               )}

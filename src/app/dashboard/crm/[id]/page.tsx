@@ -8,6 +8,7 @@ import LeadNav from "./lead-nav";
 import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
+import EditableContactInfo from "./editable-contact-info";
 import ProformaEditor from "./proforma-editor";
 import {
   LEAD_COLUMNS,
@@ -407,27 +408,20 @@ export default async function LeadDetailPage({
               </div>
 
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-card-foreground">{lead.full_name}</h1>
                 {lead.project_type_tag && (
                   <Badge variant="secondary" className={tagClasses(lead.project_type_tag)}>{lead.project_type_tag}</Badge>
                 )}
               </div>
 
-              {lead.company && <p className="mt-1 text-sm text-muted-foreground">{lead.company}</p>}
+              <EditableContactInfo
+                leadId={lead.id}
+                fullName={lead.full_name}
+                email={lead.email}
+                phone={lead.phone}
+                company={lead.company}
+              />
 
               <div className="mt-4 space-y-2">
-                {lead.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline dark:text-blue-400">{lead.email}</a>
-                  </div>
-                )}
-                {lead.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                    <a href={`tel:${lead.phone}`} className="text-foreground hover:underline">{lead.phone}</a>
-                  </div>
-                )}
                 {lead.assigned_to && (
                   <div className="flex items-center gap-2 text-sm">
                     <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
