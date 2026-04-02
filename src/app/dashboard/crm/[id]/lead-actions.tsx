@@ -23,6 +23,7 @@ import {
   updateLeadOwner,
   sendQuoteToClient,
   sendNdaToClient,
+  updateQuoteCcEmails,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import {
@@ -606,6 +607,14 @@ export default function LeadActions({
           return null;
         })()}
 
+        {/* CC Emails — emails adicionales para envíos */}
+        {quoteRequest && (
+          <CcEmailsEditor
+            quoteRequestId={quoteRequest.id}
+            initialEmails={(quoteRequest as any).cc_emails || []}
+          />
+        )}
+
         {/* Proforma & Factura — visible siempre que haya items + contacto Holded */}
         {quoteRequest && Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0 && quoteRequest.holded_contact_id && (
           <div className="space-y-2 border-t pt-3 mt-3">
@@ -1016,6 +1025,96 @@ export default function LeadActions({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── CC Emails Editor ────────────────────────────────────────────
+
+function CcEmailsEditor({
+  quoteRequestId,
+  initialEmails,
+}: {
+  quoteRequestId: string;
+  initialEmails: { email: string; label: string }[];
+}) {
+  const [emails, setEmails] = useState(initialEmails);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  const update = (i: number, field: "email" | "label", value: string) => {
+    setEmails((prev) => prev.map((e, j) => (j === i ? { ...e, [field]: value } : e)));
+    setDirty(true);
+  };
+
+  const add = () => {
+    setEmails((prev) => [...prev, { email: "", label: "" }]);
+    setDirty(true);
+  };
+
+  const remove = (i: number) => {
+    setEmails((prev) => prev.filter((_, j) => j !== i));
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    const clean = emails.filter((e) => e.email.trim());
+    await updateQuoteCcEmails(quoteRequestId, clean);
+    setEmails(clean);
+    setSaving(false);
+    setDirty(false);
+  };
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-medium text-muted-foreground">Emails adicionales (CC)</p>
+        <button
+          type="button"
+          onClick={add}
+          className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+        >
+          + Añadir
+        </button>
+      </div>
+      {emails.length === 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          Compras, facturación u otros dptos. que reciban la documentación.
+        </p>
+      )}
+      {emails.map((entry, i) => (
+        <div key={i} className="mb-1.5 flex items-center gap-1.5">
+          <input
+            type="email"
+            value={entry.email}
+            onChange={(e) => update(i, "email", e.target.value)}
+            placeholder="compras@empresa.com"
+            className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
+          />
+          <input
+            type="text"
+            value={entry.label}
+            onChange={(e) => update(i, "label", e.target.value)}
+            placeholder="Dpto."
+            className="w-20 rounded-md border border-input bg-background px-2 py-1 text-xs"
+          />
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ))}
+      {dirty && (
+        <Button size="sm" onClick={save} disabled={saving} className="mt-1.5 h-7 text-xs">
+          {saving ? "Guardando..." : "Guardar"}
+        </Button>
+      )}
     </div>
   );
 }

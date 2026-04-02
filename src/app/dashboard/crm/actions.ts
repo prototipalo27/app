@@ -1300,6 +1300,8 @@ export async function sendQuoteToClient(
     return { success: false, error: "El presupuesto no tiene líneas" };
   }
 
+  const ccString = await getCcString(qr.id, lead.email);
+
   // Build public URL
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const quoteUrl = `${baseUrl}/quote/${qr.token}`;
@@ -1401,6 +1403,7 @@ export async function sendQuoteToClient(
   try {
     await sendEmailOrSchedule({
       to: lead.email,
+      cc: ccString,
       subject: "Presupuesto — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
@@ -2007,6 +2010,8 @@ export async function sendProformaToClient(
     return { success: false, error: "El presupuesto no tiene líneas" };
   }
 
+  const ccString = await getCcString(qr.id, lead.email);
+
   if (!qr.holded_contact_id) {
     return { success: false, error: "No hay contacto de Holded vinculado" };
   }
@@ -2117,6 +2122,7 @@ export async function sendProformaToClient(
   try {
     await sendEmailOrSchedule({
       to: lead.email,
+      cc: ccString,
       subject: `Proforma${proformaRef} — Prototipalo`,
       text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto — estamos listos para empezar.\n\n${introText}\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nUna vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.\n\nQuedamos atentos a cualquier duda.`,
       html: `
@@ -2200,6 +2206,8 @@ export async function sendInvoiceToClient(
     return { success: false, error: "El presupuesto no tiene líneas" };
   }
 
+  const ccString = await getCcString(qr.id, lead.email);
+
   if (!qr.holded_contact_id) {
     return { success: false, error: "No hay contacto de Holded vinculado" };
   }
@@ -2241,6 +2249,7 @@ export async function sendInvoiceToClient(
   try {
     await sendEmailOrSchedule({
       to: lead.email,
+      cc: ccString,
       subject: "Factura — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe adjuntamos la factura correspondiente a tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la factura correspondiente a tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
@@ -3091,4 +3100,49 @@ export async function markAsPaid(
 
   const result = await onPaymentConfirmed(qr.id);
   return result;
+}
+
+// ── Update CC Emails on Quote Request ─────────────────────
+
+export async function updateQuoteCcEmails(
+  quoteRequestId: string,
+  ccEmails: { email: string; label: string }[],
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({ cc_emails: ccEmails } as any)
+    .eq("id", quoteRequestId);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Get CC email string from a quote request's cc_emails JSONB field.
+ * Excludes the primary lead email to avoid duplicates.
+ * Note: cc_emails column is not yet in generated types, so we query separately.
+ */
+async function getCcString(
+  quoteRequestId: string,
+  leadEmail: string,
+): Promise<string | undefined> {
+  const supabase = await createClient();
+  const { data } = await (supabase as any)
+    .from("quote_requests")
+    .select("cc_emails")
+    .eq("id", quoteRequestId)
+    .single();
+
+  const raw = data?.cc_emails;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const emails = raw
+    .map((e: { email: string }) => e.email?.trim().toLowerCase())
+    .filter((e: string) => e && e !== leadEmail.toLowerCase());
+  return emails.length > 0 ? emails.join(", ") : undefined;
 }
