@@ -183,35 +183,38 @@ export async function populateReportClients(reportId: string, quarter: number, y
   const startDate = new Date(year, startMonth, 1).toISOString();
   const endDate = new Date(year, startMonth + 3, 1).toISOString();
 
-  // Strategy: find leads that transitioned to "won" during this quarter
-  // 1. Try won_at field first
-  // 2. Fall back to lead_activities with status_change to "won"
-  // 3. Last resort: updated_at
+  // Find lead IDs from activity log where status changed to "won" or "paid"
+  const [{ data: wonAct1 }, { data: wonAct2 }, { data: leadsWithWonAt }] = await Promise.all([
+    supabase
+      .from("lead_activities")
+      .select("lead_id")
+      .eq("activity_type", "status_change")
+      .ilike("content", "%a won")
+      .gte("created_at", startDate)
+      .lt("created_at", endDate),
+    supabase
+      .from("lead_activities")
+      .select("lead_id")
+      .eq("activity_type", "status_change")
+      .ilike("content", "%a paid")
+      .gte("created_at", startDate)
+      .lt("created_at", endDate),
+    supabase
+      .from("leads")
+      .select("id")
+      .in("status", ["won", "paid"])
+      .not("won_at", "is", null)
+      .gte("won_at", startDate)
+      .lt("won_at", endDate),
+  ]);
 
-  // Find lead IDs from activity log (most reliable — always recorded)
-  const { data: wonActivities } = await supabase
-    .from("lead_activities")
-    .select("lead_id, created_at")
-    .eq("activity_type", "status_change")
-    .or("metadata->>new_status.eq.won,metadata->>new_status.eq.paid")
-    .gte("created_at", startDate)
-    .lt("created_at", endDate);
+  const allWonIds = [...new Set([
+    ...(wonAct1 || []).map((a) => a.lead_id),
+    ...(wonAct2 || []).map((a) => a.lead_id),
+    ...(leadsWithWonAt || []).map((l) => l.id),
+  ])];
 
-  const wonLeadIds = [...new Set((wonActivities || []).map((a) => a.lead_id))];
-
-  // Also check won_at field (for leads set via updateLeadStatus)
-  const { data: leadsWithWonAt } = await supabase
-    .from("leads")
-    .select("id")
-    .in("status", ["won", "paid"])
-    .not("won_at", "is", null)
-    .gte("won_at", startDate)
-    .lt("won_at", endDate);
-
-  // Merge both sources
-  const allWonIds = [...new Set([...wonLeadIds, ...(leadsWithWonAt || []).map((l) => l.id)])];
-
-  if (!allWonIds.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} a ${endDate.slice(0,10)})` };
+  if (!allWonIds.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} → ${endDate.slice(0,10)})` };
 
   // Fetch full lead data
   const { data: wonLeads } = await supabase
@@ -243,12 +246,21 @@ export async function populateReportClients(reportId: string, quarter: number, y
   const leadEmails = wonLeads.map((l) => l.email).filter((e): e is string => !!e);
   let recurringEmails = new Set<string>();
   if (leadEmails.length > 0) {
-    const { data: prevActivities } = await supabase
-      .from("lead_activities")
-      .select("lead_id")
-      .eq("activity_type", "status_change")
-      .or("metadata->>new_status.eq.won,metadata->>new_status.eq.paid")
-      .lt("created_at", startDate);
+    const [{ data: prev1 }, { data: prev2 }] = await Promise.all([
+      supabase
+        .from("lead_activities")
+        .select("lead_id")
+        .eq("activity_type", "status_change")
+        .ilike("content", "%a won")
+        .lt("created_at", startDate),
+      supabase
+        .from("lead_activities")
+        .select("lead_id")
+        .eq("activity_type", "status_change")
+        .ilike("content", "%a paid")
+        .lt("created_at", startDate),
+    ]);
+    const prevActivities = [...(prev1 || []), ...(prev2 || [])];
 
     if (prevActivities?.length) {
       const prevLeadIds = [...new Set(prevActivities.map((a) => a.lead_id))];
