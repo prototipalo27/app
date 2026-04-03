@@ -1948,6 +1948,46 @@ export async function dismissLead(
   return { success: true };
 }
 
+// ── Bulk Spam Cleanup ────────────────────────────────────
+
+export async function bulkDismissLeads(
+  leadIds: string[],
+): Promise<{ success: boolean; dismissed: number; error?: string }> {
+  await requireRole("manager");
+  if (leadIds.length === 0) return { success: true, dismissed: 0 };
+
+  const supabase = await createClient();
+
+  // Get emails for all leads to block
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("id, email")
+    .in("id", leadIds);
+
+  if (!leads) return { success: false, error: "No se encontraron leads", dismissed: 0 };
+
+  // Block all emails (ignore duplicates)
+  const emails = leads
+    .map((l) => l.email?.toLowerCase().trim())
+    .filter((e): e is string => !!e);
+
+  if (emails.length > 0) {
+    await supabase
+      .from("blocked_emails")
+      .upsert(
+        emails.map((email) => ({ email, reason: "Limpieza spam masiva" })),
+        { onConflict: "email", ignoreDuplicates: true },
+      );
+  }
+
+  // Delete all leads
+  const { error } = await supabase.from("leads").delete().in("id", leadIds);
+  if (error) return { success: false, error: error.message, dismissed: 0 };
+
+  revalidatePath("/dashboard/crm");
+  return { success: true, dismissed: leads.length };
+}
+
 // ── Proforma (create & send) ─────────────────────────────
 
 export interface ProformaLineItem {

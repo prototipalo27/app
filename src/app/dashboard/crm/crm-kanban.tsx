@@ -7,7 +7,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { SwipeableLeadCard } from "./swipeable-lead-card";
-import { updateLeadStatus, dismissLead, getLeadEmails } from "./actions";
+import { updateLeadStatus, dismissLead, getLeadEmails, bulkDismissLeads } from "./actions";
 import { ContactModal } from "./contact-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -145,6 +145,9 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   }, [refreshing, pullDistance, router]);
 
   const [search, setSearch] = useState("");
+  const [spamMode, setSpamMode] = useState(false);
+  const [spamSelected, setSpamSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [filterManager, setFilterManager] = useState(() => localStorage.getItem("crm_filterManager") || "all");
   const [filterOwner, setFilterOwner] = useState(() => {
@@ -531,24 +534,97 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
             <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
               {newLeads.length}
             </span>
+            <div className="ml-auto flex items-center gap-2">
+              {spamMode && spamSelected.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={bulkDeleting}
+                  onClick={async () => {
+                    if (!confirm(`Bloquear y eliminar ${spamSelected.size} lead${spamSelected.size > 1 ? "s" : ""}?`)) return;
+                    setBulkDeleting(true);
+                    const result = await bulkDismissLeads([...spamSelected]);
+                    if (result.success) {
+                      setLeads((prev) => prev.filter((l) => !spamSelected.has(l.id)));
+                      setSpamSelected(new Set());
+                      setSpamMode(false);
+                    }
+                    setBulkDeleting(false);
+                  }}
+                >
+                  {bulkDeleting ? "Eliminando..." : `Eliminar ${spamSelected.size} seleccionados`}
+                </Button>
+              )}
+              {spamMode && newLeads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (spamSelected.size === newLeads.length) {
+                      setSpamSelected(new Set());
+                    } else {
+                      setSpamSelected(new Set(newLeads.map((l) => l.id)));
+                    }
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {spamSelected.size === newLeads.length ? "Deseleccionar todo" : "Seleccionar todo"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setSpamMode(!spamMode); setSpamSelected(new Set()); }}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  spamMode
+                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {spamMode ? "Salir limpieza" : "Limpiar spam"}
+              </button>
+            </div>
           </div>
           {/* Mobile: swipeable card layout */}
           <div className="flex flex-col gap-2 px-2 pb-2 md:hidden">
             {newLeads.map((lead) => (
-              <SwipeableLeadCard
-                key={lead.id}
-                lead={lead}
-                onDismiss={handleDismiss}
-                onContact={(l) => {
-                  if (l.email) {
-                    handleContact(l);
-                  } else {
-                    router.push(`/dashboard/crm/${l.id}`);
-                  }
-                }}
-                dismissingId={dismissingId}
-                loadingContactId={loadingContactId}
-              />
+              spamMode ? (
+                <div
+                  key={lead.id}
+                  className={`flex items-center gap-2 rounded-lg border p-3 ${spamSelected.has(lead.id) ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/10" : "border-border"}`}
+                  onClick={() => setSpamSelected((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(lead.id)) next.delete(lead.id);
+                    else next.add(lead.id);
+                    return next;
+                  })}
+                >
+                  <input
+                    type="checkbox"
+                    checked={spamSelected.has(lead.id)}
+                    onChange={() => {}}
+                    className="h-4 w-4 shrink-0 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{lead.full_name}</p>
+                    {lead.company && <p className="truncate text-xs text-muted-foreground">{lead.company}</p>}
+                    {lead.email && <p className="truncate text-xs text-muted-foreground">{lead.email}</p>}
+                  </div>
+                </div>
+              ) : (
+                <SwipeableLeadCard
+                  key={lead.id}
+                  lead={lead}
+                  onDismiss={handleDismiss}
+                  onContact={(l) => {
+                    if (l.email) {
+                      handleContact(l);
+                    } else {
+                      router.push(`/dashboard/crm/${l.id}`);
+                    }
+                  }}
+                  dismissingId={dismissingId}
+                  loadingContactId={loadingContactId}
+                />
+              )
             ))}
           </div>
 
@@ -557,9 +633,31 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
             {newLeads.map((lead) => (
               <div
                 key={lead.id}
-                className="group flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
-                onClick={() => router.push(`/dashboard/crm/${lead.id}`)}
+                className={`group flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/50 ${spamMode && spamSelected.has(lead.id) ? "bg-red-50 dark:bg-red-900/10" : ""}`}
+                onClick={() => {
+                  if (spamMode) {
+                    setSpamSelected((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(lead.id)) next.delete(lead.id);
+                      else next.add(lead.id);
+                      return next;
+                    });
+                  } else {
+                    router.push(`/dashboard/crm/${lead.id}`);
+                  }
+                }}
               >
+                {/* Spam checkbox */}
+                {spamMode && (
+                  <input
+                    type="checkbox"
+                    checked={spamSelected.has(lead.id)}
+                    onChange={() => {}}
+                    className="h-4 w-4 shrink-0 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                )}
+
                 {/* Owner badge */}
                 <div className="shrink-0 w-8 text-center">
                   {lead.assignee_email ? (
