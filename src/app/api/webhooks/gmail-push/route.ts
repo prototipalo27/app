@@ -4,6 +4,7 @@ import { getGmailClient, parseMessage } from "@/lib/gmail/client";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
+import { checkSpam } from "@/lib/email-spam-filter";
 
 const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
 const ACCEPTED_INBOXES = ["info@prototipalo.com"];
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
         if (fromDomain === "prototipalo.com") continue;
 
         // Run through spam filter
-        if (isSpam(parsed)) continue;
+        if (checkSpam(parsed).spam) continue;
 
         // Process the email as a lead (pass Gmail threadId for reliable threading)
         await processEmailAsLead(supabase, parsed, msg.data.threadId || undefined);
@@ -141,144 +142,6 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-// ── SPAM FILTER ─────────────────────────────────────────────────
-
-function isSpam(email: { from: string; subject: string; body: string }): boolean {
-  const fromDomain = email.from.split("@")[1] || "";
-  const fromLocal = email.from.split("@")[0] || "";
-  const subjectLower = email.subject.toLowerCase();
-  const bodyLower = email.body.toLowerCase();
-
-  // Automated local parts
-  const spamLocalParts = [
-    "noreply", "no-reply", "no_reply", "donotreply", "do-not-reply",
-    "newsletter", "newsletters", "news", "mailer", "mailer-daemon",
-    "notifications", "notification", "alert", "alerts",
-    "marketing", "promo", "promotions", "updates",
-    "bounce", "postmaster", "daemon", "comunicacion",
-    "comunicaciones", "digest", "suscripciones", "subscriptions",
-    "support", "soporte", "billing", "facturacion", "invoice",
-    "receipts", "receipt", "account", "accounts", "team",
-    "automailer", "auto", "system", "sistema", "admin",
-    "security", "seguridad", "verify", "confirm", "welcome",
-    "bienvenido", "feedback", "survey", "encuesta",
-    "orden", "order", "orders", "pedido", "pedidos",
-    "envio", "envios", "shipping", "delivery", "tracking",
-  ];
-  if (spamLocalParts.some((p) => fromLocal === p || fromLocal.startsWith(p + "+"))) {
-    return true;
-  }
-
-  // Marketing subdomains
-  const marketingSubdomainPrefixes = [
-    "message.", "messages.", "mail.", "email.", "e-mail.",
-    "news.", "newsletter.", "marketing.", "promo.", "campaign.",
-    "campaigns.", "bulk.", "send.", "sender.", "mailing.",
-    "notify.", "notification.", "bounce.", "track.", "click.",
-    "links.", "go.", "t.", "em.", "em-", "post.",
-    "updates.", "alerts.", "info.", "service.", "noreply.",
-    "auto.", "system.", "mailer.", "transactional.",
-  ];
-  if (marketingSubdomainPrefixes.some((p) => fromDomain.startsWith(p))) {
-    return true;
-  }
-
-  // Known service/SaaS domains
-  const spamDomains = [
-    "mailchimp.com", "mandrillapp.com", "sendgrid.net", "sendgrid.com",
-    "sendinblue.com", "brevo.com", "mailgun.org", "mailgun.com",
-    "constantcontact.com", "hubspot.com", "hubspotmail.com",
-    "amazonses.com", "mailjet.com", "campaignmonitor.com",
-    "getresponse.com", "activecampaign.com", "convertkit.com",
-    "klaviyo.com", "drip.com", "mailerlite.com", "benchmark.email",
-    "exacttarget.com", "salesforce.com", "pardot.com",
-    "createsend.com", "cmail19.com", "cmail20.com",
-    "outreach.io", "salesloft.com",
-    "google.com", "googlemail.com", "google.es",
-    "linkedin.com", "linkedinmail.com",
-    "facebookmail.com", "facebook.com", "meta.com",
-    "twitter.com", "x.com", "instagram.com", "tiktok.com", "pinterest.com",
-    "microsoft.com", "microsoftonline.com", "office365.com",
-    "office.com", "outlook.com", "teams.microsoft.com",
-    "apple.com", "icloud.com",
-    "github.com", "gitlab.com", "bitbucket.org", "atlassian.com",
-    "jira.com", "confluence.com",
-    "notion.so", "slack.com", "slackbot.com",
-    "figma.com", "canva.com",
-    "vercel.com", "netlify.com", "heroku.com", "render.com",
-    "supabase.io", "supabase.com",
-    "stripe.com", "paypal.com", "paypal.es",
-    "intercom.io", "intercom.com", "zendesk.com", "freshdesk.com",
-    "airtable.com", "monday.com", "asana.com",
-    "trello.com", "clickup.com",
-    "zoom.us", "zoom.com", "calendly.com", "typeform.com",
-    "docusign.com", "docusign.net",
-    "dropbox.com", "box.com",
-    "bbva.com", "bbva.es", "santander.com", "santander.es",
-    "caixabank.com", "caixabank.es", "bankinter.com",
-    "ing.es", "ing.com", "openbank.es",
-    "wise.com", "revolut.com", "n26.com",
-    "dhl.com", "fedex.com", "ups.com", "usps.com",
-    "correos.es", "correos.com",
-    "seur.com", "seur.es", "mrw.es", "nacex.es", "gls-spain.es",
-    "amazon.com", "amazon.es",
-    "godaddy.com", "namecheap.com", "ovh.com", "ovh.es",
-    "ionos.com", "ionos.es", "arsys.es", "dinahosting.com",
-    "cloudflare.com",
-    "agenciatributaria.es", "seg-social.es", "hacienda.gob.es", "boe.es",
-    "uber.com", "cabify.com", "glovo.com",
-    "spotify.com", "netflix.com",
-    "holded.com",
-  ];
-  if (spamDomains.some((d) => fromDomain === d || fromDomain.endsWith("." + d))) {
-    return true;
-  }
-
-  // Subject keywords
-  const spamSubjectKeywords = [
-    "unsubscribe", "darse de baja", "anular suscripci",
-    "webinar", "newsletter", "invitación webinar",
-    "has been added to", "te has suscrito",
-    "notificación de", "notification from", "alerta de",
-    "recordatorio:", "reminder:",
-    "your receipt", "tu recibo", "your invoice", "tu factura",
-    "payment received", "pago recibido",
-    "password reset", "restablecer contraseña", "cambiar contraseña",
-    "verify your email", "verifica tu email", "confirma tu email",
-    "confirm your account", "confirma tu cuenta",
-    "welcome to", "bienvenido a",
-    "your order", "tu pedido", "tu envío", "your shipment",
-    "out of office", "fuera de la oficina", "autoreply", "auto-reply",
-    "respuesta automática",
-    "oferta especial", "special offer", "descuento exclusivo",
-    "última oportunidad", "last chance", "act now",
-    "free trial", "prueba gratis", "prueba gratuita",
-    "black friday", "cyber monday",
-    "suspicious sign-in", "inicio de sesión sospechoso",
-    "new sign-in", "nuevo inicio de sesión",
-    "security alert", "alerta de seguridad",
-  ];
-  if (spamSubjectKeywords.some((kw) => subjectLower.includes(kw))) {
-    return true;
-  }
-
-  // Body spam indicators (need 2+ matches)
-  const spamBodyIndicators = [
-    "unsubscribe", "darse de baja", "click here to unsubscribe",
-    "email preferences", "preferencias de email",
-    "manage your subscription", "gestionar suscripción",
-    "you are receiving this email because",
-    "recibes este email porque", "recibes este correo porque",
-    "this is an automated message", "este es un mensaje automático",
-    "do not reply to this email", "no respondas a este correo",
-    "list-unsubscribe",
-  ];
-  const bodyHits = spamBodyIndicators.filter((ind) => bodyLower.includes(ind)).length;
-  if (bodyHits >= 2) return true;
-
-  return false;
 }
 
 // ── LEAD PROCESSING ─────────────────────────────────────────────
