@@ -189,6 +189,27 @@ export async function submitBillingData(
     })
     .eq("id", qr.id);
 
+  // 5b. Move lead to "won" (cliente ha aceptado el presupuesto)
+  const { data: currentLead } = await supabase
+    .from("leads")
+    .select("status")
+    .eq("id", qr.lead_id)
+    .single();
+
+  if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
+    await supabase
+      .from("leads")
+      .update({ status: "won" })
+      .eq("id", qr.lead_id);
+
+    await supabase.from("lead_activities").insert({
+      lead_id: qr.lead_id,
+      activity_type: "status_change",
+      content: `Estado cambiado de ${currentLead.status} a won (cliente envió datos de facturación)`,
+      metadata: { old_status: currentLead.status, new_status: "won", auto: true },
+    });
+  }
+
   // 6. Create Stripe Checkout session for payment
   let stripeCheckoutUrl: string | null = null;
   try {
