@@ -183,43 +183,77 @@ export async function populateReportClients(reportId: string, quarter: number, y
   const startDate = new Date(year, startMonth, 1).toISOString();
   const endDate = new Date(year, startMonth + 3, 1).toISOString();
 
-  // Get projects
+  // Get leads that were WON in this quarter
+  // Use won_at if available, fall back to updated_at for older leads
+  const { data: leadsWithWonAt } = await supabase
+    .from("leads")
+    .select("id, full_name, email, source, won_at, updated_at")
+    .in("status", ["won", "paid"])
+    .not("won_at", "is", null)
+    .gte("won_at", startDate)
+    .lt("won_at", endDate);
+
+  const { data: leadsWithoutWonAt } = await supabase
+    .from("leads")
+    .select("id, full_name, email, source, won_at, updated_at")
+    .in("status", ["won", "paid"])
+    .is("won_at", null)
+    .gte("updated_at", startDate)
+    .lt("updated_at", endDate);
+
+  const wonLeads = [...(leadsWithWonAt || []), ...(leadsWithoutWonAt || [])];
+
+  if (!wonLeads?.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} a ${endDate.slice(0,10)})` };
+
+  // Get projects linked to these leads
+  const leadIds = wonLeads.map((l) => l.id);
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, client_name, client_email, lead_id, price, created_at")
-    .gte("created_at", startDate)
-    .lt("created_at", endDate)
-    .order("created_at");
+    .select("id, name, client_name, client_email, lead_id, price")
+    .in("lead_id", leadIds);
 
-  if (!projects?.length) return { success: true, error: null };
-
-  // Lead sources
-  const leadIds = projects.map((p) => p.lead_id).filter((id): id is string => !!id);
-  let leadSourceMap: Record<string, string> = {};
-  if (leadIds.length > 0) {
-    const { data: leads } = await supabase.from("leads").select("id, source").in("id", leadIds);
-    if (leads) leadSourceMap = Object.fromEntries(leads.map((l) => [l.id, l.source]));
+  // Build lead→source and lead→projects maps
+  const leadSourceMap: Record<string, string> = {};
+  const leadProjectsMap: Record<string, typeof projects> = {};
+  for (const l of wonLeads) {
+    leadSourceMap[l.id] = l.source || "directo";
+    leadProjectsMap[l.id] = [];
+  }
+  for (const p of projects || []) {
+    if (p.lead_id) leadProjectsMap[p.lead_id]?.push(p);
   }
 
-  // Recurring check
-  const clientEmails = projects.map((p) => p.client_email).filter((e): e is string => !!e);
+  // Recurring check: leads that were won BEFORE this quarter
+  const leadEmails = wonLeads.map((l) => l.email).filter((e): e is string => !!e);
   let recurringEmails = new Set<string>();
-  if (clientEmails.length > 0) {
-    const { data: prev } = await supabase
-      .from("projects")
-      .select("client_email")
-      .in("client_email", clientEmails)
-      .lt("created_at", startDate);
-    if (prev) recurringEmails = new Set(prev.map((p) => p.client_email!).filter(Boolean));
+  if (leadEmails.length > 0) {
+    // Check with won_at
+    const { data: prevWithWonAt } = await supabase
+      .from("leads")
+      .select("email")
+      .in("status", ["won", "paid"])
+      .in("email", leadEmails)
+      .not("won_at", "is", null)
+      .lt("won_at", startDate);
+    // Check fallback with updated_at
+    const { data: prevWithoutWonAt } = await supabase
+      .from("leads")
+      .select("email")
+      .in("status", ["won", "paid"])
+      .in("email", leadEmails)
+      .is("won_at", null)
+      .lt("updated_at", startDate);
+    const allPrev = [...(prevWithWonAt || []), ...(prevWithoutWonAt || [])];
+    recurringEmails = new Set(allPrev.map((l) => l.email!).filter(Boolean));
   }
 
-  // Lifetime value per client email
+  // Lifetime value: sum of price for ALL projects per client email
   const lifetimeMap: Record<string, number> = {};
-  if (clientEmails.length > 0) {
+  if (leadEmails.length > 0) {
     const { data: allProjects } = await supabase
       .from("projects")
       .select("client_email, price")
-      .in("client_email", clientEmails);
+      .in("client_email", leadEmails);
     if (allProjects) {
       for (const p of allProjects) {
         if (p.client_email) {
@@ -229,7 +263,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
     }
   }
 
-  // Group by client
+  // Group by lead (each won lead = one client row)
   const clientMap = new Map<string, {
     client_name: string;
     client_email: string | null;
@@ -240,28 +274,27 @@ export async function populateReportClients(reportId: string, quarter: number, y
     projects: ClientProject[];
   }>();
 
-  for (const p of projects) {
-    const key = p.client_email || p.client_name || "Desconocido";
-    const source = p.lead_id ? leadSourceMap[p.lead_id] || "directo" : "directo";
-    const existing = clientMap.get(key);
-    const projectEntry: ClientProject = {
-      name: p.name,
-      description: "",
-      value: p.price || 0,
-    };
+  for (const lead of wonLeads) {
+    const leadProjects = leadProjectsMap[lead.id] || [];
+    const quarterValue = leadProjects.reduce((s, p) => s + (p.price || 0), 0);
+    const clientProjects: ClientProject[] = leadProjects.length > 0
+      ? leadProjects.map((p) => ({ name: p.name, description: "", value: p.price || 0 }))
+      : [{ name: "Sin proyecto asociado", description: "", value: 0 }];
 
+    const key = lead.email || lead.id;
+    const existing = clientMap.get(key);
     if (existing) {
-      existing.quarter_value += p.price || 0;
-      existing.projects.push(projectEntry);
+      existing.quarter_value += quarterValue;
+      existing.projects.push(...clientProjects);
     } else {
       clientMap.set(key, {
-        client_name: p.client_name || "Sin nombre",
-        client_email: p.client_email,
-        source,
-        is_recurring: p.client_email ? recurringEmails.has(p.client_email) : false,
-        quarter_value: p.price || 0,
-        lifetime_value: p.client_email ? lifetimeMap[p.client_email] || 0 : p.price || 0,
-        projects: [projectEntry],
+        client_name: lead.full_name || "Sin nombre",
+        client_email: lead.email,
+        source: lead.source || "directo",
+        is_recurring: lead.email ? recurringEmails.has(lead.email) : false,
+        quarter_value: quarterValue,
+        lifetime_value: lead.email ? lifetimeMap[lead.email] || 0 : quarterValue,
+        projects: clientProjects,
       });
     }
   }

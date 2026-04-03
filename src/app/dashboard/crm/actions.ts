@@ -499,6 +499,9 @@ export async function updateLeadStatus(
   const oldStatus = lead.status;
 
   const updates: Record<string, unknown> = { status: newStatus };
+  if (newStatus === "won") {
+    updates.won_at = new Date().toISOString();
+  }
   if (newStatus === "lost" && lostReason) {
     updates.lost_reason = lostReason;
   }

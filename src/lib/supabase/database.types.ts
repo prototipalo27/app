@@ -917,6 +917,7 @@ export type Database = {
           status: string
           updated_at: string
           webflow_submission_id: string | null
+          won_at: string | null
         }
         Insert: {
           ai_draft?: string | null
@@ -948,6 +949,7 @@ export type Database = {
           status?: string
           updated_at?: string
           webflow_submission_id?: string | null
+          won_at?: string | null
         }
         Update: {
           ai_draft?: string | null
@@ -979,6 +981,7 @@ export type Database = {
           status?: string
           updated_at?: string
           webflow_submission_id?: string | null
+          won_at?: string | null
         }
         Relationships: [
           {
