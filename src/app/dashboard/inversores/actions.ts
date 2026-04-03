@@ -183,27 +183,43 @@ export async function populateReportClients(reportId: string, quarter: number, y
   const startDate = new Date(year, startMonth, 1).toISOString();
   const endDate = new Date(year, startMonth + 3, 1).toISOString();
 
-  // Get leads that were WON in this quarter
-  // Use won_at if available, fall back to updated_at for older leads
+  // Strategy: find leads that transitioned to "won" during this quarter
+  // 1. Try won_at field first
+  // 2. Fall back to lead_activities with status_change to "won"
+  // 3. Last resort: updated_at
+
+  // Find lead IDs from activity log (most reliable — always recorded)
+  const { data: wonActivities } = await supabase
+    .from("lead_activities")
+    .select("lead_id, created_at")
+    .eq("activity_type", "status_change")
+    .or("metadata->>new_status.eq.won,metadata->>new_status.eq.paid")
+    .gte("created_at", startDate)
+    .lt("created_at", endDate);
+
+  const wonLeadIds = [...new Set((wonActivities || []).map((a) => a.lead_id))];
+
+  // Also check won_at field (for leads set via updateLeadStatus)
   const { data: leadsWithWonAt } = await supabase
     .from("leads")
-    .select("id, full_name, email, source, won_at, updated_at")
+    .select("id")
     .in("status", ["won", "paid"])
     .not("won_at", "is", null)
     .gte("won_at", startDate)
     .lt("won_at", endDate);
 
-  const { data: leadsWithoutWonAt } = await supabase
+  // Merge both sources
+  const allWonIds = [...new Set([...wonLeadIds, ...(leadsWithWonAt || []).map((l) => l.id)])];
+
+  if (!allWonIds.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} a ${endDate.slice(0,10)})` };
+
+  // Fetch full lead data
+  const { data: wonLeads } = await supabase
     .from("leads")
     .select("id, full_name, email, source, won_at, updated_at")
-    .in("status", ["won", "paid"])
-    .is("won_at", null)
-    .gte("updated_at", startDate)
-    .lt("updated_at", endDate);
+    .in("id", allWonIds);
 
-  const wonLeads = [...(leadsWithWonAt || []), ...(leadsWithoutWonAt || [])];
-
-  if (!wonLeads?.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} a ${endDate.slice(0,10)})` };
+  if (!wonLeads?.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year}` };
 
   // Get projects linked to these leads
   const leadIds = wonLeads.map((l) => l.id);
@@ -223,28 +239,26 @@ export async function populateReportClients(reportId: string, quarter: number, y
     if (p.lead_id) leadProjectsMap[p.lead_id]?.push(p);
   }
 
-  // Recurring check: leads that were won BEFORE this quarter
+  // Recurring check: same email had a won/paid activity BEFORE this quarter
   const leadEmails = wonLeads.map((l) => l.email).filter((e): e is string => !!e);
   let recurringEmails = new Set<string>();
   if (leadEmails.length > 0) {
-    // Check with won_at
-    const { data: prevWithWonAt } = await supabase
-      .from("leads")
-      .select("email")
-      .in("status", ["won", "paid"])
-      .in("email", leadEmails)
-      .not("won_at", "is", null)
-      .lt("won_at", startDate);
-    // Check fallback with updated_at
-    const { data: prevWithoutWonAt } = await supabase
-      .from("leads")
-      .select("email")
-      .in("status", ["won", "paid"])
-      .in("email", leadEmails)
-      .is("won_at", null)
-      .lt("updated_at", startDate);
-    const allPrev = [...(prevWithWonAt || []), ...(prevWithoutWonAt || [])];
-    recurringEmails = new Set(allPrev.map((l) => l.email!).filter(Boolean));
+    const { data: prevActivities } = await supabase
+      .from("lead_activities")
+      .select("lead_id")
+      .eq("activity_type", "status_change")
+      .or("metadata->>new_status.eq.won,metadata->>new_status.eq.paid")
+      .lt("created_at", startDate);
+
+    if (prevActivities?.length) {
+      const prevLeadIds = [...new Set(prevActivities.map((a) => a.lead_id))];
+      const { data: prevLeads } = await supabase
+        .from("leads")
+        .select("email")
+        .in("id", prevLeadIds)
+        .in("email", leadEmails);
+      if (prevLeads) recurringEmails = new Set(prevLeads.map((l) => l.email!).filter(Boolean));
+    }
   }
 
   // Lifetime value: sum of price for ALL projects per client email
