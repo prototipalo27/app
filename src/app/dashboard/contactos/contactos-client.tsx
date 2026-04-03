@@ -190,7 +190,7 @@ export default function ContactosClient({ initialContacts, teamMembers }: { init
 
   async function handleDelete() {
     if (!selected) return;
-    if (!confirm(`Ocultar "${selected.name}"? Se eliminará de la lista y no volverá a aparecer en futuros syncs. Seguirá existiendo en Holded.`)) return;
+    if (!confirm(`Eliminar "${selected.name}"? Se borrará de Holded y de la lista. Esta acción no se puede deshacer.`)) return;
     setSaving(true);
     const result = await deleteContacto(selected.holded_id, selected.name);
     if (result.success) {

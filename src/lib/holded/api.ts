@@ -50,6 +50,16 @@ export async function getContact(id: string): Promise<HoldedContact> {
   return (await res.json()) as HoldedContact;
 }
 
+/** Delete a contact by ID */
+export async function deleteHoldedContact(id: string): Promise<boolean> {
+  const res = await fetch(`${HOLDED_API_BASE}/contacts/${id}`, {
+    method: "DELETE",
+    headers: { key: getApiKey() },
+  });
+
+  return res.ok;
+}
+
 // ── Documents ──────────────────────────────────────────────
 
 /** List documents by type with optional filters (handles pagination) */

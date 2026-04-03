@@ -190,6 +190,12 @@ export async function deleteContacto(
   try {
     const supabase = createServiceClient();
 
+    // Delete from Holded
+    const { deleteHoldedContact } = await import("@/lib/holded/api");
+    await deleteHoldedContact(holdedId).catch((err) => {
+      console.error("[deleteContacto] Holded delete failed:", err);
+    });
+
     // Add to exclusion list so it doesn't reappear on next sync
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
