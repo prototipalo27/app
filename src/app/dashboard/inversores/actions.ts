@@ -301,6 +301,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
   }
 
   // Group by lead (each won lead = one client row)
+  // Track seen project IDs to avoid duplicates when multiple leads share projects
   const clientMap = new Map<string, {
     client_name: string;
     client_email: string | null;
@@ -309,17 +310,25 @@ export async function populateReportClients(reportId: string, quarter: number, y
     quarter_value: number;
     lifetime_value: number;
     projects: ClientProject[];
+    seenProjectIds: Set<string>;
   }>();
 
   for (const lead of wonLeads) {
     const leadProjects = leadProjectsMap[lead.id] || [];
-    const quarterValue = leadProjects.reduce((s, p) => s + (p.price || 0), 0);
-    const clientProjects: ClientProject[] = leadProjects.length > 0
-      ? leadProjects.map((p) => ({ name: p.name, description: "", value: p.price || 0 }))
-      : [{ name: "Sin proyecto asociado", description: "", value: 0 }];
 
     const key = lead.email || lead.id;
     const existing = clientMap.get(key);
+    const seenIds = existing?.seenProjectIds || new Set<string>();
+
+    // Filter out already-seen projects
+    const newProjects = leadProjects.filter((p) => !seenIds.has(p.id));
+    for (const p of newProjects) seenIds.add(p.id);
+
+    const quarterValue = newProjects.reduce((s, p) => s + (p.price || 0), 0);
+    const clientProjects: ClientProject[] = newProjects.length > 0
+      ? newProjects.map((p) => ({ name: p.name, description: "", value: p.price || 0 }))
+      : existing ? [] : [{ name: "Sin proyecto asociado", description: "", value: 0 }];
+
     if (existing) {
       existing.quarter_value += quarterValue;
       existing.projects.push(...clientProjects);
@@ -327,6 +336,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
       clientMap.set(key, {
         client_name: lead.full_name || "Sin nombre",
         client_email: lead.email,
+        seenProjectIds: seenIds,
         source: lead.source || "directo",
         is_recurring: lead.email ? recurringEmails.has(lead.email) : false,
         quarter_value: quarterValue,
