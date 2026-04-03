@@ -183,8 +183,9 @@ export async function populateReportClients(reportId: string, quarter: number, y
   const startDate = new Date(year, startMonth, 1).toISOString();
   const endDate = new Date(year, startMonth + 3, 1).toISOString();
 
-  // Find lead IDs from activity log where status changed to "won" or "paid"
-  const [{ data: wonAct1 }, { data: wonAct2 }, { data: leadsWithWonAt }] = await Promise.all([
+  // Find won/paid leads using multiple strategies in parallel
+  const [{ data: wonAct1 }, { data: wonAct2 }, { data: leadsWonAt }, { data: leadsUpdatedAt }] = await Promise.all([
+    // 1. Activity log: status changed to "won"
     supabase
       .from("lead_activities")
       .select("lead_id")
@@ -192,6 +193,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
       .ilike("content", "%a won")
       .gte("created_at", startDate)
       .lt("created_at", endDate),
+    // 2. Activity log: status changed to "paid"
     supabase
       .from("lead_activities")
       .select("lead_id")
@@ -199,6 +201,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
       .ilike("content", "%a paid")
       .gte("created_at", startDate)
       .lt("created_at", endDate),
+    // 3. won_at field
     supabase
       .from("leads")
       .select("id")
@@ -206,12 +209,20 @@ export async function populateReportClients(reportId: string, quarter: number, y
       .not("won_at", "is", null)
       .gte("won_at", startDate)
       .lt("won_at", endDate),
+    // 4. Fallback: updated_at for won/paid leads
+    supabase
+      .from("leads")
+      .select("id")
+      .in("status", ["won", "paid"])
+      .gte("updated_at", startDate)
+      .lt("updated_at", endDate),
   ]);
 
   const allWonIds = [...new Set([
     ...(wonAct1 || []).map((a) => a.lead_id),
     ...(wonAct2 || []).map((a) => a.lead_id),
-    ...(leadsWithWonAt || []).map((l) => l.id),
+    ...(leadsWonAt || []).map((l) => l.id),
+    ...(leadsUpdatedAt || []).map((l) => l.id),
   ])];
 
   if (!allWonIds.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} → ${endDate.slice(0,10)})` };
