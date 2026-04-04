@@ -514,6 +514,27 @@ function TextSection({ label, content }: { label: string; content: string }) {
   );
 }
 
+function SortHeader({ label, sortKey: sk, currentKey, asc, onSort, className }: {
+  label: string;
+  sortKey: "name" | "source" | "quarter" | "lifetime";
+  currentKey: string;
+  asc: boolean;
+  onSort: (key: "name" | "source" | "quarter" | "lifetime") => void;
+  className?: string;
+}) {
+  const active = currentKey === sk;
+  return (
+    <button onClick={() => onSort(sk)} className={`flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-300 ${className ?? ""}`}>
+      {label}
+      {active && (
+        <svg className={`h-3 w-3 transition-transform ${asc ? "" : "rotate-180"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   webflow: "Web", email: "Email", whatsapp: "WhatsApp", phone: "Teléfono",
   referral: "Referido", instagram: "Instagram", linkedin: "LinkedIn",
@@ -527,6 +548,13 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
   const [shown, setShown] = useState(false);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [sortKey, setSortKey] = useState<"name" | "source" | "quarter" | "lifetime">("quarter");
+  const [sortAsc, setSortAsc] = useState(false);
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(key === "name"); }
+  }
 
   async function loadClients() {
     if (clients) { setShown(!shown); return; }
@@ -569,6 +597,19 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
     );
     startTransition(async () => {
       await updateReportClient(id, updates);
+    });
+  }
+
+  function sortedClients(list: ReportClient[]) {
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "name": cmp = a.client_name.localeCompare(b.client_name); break;
+        case "source": cmp = (a.source || "").localeCompare(b.source || ""); break;
+        case "quarter": cmp = Number(a.quarter_value) - Number(b.quarter_value); break;
+        case "lifetime": cmp = Number(a.lifetime_value) - Number(b.lifetime_value); break;
+      }
+      return sortAsc ? cmp : -cmp;
     });
   }
 
@@ -623,8 +664,22 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
             </button>
           </div>
 
+          {/* Client table header */}
+          {clients.length > 0 && (
+            <div className="flex items-center gap-3 rounded-lg bg-zinc-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              <div className="w-4 shrink-0" />
+              <SortHeader label="Cliente" sortKey="name" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="min-w-0 flex-1" />
+              <SortHeader label="Canal" sortKey="source" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-center" />
+              <div className="w-20 text-center">Tipo</div>
+              <SortHeader label="Trimestre" sortKey="quarter" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
+              <SortHeader label="Lifetime" sortKey="lifetime" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
+              <div className="w-14 text-center">Proy.</div>
+              <div className="w-4 shrink-0" />
+            </div>
+          )}
+
           {/* Client list */}
-          {clients.map((client) => {
+          {sortedClients(clients).map((client) => {
             const projects = (Array.isArray(client.projects) ? client.projects : []) as ClientProject[];
             const isExpanded = expandedClient === client.id;
 
@@ -674,19 +729,17 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
                   </button>
 
                   {/* Quarter value */}
-                  <div className="text-right">
-                    <p className="text-[10px] text-zinc-400">Trimestre</p>
+                  <div className="w-24 text-right">
                     <input
                       type="number" step="0.01"
-                      className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
+                      className="w-full bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
                       defaultValue={Number(client.quarter_value)}
                       onBlur={(e) => handleUpdateClient(client.id, { quarter_value: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
 
                   {/* Lifetime value */}
-                  <div className="text-right">
-                    <p className="text-[10px] text-zinc-400">Lifetime</p>
+                  <div className="w-24 text-right">
                     <input
                       type="number" step="0.01"
                       className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
