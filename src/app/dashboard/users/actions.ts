@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import type { UserRole } from "@/lib/rbac";
 
 const PROTECTED_EMAIL = "manu@prototipalo.com";
+const PROTECTED_EMAILS = ["manu@prototipalo.com"];
 
 export async function updateUserRole(userId: string, role: UserRole) {
   const profile = await requireRole("super_admin");
@@ -91,4 +92,59 @@ export async function inviteUser(
 
   revalidatePath("/dashboard/users");
   return { message: `Invitacion enviada a ${email}` };
+}
+
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("super_admin");
+
+  if (userId === profile.id) {
+    return { success: false, error: "No puedes eliminarte a ti mismo" };
+  }
+
+  const supabase = await createClient();
+
+  // Check protected
+  const { data: target } = await supabase
+    .from("user_profiles")
+    .select("email")
+    .eq("id", userId)
+    .single();
+
+  if (!target) return { success: false, error: "Usuario no encontrado" };
+  if (PROTECTED_EMAILS.includes(target.email)) {
+    return { success: false, error: "No se puede eliminar a este usuario" };
+  }
+
+  // Delete from Supabase Auth (cascades to profile via trigger/FK)
+  const serviceClient = createServiceClient();
+  const { error } = await serviceClient.auth.admin.deleteUser(userId);
+
+  if (error) return { success: false, error: error.message };
+
+  // Also delete profile row if it wasn't cascaded
+  await supabase.from("user_profiles").delete().eq("id", userId);
+
+  revalidatePath("/dashboard/users");
+  return { success: true };
+}
+
+export async function updateContractEndDate(
+  userId: string,
+  contractEndDate: string | null,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("super_admin");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("user_profiles")
+    .update({
+      contract_end_date: contractEndDate || null,
+      updated_at: new Date().toISOString(),
+    } as Record<string, unknown>)
+    .eq("id", userId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dashboard/users");
+  return { success: true };
 }

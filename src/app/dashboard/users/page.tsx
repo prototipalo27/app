@@ -8,7 +8,7 @@ export default async function UsersPage() {
   const supabase = await createClient();
   const { data: users } = await supabase
     .from("user_profiles")
-    .select("id, email, role, is_active, created_at")
+    .select("id, email, role, is_active, created_at, full_name, contract_end_date")
     .order("created_at", { ascending: true });
 
   return (

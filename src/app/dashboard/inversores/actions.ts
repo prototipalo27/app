@@ -178,179 +178,166 @@ export async function populateReportClients(reportId: string, quarter: number, y
     return { success: false, error: "Ya hay clientes cargados. Elimínalos primero para recargar." };
   }
 
-  // Quarter date range
+  // Quarter date range as unix timestamps (Holded uses seconds)
   const startMonth = (quarter - 1) * 3;
-  const startDate = new Date(year, startMonth, 1).toISOString();
-  const endDate = new Date(year, startMonth + 3, 1).toISOString();
+  const startUnix = Math.floor(new Date(year, startMonth, 1).getTime() / 1000);
+  const endUnix = Math.floor(new Date(year, startMonth + 3, 1).getTime() / 1000);
 
-  // Find won/paid leads using multiple strategies in parallel
-  const [{ data: wonAct1 }, { data: wonAct2 }, { data: leadsWonAt }, { data: leadsUpdatedAt }] = await Promise.all([
-    // 1. Activity log: status changed to "won"
-    supabase
-      .from("lead_activities")
-      .select("lead_id")
-      .eq("activity_type", "status_change")
-      .ilike("content", "%a won")
-      .gte("created_at", startDate)
-      .lt("created_at", endDate),
-    // 2. Activity log: status changed to "paid"
-    supabase
-      .from("lead_activities")
-      .select("lead_id")
-      .eq("activity_type", "status_change")
-      .ilike("content", "%a paid")
-      .gte("created_at", startDate)
-      .lt("created_at", endDate),
-    // 3. won_at field
-    supabase
-      .from("leads")
-      .select("id")
-      .in("status", ["won", "paid"])
-      .not("won_at", "is", null)
-      .gte("won_at", startDate)
-      .lt("won_at", endDate),
-    // 4. Fallback: updated_at for won/paid leads
-    supabase
-      .from("leads")
-      .select("id")
-      .in("status", ["won", "paid"])
-      .gte("updated_at", startDate)
-      .lt("updated_at", endDate),
+  // Fetch invoices + credit notes from Holded for this quarter
+  const { listDocuments } = await import("@/lib/holded/api");
+  const [invoices, creditNotes] = await Promise.all([
+    listDocuments("invoice", { starttmp: startUnix, endtmp: endUnix }),
+    listDocuments("creditnote", { starttmp: startUnix, endtmp: endUnix }),
   ]);
 
-  const allWonIds = [...new Set([
-    ...(wonAct1 || []).map((a) => a.lead_id),
-    ...(wonAct2 || []).map((a) => a.lead_id),
-    ...(leadsWonAt || []).map((l) => l.id),
-    ...(leadsUpdatedAt || []).map((l) => l.id),
-  ])];
-
-  if (!allWonIds.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year} (${startDate.slice(0,10)} → ${endDate.slice(0,10)})` };
-
-  // Fetch full lead data
-  const { data: wonLeads } = await supabase
-    .from("leads")
-    .select("id, full_name, email, source, won_at, updated_at")
-    .in("id", allWonIds);
-
-  if (!wonLeads?.length) return { success: true, error: `No se encontraron leads ganados en Q${quarter} ${year}` };
-
-  // Get projects linked to these leads
-  const leadIds = wonLeads.map((l) => l.id);
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name, client_name, client_email, lead_id, price")
-    .in("lead_id", leadIds);
-
-  // Build lead→source and lead→projects maps
-  const leadSourceMap: Record<string, string> = {};
-  const leadProjectsMap: Record<string, typeof projects> = {};
-  for (const l of wonLeads) {
-    leadSourceMap[l.id] = l.source || "directo";
-    leadProjectsMap[l.id] = [];
-  }
-  for (const p of projects || []) {
-    if (p.lead_id) leadProjectsMap[p.lead_id]?.push(p);
+  if (!invoices.length && !creditNotes.length) {
+    return { success: true, error: `No se encontraron facturas en Holded para Q${quarter} ${year}` };
   }
 
-  // Recurring check: same email had a won/paid activity BEFORE this quarter
-  const leadEmails = wonLeads.map((l) => l.email).filter((e): e is string => !!e);
-  let recurringEmails = new Set<string>();
-  if (leadEmails.length > 0) {
-    const [{ data: prev1 }, { data: prev2 }] = await Promise.all([
-      supabase
-        .from("lead_activities")
-        .select("lead_id")
-        .eq("activity_type", "status_change")
-        .ilike("content", "%a won")
-        .lt("created_at", startDate),
-      supabase
-        .from("lead_activities")
-        .select("lead_id")
-        .eq("activity_type", "status_change")
-        .ilike("content", "%a paid")
-        .lt("created_at", startDate),
-    ]);
-    const prevActivities = [...(prev1 || []), ...(prev2 || [])];
-
-    if (prevActivities?.length) {
-      const prevLeadIds = [...new Set(prevActivities.map((a) => a.lead_id))];
-      const { data: prevLeads } = await supabase
-        .from("leads")
-        .select("email")
-        .in("id", prevLeadIds)
-        .in("email", leadEmails);
-      if (prevLeads) recurringEmails = new Set(prevLeads.map((l) => l.email!).filter(Boolean));
-    }
+  // Build credit note map by contact for easy matching
+  const creditByContact: Record<string, typeof creditNotes> = {};
+  for (const cn of creditNotes) {
+    if (!creditByContact[cn.contact]) creditByContact[cn.contact] = [];
+    creditByContact[cn.contact].push(cn);
   }
 
-  // Lifetime value: sum of price for ALL projects per client email
+  // Lifetime value: fetch ALL invoices per contact (not just this quarter)
+  const contactIds = [...new Set(invoices.map((inv) => inv.contact))];
+  const allInvoices = await listDocuments("invoice");
+  const allCreditNotes = await listDocuments("creditnote");
+
   const lifetimeMap: Record<string, number> = {};
-  if (leadEmails.length > 0) {
-    const { data: allProjects } = await supabase
-      .from("projects")
-      .select("client_email, price")
-      .in("client_email", leadEmails);
-    if (allProjects) {
-      for (const p of allProjects) {
-        if (p.client_email) {
-          lifetimeMap[p.client_email] = (lifetimeMap[p.client_email] || 0) + (p.price || 0);
-        }
-      }
+  for (const inv of allInvoices) {
+    lifetimeMap[inv.contact] = (lifetimeMap[inv.contact] || 0) + inv.total;
+  }
+  for (const cn of allCreditNotes) {
+    lifetimeMap[cn.contact] = (lifetimeMap[cn.contact] || 0) - cn.total;
+  }
+
+  // Recurring: contacts that had invoices BEFORE this quarter
+  const recurringContacts = new Set<string>();
+  for (const inv of allInvoices) {
+    if (inv.date < startUnix && contactIds.includes(inv.contact)) {
+      recurringContacts.add(inv.contact);
     }
   }
 
-  // Group by lead (each won lead = one client row)
-  // Track seen project IDs to avoid duplicates when multiple leads share projects
+  // Try to match contacts to leads for source info
+  const leadSourceMap: Record<string, string> = {};
+  const { data: leads } = await supabase
+    .from("leads")
+    .select("email, source, company")
+    .in("status", ["won", "paid"]);
+  if (leads) {
+    for (const l of leads) {
+      if (l.email) leadSourceMap[l.email.toLowerCase()] = l.source || "directo";
+      if (l.company) leadSourceMap[l.company.toLowerCase()] = l.source || "directo";
+    }
+  }
+
+  // Group invoices by contact
   const clientMap = new Map<string, {
     client_name: string;
-    client_email: string | null;
+    contact_id: string;
     source: string;
     is_recurring: boolean;
     quarter_value: number;
     lifetime_value: number;
     projects: ClientProject[];
-    seenProjectIds: Set<string>;
   }>();
 
-  for (const lead of wonLeads) {
-    const leadProjects = leadProjectsMap[lead.id] || [];
+  // ── Match & cancel: pair invoices with credit notes by contact + amount ──
+  // Group credit notes by contact for matching
+  const remainingCreditNotes: Record<string, typeof creditNotes> = {};
+  for (const cn of creditNotes) {
+    if (!remainingCreditNotes[cn.contact]) remainingCreditNotes[cn.contact] = [];
+    remainingCreditNotes[cn.contact].push({ ...cn });
+  }
 
-    const key = lead.email || lead.id;
+  // Filter invoices: remove those that are fully cancelled by a credit note
+  const cleanInvoices = invoices.filter((inv) => {
+    const contactCNs = remainingCreditNotes[inv.contact];
+    if (!contactCNs?.length) return true;
+
+    // Find a credit note with matching total
+    const matchIdx = contactCNs.findIndex((cn) => Math.abs(cn.total - inv.total) < 0.01);
+    if (matchIdx >= 0) {
+      // Remove the matched credit note so it's not reused
+      contactCNs.splice(matchIdx, 1);
+      return false; // Cancel this invoice
+    }
+    return true;
+  });
+
+  // Remaining credit notes that didn't match any invoice
+  const unmatchedCreditNotes = Object.values(remainingCreditNotes).flat();
+
+  for (const inv of cleanInvoices) {
+    const key = inv.contact;
     const existing = clientMap.get(key);
-    const seenIds = existing?.seenProjectIds || new Set<string>();
 
-    // Filter out already-seen projects
-    const newProjects = leadProjects.filter((p) => !seenIds.has(p.id));
-    for (const p of newProjects) seenIds.add(p.id);
+    const nameLower = inv.contactName.toLowerCase();
+    const source = leadSourceMap[nameLower] || "directo";
 
-    const quarterValue = newProjects.reduce((s, p) => s + (p.price || 0), 0);
-    const clientProjects: ClientProject[] = newProjects.length > 0
-      ? newProjects.map((p) => ({ name: p.name, description: "", value: p.price || 0 }))
-      : existing ? [] : [{ name: "Sin proyecto asociado", description: "", value: 0 }];
+    const projectEntry: ClientProject = {
+      name: `${inv.docNumber} — ${inv.products?.map((p) => p.name).join(", ") || inv.desc || "Factura"}`,
+      description: "",
+      value: inv.total,
+    };
 
     if (existing) {
-      existing.quarter_value += quarterValue;
-      existing.projects.push(...clientProjects);
+      existing.quarter_value += inv.total;
+      existing.projects.push(projectEntry);
     } else {
       clientMap.set(key, {
-        client_name: lead.full_name || "Sin nombre",
-        client_email: lead.email,
-        seenProjectIds: seenIds,
-        source: lead.source || "directo",
-        is_recurring: lead.email ? recurringEmails.has(lead.email) : false,
-        quarter_value: quarterValue,
-        lifetime_value: lead.email ? lifetimeMap[lead.email] || 0 : quarterValue,
-        projects: clientProjects,
+        client_name: inv.contactName,
+        contact_id: inv.contact,
+        source,
+        is_recurring: recurringContacts.has(inv.contact),
+        quarter_value: inv.total,
+        lifetime_value: lifetimeMap[inv.contact] || inv.total,
+        projects: [projectEntry],
       });
     }
+  }
+
+  // Add unmatched credit notes (partial refunds, etc.)
+  for (const cn of unmatchedCreditNotes) {
+    const key = cn.contact;
+    const existing = clientMap.get(key);
+
+    const rectEntry: ClientProject = {
+      name: `${cn.docNumber} (Rectificativa)`,
+      description: "",
+      value: -cn.total,
+    };
+
+    if (existing) {
+      existing.quarter_value -= cn.total;
+      existing.projects.push(rectEntry);
+    } else {
+      clientMap.set(key, {
+        client_name: cn.contactName,
+        contact_id: cn.contact,
+        source: "directo",
+        is_recurring: true,
+        quarter_value: -cn.total,
+        lifetime_value: lifetimeMap[cn.contact] || 0,
+        projects: [rectEntry],
+      });
+    }
+  }
+
+  // Remove clients with zero or negative net value (fully cancelled)
+  for (const [key, client] of clientMap) {
+    if (client.quarter_value <= 0) clientMap.delete(key);
   }
 
   // Insert all
   const rows = Array.from(clientMap.values()).map((c, i) => ({
     report_id: reportId,
     client_name: c.client_name,
-    client_email: c.client_email,
+    client_email: null,
     source: c.source,
     is_recurring: c.is_recurring,
     quarter_value: c.quarter_value,
