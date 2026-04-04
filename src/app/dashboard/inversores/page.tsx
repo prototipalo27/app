@@ -16,8 +16,8 @@ export default async function InversoresPage() {
 
   return (
     <InvestorsClient
-      investors={investorsResult.data ?? []}
-      reports={reportsResult.data ?? []}
+      investors={(investorsResult.data ?? []) as any}
+      reports={(reportsResult.data ?? []) as any}
     />
   );
 }

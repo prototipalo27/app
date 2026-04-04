@@ -133,8 +133,8 @@ export default async function InvestorPortalPage({
       </header>
 
       <InvestorPortalClient
-        investor={investor}
-        allInvestors={allInvestors ?? []}
+        investor={investor as any}
+        allInvestors={(allInvestors ?? []) as any}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       reports={(reports ?? []).map((r) => ({ ...r, clients: reportClients[r.id] ?? [], expenses_breakdown: reportExpenses[r.id] ?? [] })) as any}
         team={team ?? []}

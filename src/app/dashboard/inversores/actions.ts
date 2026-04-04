@@ -468,8 +468,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Otros",
 };
 
-export { CATEGORY_LABELS };
-
 export async function getReportExpenses(reportId: string) {
   await requireRole("super_admin");
   const supabase = createServiceClient();

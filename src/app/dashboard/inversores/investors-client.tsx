@@ -16,7 +16,6 @@ import {
   populateReportExpenses,
   updateReportExpense,
   deleteReportExpenses,
-  CATEGORY_LABELS,
   type ReportClient,
   type ClientProject,
   type ReportExpense,
@@ -29,28 +28,39 @@ type Investor = {
   phone: string | null;
   equity_pct: number;
   invested_amount: number;
+  shares: number;
+  share_number_from: number | null;
+  share_number_to: number | null;
+  nominal_value: number | null;
+  premium_total: number | null;
+  premium_per_share: number | null;
   join_date: string | null;
   notes: string | null;
   is_active: boolean;
   access_token: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type QuarterlyReport = {
   id: string;
   quarter: number;
   year: number;
-  revenue: number;
-  expenses: number;
-  net_profit: number;
-  cash_balance: number;
-  projects_completed: number;
-  new_clients: number;
+  revenue: number | null;
+  expenses: number | null;
+  net_profit: number | null;
+  cash_balance: number | null;
+  projects_completed: number | null;
+  new_clients: number | null;
   summary: string | null;
   highlights: string | null;
   challenges: string | null;
   next_quarter_goals: string | null;
   video_url: string | null;
-  published: boolean;
+  published: boolean | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 const inputClass =
@@ -888,6 +898,15 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
 }
 
 // ─── Expenses Section ────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  materials: "Materiales", shipping: "Envíos", software: "Software",
+  payroll: "Nóminas", financing: "Financiación", banking: "Banca",
+  taxes: "Impuestos", rent: "Alquiler", utilities: "Suministros",
+  telecom: "Telecomunicaciones", insurance: "Seguros", fuel: "Combustible",
+  meals: "Comidas", travel: "Viajes", marketing: "Marketing",
+  professional: "Servicios profesionales", other: "Otros",
+};
 
 const CATEGORY_COLORS: Record<string, string> = {
   payroll: "bg-blue-500", rent: "bg-amber-500", materials: "bg-green-500",
