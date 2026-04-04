@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useCallback, useTransition, useRef } from "react";
 import {
   createInvestor,
   updateInvestor,
@@ -462,7 +462,10 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                     reportId={report.id}
                     quarter={report.quarter}
                     year={report.year}
-                    onRevenueChange={(total) => setClientRevenue((prev) => ({ ...prev, [report.id]: total }))}
+                    onRevenueChange={(total) => setClientRevenue((prev) => {
+                      if (prev[report.id] === total) return prev;
+                      return { ...prev, [report.id]: total };
+                    })}
                   />
 
                   {/* Actions */}
@@ -616,9 +619,16 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
   const recurring = clients?.filter((c) => c.is_recurring).length ?? 0;
   const totalQuarterValue = clients?.reduce((s, c) => s + Number(c.quarter_value), 0) ?? 0;
 
+  const onRevenueRef = useRef(onRevenueChange);
+  onRevenueRef.current = onRevenueChange;
+  const prevRevenue = useRef<number | null>(null);
+
   useEffect(() => {
-    if (clients) onRevenueChange(totalQuarterValue);
-  }, [clients, totalQuarterValue, onRevenueChange]);
+    if (clients && totalQuarterValue !== prevRevenue.current) {
+      prevRevenue.current = totalQuarterValue;
+      onRevenueRef.current(totalQuarterValue);
+    }
+  }, [clients, totalQuarterValue]);
   const sourceCounts: Record<string, number> = {};
   if (clients) {
     for (const c of clients) sourceCounts[c.source || "directo"] = (sourceCounts[c.source || "directo"] || 0) + 1;
