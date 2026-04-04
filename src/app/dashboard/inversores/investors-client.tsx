@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import {
   createInvestor,
   updateInvestor,
@@ -347,6 +347,7 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
   const [editing, setEditing] = useState<QuarterlyReport | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [clientRevenue, setClientRevenue] = useState<Record<string, number>>({});
 
   const currentYear = new Date().getFullYear();
   const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
@@ -413,7 +414,7 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                   </span>
                   <div className="flex gap-4 text-sm">
                     <span className="text-zinc-500 dark:text-zinc-400">
-                      Facturación: <span className="font-medium text-zinc-900 dark:text-white">{formatCurrency(Number(report.revenue))}</span>
+                      Facturación: <span className="font-medium text-zinc-900 dark:text-white">{formatCurrency(clientRevenue[report.id] ?? Number(report.revenue))}</span>
                     </span>
                     <span className="text-zinc-500 dark:text-zinc-400">
                       Beneficio: <span className={`font-medium ${Number(report.net_profit) >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(Number(report.net_profit))}</span>
@@ -432,12 +433,11 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
               {expanded === report.id && (
                 <div className="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
                   {/* Financial metrics */}
-                  <div className="mb-4 grid grid-cols-3 gap-4 sm:grid-cols-6">
-                    <Metric label="Facturación" value={formatCurrency(Number(report.revenue))} />
+                  <div className="mb-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
+                    <Metric label="Facturación" value={formatCurrency(clientRevenue[report.id] ?? Number(report.revenue))} />
                     <Metric label="Gastos" value={formatCurrency(Number(report.expenses))} />
                     <Metric label="Beneficio neto" value={formatCurrency(Number(report.net_profit))} color={Number(report.net_profit) >= 0 ? "green" : "red"} />
                     <Metric label="Saldo en caja" value={formatCurrency(Number(report.cash_balance))} />
-                    <Metric label="Proyectos" value={String(report.projects_completed)} />
                     <Metric label="Nuevos clientes" value={String(report.new_clients)} />
                   </div>
 
@@ -458,7 +458,12 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                   </div>
 
                   {/* Clients section (editable) */}
-                  <QuarterClientsSection reportId={report.id} quarter={report.quarter} year={report.year} />
+                  <QuarterClientsSection
+                    reportId={report.id}
+                    quarter={report.quarter}
+                    year={report.year}
+                    onRevenueChange={(total) => setClientRevenue((prev) => ({ ...prev, [report.id]: total }))}
+                  />
 
                   {/* Actions */}
                   <div className="mt-4 flex gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
@@ -516,7 +521,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const SOURCE_OPTIONS = Object.entries(SOURCE_LABELS);
 
-function QuarterClientsSection({ reportId, quarter, year }: { reportId: string; quarter: number; year: number }) {
+function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { reportId: string; quarter: number; year: number; onRevenueChange: (total: number) => void }) {
   const [clients, setClients] = useState<ReportClient[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [shown, setShown] = useState(false);
@@ -569,6 +574,10 @@ function QuarterClientsSection({ reportId, quarter, year }: { reportId: string; 
 
   const recurring = clients?.filter((c) => c.is_recurring).length ?? 0;
   const totalQuarterValue = clients?.reduce((s, c) => s + Number(c.quarter_value), 0) ?? 0;
+
+  useEffect(() => {
+    if (clients) onRevenueChange(totalQuarterValue);
+  }, [clients, totalQuarterValue, onRevenueChange]);
   const sourceCounts: Record<string, number> = {};
   if (clients) {
     for (const c of clients) sourceCounts[c.source || "directo"] = (sourceCounts[c.source || "directo"] || 0) + 1;
@@ -816,10 +825,6 @@ function ReportForm({
           <input name="year" type="number" min={2020} max={2040} defaultValue={report?.year ?? defaultYear} className={inputClass} required />
         </div>
         <div>
-          <label className={labelClass}>Facturación (EUR)</label>
-          <input name="revenue" type="number" step="0.01" defaultValue={report?.revenue ?? 0} className={inputClass} />
-        </div>
-        <div>
           <label className={labelClass}>Gastos (EUR)</label>
           <input name="expenses" type="number" step="0.01" defaultValue={report?.expenses ?? 0} className={inputClass} />
         </div>
@@ -830,14 +835,6 @@ function ReportForm({
         <div>
           <label className={labelClass}>Saldo en caja (EUR)</label>
           <input name="cash_balance" type="number" step="0.01" defaultValue={report?.cash_balance ?? 0} className={inputClass} />
-        </div>
-        <div>
-          <label className={labelClass}>Proyectos completados</label>
-          <input name="projects_completed" type="number" min="0" defaultValue={report?.projects_completed ?? 0} className={inputClass} />
-        </div>
-        <div>
-          <label className={labelClass}>Nuevos clientes</label>
-          <input name="new_clients" type="number" min="0" defaultValue={report?.new_clients ?? 0} className={inputClass} />
         </div>
       </div>
 
