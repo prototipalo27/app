@@ -7,6 +7,7 @@ import LinkStop from "./link-stop";
 import WorkCalendar from "./work-calendar";
 import ZoneEditor from "./zone-editor";
 import OvertimeSection from "./overtime-section";
+import AdminSection from "./admin-section";
 import { getZoneColor, getZoneLabel } from "@/lib/zones";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -80,6 +81,7 @@ export default async function EquipoPage() {
   const isManager = hasRole(profile.role, "manager");
   const supabase = await createClient();
 
+  const isSuperAdmin = hasRole(profile.role, "super_admin");
   const currentYear = new Date().getFullYear();
 
   const [
@@ -110,6 +112,16 @@ export default async function EquipoPage() {
       ? supabase.from("overtime_entries").select("user_id, minutes, type")
       : Promise.resolve({ data: null }),
   ]);
+
+  // Fetch ALL users for admin section (including inactive + contract_end_date)
+  let adminUsers: { id: string; email: string; role: string; is_active: boolean; full_name: string | null; contract_end_date: string | null }[] = [];
+  if (isSuperAdmin) {
+    const { data: allProfiles } = await (supabase as any)
+      .from("user_profiles")
+      .select("id, email, role, is_active, full_name, contract_end_date")
+      .order("created_at", { ascending: true });
+    adminUsers = (allProfiles ?? []) as typeof adminUsers;
+  }
 
   // Build overtime balance map (manager only)
   const overtimeBalances = new Map<string, number>();
@@ -158,6 +170,11 @@ export default async function EquipoPage() {
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
         Equipo
       </h1>
+
+      {/* Admin section — super_admin only */}
+      {isSuperAdmin && (
+        <AdminSection users={adminUsers} currentUserId={profile.id} />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {

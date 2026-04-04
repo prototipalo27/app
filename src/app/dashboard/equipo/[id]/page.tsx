@@ -8,6 +8,12 @@ import EmployeeProfileForm from "./employee-profile-form";
 import EmployeeDocuments from "./employee-documents";
 import CareerPlanEditor from "./career-plan-editor";
 import EmployeeCommissions from "./employee-commissions";
+import NotificationSettingsClient from "../../settings/notifications/notification-settings-client";
+import {
+  getNotificationEvents,
+  getMyNotificationPreferences,
+  getActiveUsers,
+} from "../../settings/notifications/actions";
 
 export default async function EmployeeDetailPage({
   params,
@@ -47,6 +53,22 @@ export default async function EmployeeDetailPage({
   const allSkills = skills ?? [];
   const userSkillIds = (userSkills ?? []).map((us) => us.skill_id);
   const displayName = employee.nickname || employee.full_name || employee.email.split("@")[0];
+
+  // Only load notification settings for the user's own profile
+  const isOwnProfile = profile.id === id;
+  let notifEvents: any[] = [];
+  let notifPrefs: any[] = [];
+  let notifUsers: any[] = [];
+  if (isOwnProfile) {
+    const [ev, pr, us] = await Promise.all([
+      getNotificationEvents(),
+      getMyNotificationPreferences(),
+      isManager ? getActiveUsers() : Promise.resolve({ data: null }),
+    ]);
+    notifEvents = ev.data ?? [];
+    notifPrefs = pr.data ?? [];
+    notifUsers = us.data ?? [];
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-8">
@@ -142,7 +164,7 @@ export default async function EmployeeDetailPage({
           />
         </section>
 
-        {/* Section 4: Career Plan */}
+        {/* Section 5: Career Plan */}
         <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             Plan de carrera
@@ -153,6 +175,22 @@ export default async function EmployeeDetailPage({
             isManager={isManager}
           />
         </section>
+
+        {/* Section 6: Notification settings — own profile only */}
+        {isOwnProfile && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Notificaciones
+            </h2>
+            <NotificationSettingsClient
+              events={notifEvents}
+              preferences={notifPrefs}
+              users={notifUsers}
+              currentUserRole={profile.role}
+              isManager={isManager}
+            />
+          </section>
+        )}
       </div>
     </div>
   );
