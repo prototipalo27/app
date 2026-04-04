@@ -1074,12 +1074,9 @@ function QuarterExpensesSection({ reportId, quarter, year, onExpensesChange }: {
                         {exp.vendor_count}
                       </div>
 
-                      <input
-                        type="number" step="0.01"
-                        className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
-                        defaultValue={Number(exp.amount)}
-                        onBlur={(e) => handleUpdateAmount(exp.id, parseFloat(e.target.value) || 0)}
-                      />
+                      <span className="w-28 text-right text-sm font-bold text-zinc-900 dark:text-white">
+                        {formatCurrency(Number(exp.amount))}
+                      </span>
 
                       <div className="w-16 text-right text-xs text-zinc-500 dark:text-zinc-400">
                         {pct}%

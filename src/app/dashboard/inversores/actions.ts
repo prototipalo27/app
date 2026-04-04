@@ -534,7 +534,10 @@ export async function populateReportExpenses(reportId: string, quarter: number, 
     }>;
 
     for (const tx of transactions) {
-      const amount = parseFloat(String(tx.amount).replace(/\./g, "").replace(",", "."));
+      // BBVA format: dot with exactly 3 digits after = thousands separator (e.g. -1.318 = -1318)
+      // dot with 1-2 digits after = decimal (e.g. -191.18 = -191.18, -1.95 = -1.95)
+      const raw = String(tx.amount);
+      const amount = parseFloat(raw.replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", "."));
       if (amount >= 0) continue; // Only expenses (negative amounts)
 
       const vendor = tx.vendorName || tx.description || "Desconocido";
