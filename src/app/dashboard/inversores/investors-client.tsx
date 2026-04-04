@@ -664,138 +664,120 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
             </button>
           </div>
 
-          {/* Client table header */}
+          {/* Client table */}
           {clients.length > 0 && (
-            <div className="flex items-center gap-3 rounded-lg bg-zinc-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              <div className="w-4 shrink-0" />
-              <SortHeader label="Cliente" sortKey="name" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="min-w-0 flex-1" />
-              <SortHeader label="Canal" sortKey="source" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-center" />
-              <div className="w-20 text-center">Tipo</div>
-              <SortHeader label="Trimestre" sortKey="quarter" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
-              <SortHeader label="Lifetime" sortKey="lifetime" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
-              <div className="w-14 text-center">Proy.</div>
-              <div className="w-4 shrink-0" />
-            </div>
-          )}
+            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              {/* Header */}
+              <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                <div className="w-4 shrink-0" />
+                <SortHeader label="Cliente" sortKey="name" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="min-w-0 flex-1" />
+                <SortHeader label="Canal" sortKey="source" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-20 text-center" />
+                <div className="w-[72px] text-center">Tipo</div>
+                <SortHeader label="Trimestre" sortKey="quarter" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
+                <SortHeader label="Lifetime" sortKey="lifetime" currentKey={sortKey} asc={sortAsc} onSort={toggleSort} className="w-24 text-right" />
+                <div className="w-8 shrink-0" />
+              </div>
 
-          {/* Client list */}
-          {sortedClients(clients).map((client) => {
-            const projects = (Array.isArray(client.projects) ? client.projects : []) as ClientProject[];
-            const isExpanded = expandedClient === client.id;
+              {/* Rows */}
+              {sortedClients(clients).map((client) => {
+                const projects = (Array.isArray(client.projects) ? client.projects : []) as ClientProject[];
+                const isExpanded = expandedClient === client.id;
 
-            return (
-              <div key={client.id} className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-                {/* Client row */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  {/* Expand toggle */}
-                  <button
-                    onClick={() => setExpandedClient(isExpanded ? null : client.id)}
-                    className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                  >
-                    <svg className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                return (
+                  <div key={client.id} className={`border-b border-zinc-100 last:border-b-0 dark:border-zinc-800 ${isExpanded ? "bg-zinc-50/50 dark:bg-zinc-950/50" : ""}`}>
+                    {/* Client row */}
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <button
+                        onClick={() => setExpandedClient(isExpanded ? null : client.id)}
+                        className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                      >
+                        <svg className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
 
-                  {/* Name (editable) */}
-                  <div className="min-w-0 flex-1">
-                    <input
-                      className="w-full bg-transparent text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
-                      defaultValue={client.client_name}
-                      onBlur={(e) => handleUpdateClient(client.id, { client_name: e.target.value })}
-                    />
-                    {client.client_email && <p className="text-xs text-zinc-400">{client.client_email}</p>}
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="min-w-0 flex-1 bg-transparent text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
+                            defaultValue={client.client_name}
+                            onBlur={(e) => handleUpdateClient(client.id, { client_name: e.target.value })}
+                          />
+                          {projects.length > 1 && (
+                            <span className="shrink-0 text-[10px] text-zinc-400">{projects.length} fact.</span>
+                          )}
+                        </div>
+                      </div>
 
-                  {/* Source */}
-                  <select
-                    className="rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-                    value={client.source}
-                    onChange={(e) => handleUpdateClient(client.id, { source: e.target.value })}
-                  >
-                    {SOURCE_OPTIONS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-                  </select>
+                      <select
+                        className="w-20 rounded border border-zinc-200 bg-transparent px-1.5 py-0.5 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                        value={client.source}
+                        onChange={(e) => handleUpdateClient(client.id, { source: e.target.value })}
+                      >
+                        {SOURCE_OPTIONS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                      </select>
 
-                  {/* Recurring toggle */}
-                  <button
-                    onClick={() => handleUpdateClient(client.id, { is_recurring: !client.is_recurring })}
-                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${
-                      client.is_recurring
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    }`}
-                  >
-                    {client.is_recurring ? "Recurrente" : "Nuevo"}
-                  </button>
+                      <button
+                        onClick={() => handleUpdateClient(client.id, { is_recurring: !client.is_recurring })}
+                        className={`w-[72px] shrink-0 rounded px-1.5 py-0.5 text-center text-[11px] font-medium ${
+                          client.is_recurring
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        }`}
+                      >
+                        {client.is_recurring ? "Recurrente" : "Nuevo"}
+                      </button>
 
-                  {/* Quarter value */}
-                  <div className="w-24 text-right">
-                    <input
-                      type="number" step="0.01"
-                      className="w-full bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
-                      defaultValue={Number(client.quarter_value)}
-                      onBlur={(e) => handleUpdateClient(client.id, { quarter_value: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
+                      <input
+                        type="number" step="0.01"
+                        className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
+                        defaultValue={Number(client.quarter_value)}
+                        onBlur={(e) => handleUpdateClient(client.id, { quarter_value: parseFloat(e.target.value) || 0 })}
+                      />
 
-                  {/* Lifetime value */}
-                  <div className="w-24 text-right">
-                    <input
-                      type="number" step="0.01"
-                      className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
-                      defaultValue={Number(client.lifetime_value)}
-                      onBlur={(e) => handleUpdateClient(client.id, { lifetime_value: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
+                      <input
+                        type="number" step="0.01"
+                        className="w-24 bg-transparent text-right text-sm text-zinc-500 focus:outline-none dark:text-zinc-400"
+                        defaultValue={Number(client.lifetime_value)}
+                        onBlur={(e) => handleUpdateClient(client.id, { lifetime_value: parseFloat(e.target.value) || 0 })}
+                      />
 
-                  {/* Projects count */}
-                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                    {projects.length} proy.
-                  </span>
+                      <button onClick={() => handleDeleteClient(client.id)} className="shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
 
-                  {/* Delete */}
-                  <button onClick={() => handleDeleteClient(client.id)} className="shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Expanded: projects */}
-                {isExpanded && (
-                  <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-                    <div className="space-y-2">
-                      {projects.map((proj, idx) => (
-                        <div key={idx} className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <input
-                              className="w-full bg-transparent text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
-                              defaultValue={proj.name}
-                              placeholder="Nombre del proyecto"
-                              onBlur={(e) => {
-                                const updated = [...projects];
-                                updated[idx] = { ...updated[idx], name: e.target.value };
-                                handleUpdateClient(client.id, { projects: updated });
-                              }}
-                            />
-                            <textarea
-                              className="w-full resize-none bg-transparent text-xs text-zinc-600 placeholder-zinc-400 focus:outline-none dark:text-zinc-400 dark:placeholder-zinc-600"
-                              rows={2}
-                              defaultValue={proj.description}
-                              placeholder="Descripción del proyecto..."
-                              onBlur={(e) => {
-                                const updated = [...projects];
-                                updated[idx] = { ...updated[idx], description: e.target.value };
-                                handleUpdateClient(client.id, { projects: updated });
-                              }}
-                            />
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-[10px] text-zinc-400">Valor</p>
-                            <div className="flex items-center gap-1">
+                    {/* Expanded: invoices/projects */}
+                    {isExpanded && (
+                      <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-2 pl-11 dark:border-zinc-800 dark:bg-zinc-950">
+                        <div className="space-y-1.5">
+                          {projects.map((proj, idx) => (
+                            <div key={idx} className="flex items-center gap-2 rounded border border-zinc-200 bg-white px-3 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+                              <input
+                                className="min-w-0 flex-1 bg-transparent text-xs text-zinc-700 focus:outline-none dark:text-zinc-300"
+                                defaultValue={proj.name}
+                                placeholder="Factura / proyecto"
+                                onBlur={(e) => {
+                                  const updated = [...projects];
+                                  updated[idx] = { ...updated[idx], name: e.target.value };
+                                  handleUpdateClient(client.id, { projects: updated });
+                                }}
+                              />
+                              <input
+                                className="w-48 bg-transparent text-xs text-zinc-400 placeholder-zinc-300 focus:outline-none dark:placeholder-zinc-600"
+                                defaultValue={proj.description}
+                                placeholder="Descripción..."
+                                onBlur={(e) => {
+                                  const updated = [...projects];
+                                  updated[idx] = { ...updated[idx], description: e.target.value };
+                                  handleUpdateClient(client.id, { projects: updated });
+                                }}
+                              />
                               <input
                                 type="number" step="0.01"
-                                className="w-20 bg-transparent text-right text-sm font-medium text-zinc-900 focus:outline-none dark:text-white"
+                                className="w-20 bg-transparent text-right text-xs font-medium text-zinc-900 focus:outline-none dark:text-white"
                                 defaultValue={proj.value}
                                 onBlur={(e) => {
                                   const updated = [...projects];
@@ -803,20 +785,17 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
                                   handleUpdateClient(client.id, { projects: updated });
                                 }}
                               />
-                              <span className="text-xs text-zinc-400">EUR</span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              const updated = projects.filter((_, i) => i !== idx);
-                              handleUpdateClient(client.id, { projects: updated });
-                            }}
-                            className="mt-1 shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
+                              <button
+                                onClick={() => {
+                                  const updated = projects.filter((_, i) => i !== idx);
+                                  handleUpdateClient(client.id, { projects: updated });
+                                }}
+                                className="shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600"
+                              >
+                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
                         </div>
                       ))}
                     </div>
@@ -827,13 +806,30 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
                       }}
                       className="mt-2 text-xs font-medium text-green-600 hover:text-green-700 dark:text-green-400"
                     >
-                      + Añadir proyecto
+                      + Añadir factura
                     </button>
                   </div>
                 )}
               </div>
             );
           })}
+
+            {/* Footer with total */}
+            <div className="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="w-4 shrink-0" />
+              <div className="min-w-0 flex-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                Total ({clients.length} clientes)
+              </div>
+              <div className="w-20" />
+              <div className="w-[72px]" />
+              <div className="w-24 text-right text-sm font-bold text-zinc-900 dark:text-white">
+                {formatCurrency(totalQuarterValue)}
+              </div>
+              <div className="w-24" />
+              <div className="w-8 shrink-0" />
+            </div>
+          </div>
+          )}
         </div>
       )}
     </div>
