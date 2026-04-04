@@ -26,6 +26,7 @@ type Investor = {
   join_date: string | null;
   notes: string | null;
   is_active: boolean;
+  access_token: string | null;
 };
 
 type QuarterlyReport = {
@@ -42,6 +43,8 @@ type QuarterlyReport = {
   highlights: string | null;
   challenges: string | null;
   next_quarter_goals: string | null;
+  video_url: string | null;
+  published: boolean;
 };
 
 const inputClass =
@@ -244,6 +247,21 @@ function InvestorsTab({ investors }: { investors: Investor[] }) {
                   <p className="text-xs text-zinc-500">{formatCurrency(Number(investor.invested_amount))}</p>
                 </div>
                 <div className="flex gap-1">
+                  {investor.access_token && (
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/investors/${investor.access_token}`;
+                        navigator.clipboard.writeText(url);
+                        alert("Link copiado: " + url);
+                      }}
+                      className="rounded p-1.5 text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                      title="Copiar link del portal"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     onClick={() => { setEditing(investor); setShowForm(false); }}
                     className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
@@ -918,6 +936,19 @@ function ReportForm({
         <div>
           <label className={labelClass}>Objetivos próximo trimestre</label>
           <textarea name="next_quarter_goals" rows={3} defaultValue={report?.next_quarter_goals ?? ""} className={inputClass} placeholder="Metas para el siguiente trimestre..." />
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Video URL (YouTube/Vimeo embed)</label>
+          <input name="video_url" defaultValue={report?.video_url ?? ""} className={inputClass} placeholder="https://www.youtube.com/embed/..." />
+        </div>
+        <div className="flex items-end gap-3">
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input type="checkbox" name="published" value="true" defaultChecked={report?.published ?? false} className="rounded border-zinc-300 text-green-600 focus:ring-green-500" />
+            Publicar para inversores
+          </label>
         </div>
       </div>
 

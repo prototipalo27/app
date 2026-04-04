@@ -24,6 +24,9 @@ export async function createInvestor(formData: FormData) {
   await requireRole("super_admin");
   const supabase = createServiceClient();
 
+  const { randomBytes } = await import("crypto");
+  const token = randomBytes(24).toString("hex");
+
   const { error } = await supabase.from("investors").insert({
     full_name: formData.get("full_name") as string,
     email: (formData.get("email") as string) || null,
@@ -32,6 +35,7 @@ export async function createInvestor(formData: FormData) {
     invested_amount: parseFloat(formData.get("invested_amount") as string) || 0,
     join_date: (formData.get("join_date") as string) || null,
     notes: (formData.get("notes") as string) || null,
+    access_token: token,
   });
 
   if (error) return { success: false, error: error.message };
@@ -108,6 +112,8 @@ export async function upsertQuarterlyReport(formData: FormData) {
     highlights: (formData.get("highlights") as string) || null,
     challenges: (formData.get("challenges") as string) || null,
     next_quarter_goals: (formData.get("next_quarter_goals") as string) || null,
+    video_url: (formData.get("video_url") as string) || null,
+    published: formData.get("published") === "true",
     created_by: profile.id,
     updated_at: new Date().toISOString(),
   };

@@ -1817,6 +1817,7 @@ export type Database = {
           join_date: string | null
           notes: string | null
           is_active: boolean
+          access_token: string | null
           created_at: string
           updated_at: string
         }
@@ -1836,6 +1837,7 @@ export type Database = {
           join_date?: string | null
           notes?: string | null
           is_active?: boolean
+          access_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1855,6 +1857,7 @@ export type Database = {
           join_date?: string | null
           notes?: string | null
           is_active?: boolean
+          access_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2033,6 +2036,8 @@ export type Database = {
           highlights: string | null
           challenges: string | null
           next_quarter_goals: string | null
+          video_url: string | null
+          published: boolean
           created_by: string | null
           created_at: string
           updated_at: string
@@ -2051,6 +2056,8 @@ export type Database = {
           highlights?: string | null
           challenges?: string | null
           next_quarter_goals?: string | null
+          video_url?: string | null
+          published?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -2069,6 +2076,8 @@ export type Database = {
           highlights?: string | null
           challenges?: string | null
           next_quarter_goals?: string | null
+          video_url?: string | null
+          published?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
