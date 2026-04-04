@@ -680,7 +680,12 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
 
               {/* Rows */}
               {sortedClients(clients).map((client) => {
-                const projects = (Array.isArray(client.projects) ? client.projects : []) as ClientProject[];
+                const rawProjects = client.projects;
+                const projects: ClientProject[] = Array.isArray(rawProjects)
+                  ? rawProjects
+                  : typeof rawProjects === "string"
+                    ? JSON.parse(rawProjects)
+                    : [];
                 const isExpanded = expandedClient === client.id;
 
                 return (
@@ -754,7 +759,7 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
                       <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-2 pl-11 dark:border-zinc-800 dark:bg-zinc-950">
                         <div className="space-y-1.5">
                           {projects.map((proj, idx) => (
-                            <div key={idx} className="flex items-center gap-2 rounded border border-zinc-200 bg-white px-3 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+                            <div key={`${client.id}-${idx}-${projects.length}`} className="flex items-center gap-2 rounded border border-zinc-200 bg-white px-3 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
                               <input
                                 className="min-w-0 flex-1 bg-transparent text-xs text-zinc-700 focus:outline-none dark:text-zinc-300"
                                 defaultValue={proj.name}
