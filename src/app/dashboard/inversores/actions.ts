@@ -207,10 +207,13 @@ export async function populateReportClients(reportId: string, quarter: number, y
     creditByContact[cn.contact].push(cn);
   }
 
-  // Lifetime value: fetch ALL invoices per contact (not just this quarter)
+  // Lifetime value: fetch ALL invoices since 2022 per contact
   const contactIds = [...new Set(invoices.map((inv) => inv.contact))];
-  const allInvoices = await listDocuments("invoice");
-  const allCreditNotes = await listDocuments("creditnote");
+  const since2022 = Math.floor(new Date(2022, 0, 1).getTime() / 1000);
+  const [allInvoices, allCreditNotes] = await Promise.all([
+    listDocuments("invoice", { starttmp: since2022 }),
+    listDocuments("creditnote", { starttmp: since2022 }),
+  ]);
 
   const lifetimeMap: Record<string, number> = {};
   for (const inv of allInvoices) {
@@ -424,6 +427,198 @@ export async function deleteReportClient(id: string) {
   const supabase = createServiceClient();
 
   const { error } = await supabase.from("quarterly_report_clients").delete().eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath(PATH);
+  return { success: true, error: null };
+}
+
+// ─── Report Expenses (from bank statements) ─────────────────────
+
+export type ExpenseDetail = {
+  vendor: string;
+  amount: number;
+};
+
+export type ReportExpense = {
+  id: string;
+  report_id: string;
+  category: string;
+  amount: number;
+  vendor_count: number;
+  details: ExpenseDetail[];
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  materials: "Materiales",
+  shipping: "Envíos",
+  software: "Software",
+  payroll: "Nóminas",
+  financing: "Financiación",
+  banking: "Banca",
+  taxes: "Impuestos",
+  rent: "Alquiler",
+  utilities: "Suministros",
+  telecom: "Telecomunicaciones",
+  insurance: "Seguros",
+  fuel: "Combustible",
+  meals: "Comidas",
+  travel: "Viajes",
+  marketing: "Marketing",
+  professional: "Servicios profesionales",
+  other: "Otros",
+};
+
+export { CATEGORY_LABELS };
+
+export async function getReportExpenses(reportId: string) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("quarterly_report_expenses")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("amount", { ascending: false });
+
+  if (error) return { success: false, error: error.message, data: null };
+  return { success: true, error: null, data: data as unknown as ReportExpense[] };
+}
+
+export async function populateReportExpenses(reportId: string, quarter: number, year: number) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  // Check if already populated
+  const { count } = await supabase
+    .from("quarterly_report_expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("report_id", reportId);
+
+  if (count && count > 0) {
+    return { success: false, error: "Ya hay gastos cargados. Elimínalos primero para recargar." };
+  }
+
+  // Get the 3 months of the quarter
+  const months = [(quarter - 1) * 3 + 1, (quarter - 1) * 3 + 2, (quarter - 1) * 3 + 3];
+
+  // Fetch bank statements for these months
+  const { data: statements } = await supabase
+    .from("bank_statements")
+    .select("transactions")
+    .eq("year", year)
+    .in("month", months);
+
+  if (!statements || statements.length === 0) {
+    return { success: true, error: `No se encontraron extractos bancarios para Q${quarter} ${year}` };
+  }
+
+  // Fetch vendor mappings for category assignment
+  const { data: mappings } = await supabase
+    .from("vendor_mappings")
+    .select("bank_vendor_name, category");
+
+  const categoryMap: Record<string, string> = {};
+  if (mappings) {
+    for (const m of mappings) {
+      categoryMap[m.bank_vendor_name.toLowerCase()] = m.category || "other";
+    }
+  }
+
+  // Process all transactions: group expenses by category
+  type VendorSum = { vendor: string; amount: number };
+  const categoryTotals: Record<string, { amount: number; vendors: Record<string, number> }> = {};
+
+  for (const stmt of statements) {
+    const transactions = stmt.transactions as Array<{
+      amount: string;
+      vendorName?: string;
+      description?: string;
+    }>;
+
+    for (const tx of transactions) {
+      const amount = parseFloat(String(tx.amount).replace(/\./g, "").replace(",", "."));
+      if (amount >= 0) continue; // Only expenses (negative amounts)
+
+      const vendor = tx.vendorName || tx.description || "Desconocido";
+      const category = categoryMap[vendor.toLowerCase()] || "other";
+      const absAmount = Math.abs(amount);
+
+      if (!categoryTotals[category]) {
+        categoryTotals[category] = { amount: 0, vendors: {} };
+      }
+      categoryTotals[category].amount += absAmount;
+      categoryTotals[category].vendors[vendor] = (categoryTotals[category].vendors[vendor] || 0) + absAmount;
+    }
+  }
+
+  // Build rows sorted by amount desc
+  const rows = Object.entries(categoryTotals)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .map(([category, data], i) => {
+      const details: VendorSum[] = Object.entries(data.vendors)
+        .sort((a, b) => b[1] - a[1])
+        .map(([vendor, amount]) => ({ vendor, amount: Math.round(amount * 100) / 100 }));
+
+      return {
+        report_id: reportId,
+        category,
+        amount: Math.round(data.amount * 100) / 100,
+        vendor_count: details.length,
+        details: JSON.stringify(details),
+        sort_order: i,
+      };
+    });
+
+  if (rows.length === 0) {
+    return { success: true, error: "No se encontraron gastos en los extractos." };
+  }
+
+  const { error } = await supabase.from("quarterly_report_expenses").insert(rows);
+  if (error) return { success: false, error: error.message };
+
+  // Auto-update expenses total on the quarterly report
+  const totalExpenses = rows.reduce((sum, r) => sum + r.amount, 0);
+  await supabase
+    .from("quarterly_reports")
+    .update({
+      expenses: totalExpenses,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
+
+  revalidatePath(PATH);
+  return { success: true, error: null };
+}
+
+export async function updateReportExpense(
+  id: string,
+  updates: { category?: string; amount?: number }
+) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.category !== undefined) payload.category = updates.category;
+  if (updates.amount !== undefined) payload.amount = updates.amount;
+
+  const { error } = await supabase
+    .from("quarterly_report_expenses")
+    .update(payload)
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function deleteReportExpenses(reportId: string) {
+  await requireRole("super_admin");
+  const supabase = createServiceClient();
+
+  const { error } = await supabase
+    .from("quarterly_report_expenses")
+    .delete()
+    .eq("report_id", reportId);
+
   if (error) return { success: false, error: error.message };
   revalidatePath(PATH);
   return { success: true, error: null };

@@ -714,6 +714,69 @@ export type Database = {
           },
         ]
       }
+      investors: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          email: string | null
+          equity_pct: number
+          full_name: string
+          id: string
+          invested_amount: number | null
+          is_active: boolean
+          join_date: string | null
+          nominal_value: number | null
+          notes: string | null
+          phone: string | null
+          premium_per_share: number | null
+          premium_total: number | null
+          share_number_from: number | null
+          share_number_to: number | null
+          shares: number
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          email?: string | null
+          equity_pct?: number
+          full_name: string
+          id?: string
+          invested_amount?: number | null
+          is_active?: boolean
+          join_date?: string | null
+          nominal_value?: number | null
+          notes?: string | null
+          phone?: string | null
+          premium_per_share?: number | null
+          premium_total?: number | null
+          share_number_from?: number | null
+          share_number_to?: number | null
+          shares?: number
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          email?: string | null
+          equity_pct?: number
+          full_name?: string
+          id?: string
+          invested_amount?: number | null
+          is_active?: boolean
+          join_date?: string | null
+          nominal_value?: number | null
+          notes?: string | null
+          phone?: string | null
+          premium_per_share?: number | null
+          premium_total?: number | null
+          share_number_from?: number | null
+          share_number_to?: number | null
+          shares?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoice_claims: {
         Row: {
           claim_date: string | null
@@ -761,83 +824,6 @@ export type Database = {
           },
         ]
       }
-      lead_utm_data: {
-        Row: {
-          id: string
-          lead_id: string
-          utm_source: string | null
-          utm_medium: string | null
-          utm_campaign: string | null
-          utm_term: string | null
-          utm_content: string | null
-          gclid: string | null
-          fbclid: string | null
-          msclkid: string | null
-          ttclid: string | null
-          referrer: string | null
-          landing_page: string | null
-          current_page: string | null
-          first_touch_page: string | null
-          first_touch_referrer: string | null
-          first_touch_timestamp: string | null
-          last_touch_timestamp: string | null
-          session_id: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          lead_id: string
-          utm_source?: string | null
-          utm_medium?: string | null
-          utm_campaign?: string | null
-          utm_term?: string | null
-          utm_content?: string | null
-          gclid?: string | null
-          fbclid?: string | null
-          msclkid?: string | null
-          ttclid?: string | null
-          referrer?: string | null
-          landing_page?: string | null
-          current_page?: string | null
-          first_touch_page?: string | null
-          first_touch_referrer?: string | null
-          first_touch_timestamp?: string | null
-          last_touch_timestamp?: string | null
-          session_id?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          lead_id?: string
-          utm_source?: string | null
-          utm_medium?: string | null
-          utm_campaign?: string | null
-          utm_term?: string | null
-          utm_content?: string | null
-          gclid?: string | null
-          fbclid?: string | null
-          msclkid?: string | null
-          ttclid?: string | null
-          referrer?: string | null
-          landing_page?: string | null
-          current_page?: string | null
-          first_touch_page?: string | null
-          first_touch_referrer?: string | null
-          first_touch_timestamp?: string | null
-          last_touch_timestamp?: string | null
-          session_id?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lead_utm_data_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: true
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       lead_activities: {
         Row: {
           activity_type: string
@@ -881,6 +867,83 @@ export type Database = {
             foreignKeyName: "lead_activities_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_utm_data: {
+        Row: {
+          created_at: string
+          current_page: string | null
+          fbclid: string | null
+          first_touch_page: string | null
+          first_touch_referrer: string | null
+          first_touch_timestamp: string | null
+          gclid: string | null
+          id: string
+          landing_page: string | null
+          last_touch_timestamp: string | null
+          lead_id: string
+          msclkid: string | null
+          referrer: string | null
+          session_id: string | null
+          ttclid: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_page?: string | null
+          fbclid?: string | null
+          first_touch_page?: string | null
+          first_touch_referrer?: string | null
+          first_touch_timestamp?: string | null
+          gclid?: string | null
+          id?: string
+          landing_page?: string | null
+          last_touch_timestamp?: string | null
+          lead_id: string
+          msclkid?: string | null
+          referrer?: string | null
+          session_id?: string | null
+          ttclid?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_page?: string | null
+          fbclid?: string | null
+          first_touch_page?: string | null
+          first_touch_referrer?: string | null
+          first_touch_timestamp?: string | null
+          gclid?: string | null
+          id?: string
+          landing_page?: string | null
+          last_touch_timestamp?: string | null
+          lead_id?: string
+          msclkid?: string | null
+          referrer?: string | null
+          session_id?: string | null
+          ttclid?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_utm_data_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
@@ -1071,6 +1134,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_event_config: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          enabled: boolean
+          event_type: string
+          label: string
+          target_roles: string[]
+          target_user_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          event_type: string
+          label: string
+          target_roles?: string[]
+          target_user_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          event_type?: string
+          label?: string
+          target_roles?: string[]
+          target_user_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
       }
       overtime_entries: {
         Row: {
@@ -1800,105 +1899,6 @@ export type Database = {
           },
         ]
       }
-      investors: {
-        Row: {
-          id: string
-          full_name: string
-          email: string | null
-          phone: string | null
-          equity_pct: number
-          invested_amount: number
-          shares: number
-          share_number_from: number | null
-          share_number_to: number | null
-          nominal_value: number
-          premium_total: number
-          premium_per_share: number
-          join_date: string | null
-          notes: string | null
-          is_active: boolean
-          access_token: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          full_name: string
-          email?: string | null
-          phone?: string | null
-          equity_pct?: number
-          invested_amount?: number
-          shares?: number
-          share_number_from?: number | null
-          share_number_to?: number | null
-          nominal_value?: number
-          premium_total?: number
-          premium_per_share?: number
-          join_date?: string | null
-          notes?: string | null
-          is_active?: boolean
-          access_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          full_name?: string
-          email?: string | null
-          phone?: string | null
-          equity_pct?: number
-          invested_amount?: number
-          shares?: number
-          share_number_from?: number | null
-          share_number_to?: number | null
-          nominal_value?: number
-          premium_total?: number
-          premium_per_share?: number
-          join_date?: string | null
-          notes?: string | null
-          is_active?: boolean
-          access_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      notification_event_config: {
-        Row: {
-          event_type: string
-          label: string
-          description: string | null
-          category: string
-          target_roles: string[]
-          target_user_ids: string[]
-          enabled: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          event_type: string
-          label: string
-          description?: string | null
-          category?: string
-          target_roles?: string[]
-          target_user_ids?: string[]
-          enabled?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          event_type?: string
-          label?: string
-          description?: string | null
-          category?: string
-          target_roles?: string[]
-          target_user_ids?: string[]
-          enabled?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1926,90 +1926,48 @@ export type Database = {
         }
         Relationships: []
       }
-      user_notification_preferences: {
-        Row: {
-          id: string
-          user_id: string
-          event_type: string
-          push_enabled: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          event_type: string
-          push_enabled?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          event_type?: string
-          push_enabled?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_notification_preferences_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_notification_preferences_event_type_fkey"
-            columns: ["event_type"]
-            isOneToOne: false
-            referencedRelation: "notification_event_config"
-            referencedColumns: ["event_type"]
-          },
-        ]
-      }
       quarterly_report_clients: {
         Row: {
-          id: string
-          report_id: string
-          client_name: string
           client_email: string | null
-          source: string
-          is_recurring: boolean
-          quarter_value: number
-          lifetime_value: number
-          projects: Json
-          sort_order: number
-          created_at: string
-          updated_at: string
+          client_name: string
+          created_at: string | null
+          id: string
+          is_recurring: boolean | null
+          lifetime_value: number | null
+          projects: Json | null
+          quarter_value: number | null
+          report_id: string
+          sort_order: number | null
+          source: string | null
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          report_id: string
-          client_name: string
           client_email?: string | null
-          source?: string
-          is_recurring?: boolean
-          quarter_value?: number
-          lifetime_value?: number
-          projects?: Json
-          sort_order?: number
-          created_at?: string
-          updated_at?: string
+          client_name: string
+          created_at?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          lifetime_value?: number | null
+          projects?: Json | null
+          quarter_value?: number | null
+          report_id: string
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          report_id?: string
-          client_name?: string
           client_email?: string | null
-          source?: string
-          is_recurring?: boolean
-          quarter_value?: number
-          lifetime_value?: number
-          projects?: Json
-          sort_order?: number
-          created_at?: string
-          updated_at?: string
+          client_name?: string
+          created_at?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          lifetime_value?: number | null
+          projects?: Json | null
+          quarter_value?: number | null
+          report_id?: string
+          sort_order?: number | null
+          source?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -2021,66 +1979,110 @@ export type Database = {
           },
         ]
       }
-      quarterly_reports: {
+      quarterly_report_expenses: {
         Row: {
+          amount: number
+          category: string
+          created_at: string | null
+          details: Json | null
           id: string
-          quarter: number
-          year: number
-          revenue: number
-          expenses: number
-          net_profit: number
-          cash_balance: number
-          projects_completed: number
-          new_clients: number
-          summary: string | null
-          highlights: string | null
-          challenges: string | null
-          next_quarter_goals: string | null
-          video_url: string | null
-          published: boolean
-          created_by: string | null
-          created_at: string
-          updated_at: string
+          report_id: string
+          sort_order: number | null
+          updated_at: string | null
+          vendor_count: number
         }
         Insert: {
+          amount?: number
+          category: string
+          created_at?: string | null
+          details?: Json | null
           id?: string
-          quarter: number
-          year: number
-          revenue?: number
-          expenses?: number
-          net_profit?: number
-          cash_balance?: number
-          projects_completed?: number
-          new_clients?: number
-          summary?: string | null
-          highlights?: string | null
-          challenges?: string | null
-          next_quarter_goals?: string | null
-          video_url?: string | null
-          published?: boolean
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
+          report_id: string
+          sort_order?: number | null
+          updated_at?: string | null
+          vendor_count?: number
         }
         Update: {
+          amount?: number
+          category?: string
+          created_at?: string | null
+          details?: Json | null
           id?: string
-          quarter?: number
-          year?: number
-          revenue?: number
-          expenses?: number
-          net_profit?: number
-          cash_balance?: number
-          projects_completed?: number
-          new_clients?: number
-          summary?: string | null
-          highlights?: string | null
+          report_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
+          vendor_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quarterly_report_expenses_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "quarterly_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quarterly_reports: {
+        Row: {
+          cash_balance: number | null
+          challenges: string | null
+          created_at: string
+          created_by: string | null
+          expenses: number | null
+          highlights: string | null
+          id: string
+          net_profit: number | null
+          new_clients: number | null
+          next_quarter_goals: string | null
+          projects_completed: number | null
+          published: boolean
+          quarter: number
+          revenue: number | null
+          summary: string | null
+          updated_at: string
+          video_url: string | null
+          year: number
+        }
+        Insert: {
+          cash_balance?: number | null
           challenges?: string | null
-          next_quarter_goals?: string | null
-          video_url?: string | null
-          published?: boolean
-          created_by?: string | null
           created_at?: string
+          created_by?: string | null
+          expenses?: number | null
+          highlights?: string | null
+          id?: string
+          net_profit?: number | null
+          new_clients?: number | null
+          next_quarter_goals?: string | null
+          projects_completed?: number | null
+          published?: boolean
+          quarter: number
+          revenue?: number | null
+          summary?: string | null
           updated_at?: string
+          video_url?: string | null
+          year: number
+        }
+        Update: {
+          cash_balance?: number | null
+          challenges?: string | null
+          created_at?: string
+          created_by?: string | null
+          expenses?: number | null
+          highlights?: string | null
+          id?: string
+          net_profit?: number | null
+          new_clients?: number | null
+          next_quarter_goals?: string | null
+          projects_completed?: number | null
+          published?: boolean
+          quarter?: number
+          revenue?: number | null
+          summary?: string | null
+          updated_at?: string
+          video_url?: string | null
+          year?: number
         }
         Relationships: [
           {
@@ -2108,13 +2110,11 @@ export type Database = {
           id: string
           items: Json | null
           lead_id: string
+          notes: string | null
           paid_amount: number | null
           paid_at: string | null
-          payment_status: string | null
-          stripe_checkout_session_id: string | null
-          stripe_payment_intent_id: string | null
-          notes: string | null
           payment_option: string | null
+          payment_status: string | null
           proforma_accepted_at: string | null
           shipping_address: string | null
           shipping_city: string | null
@@ -2124,6 +2124,8 @@ export type Database = {
           shipping_recipient_name: string | null
           shipping_recipient_phone: string | null
           status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
           submitted_at: string | null
           tax_id: string | null
           token: string
@@ -2143,13 +2145,11 @@ export type Database = {
           id?: string
           items?: Json | null
           lead_id: string
+          notes?: string | null
           paid_amount?: number | null
           paid_at?: string | null
-          payment_status?: string | null
-          stripe_checkout_session_id?: string | null
-          stripe_payment_intent_id?: string | null
-          notes?: string | null
           payment_option?: string | null
+          payment_status?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
@@ -2159,6 +2159,8 @@ export type Database = {
           shipping_recipient_name?: string | null
           shipping_recipient_phone?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           submitted_at?: string | null
           tax_id?: string | null
           token?: string
@@ -2178,13 +2180,11 @@ export type Database = {
           id?: string
           items?: Json | null
           lead_id?: string
+          notes?: string | null
           paid_amount?: number | null
           paid_at?: string | null
-          payment_status?: string | null
-          stripe_checkout_session_id?: string | null
-          stripe_payment_intent_id?: string | null
-          notes?: string | null
           payment_option?: string | null
+          payment_status?: string | null
           proforma_accepted_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
@@ -2194,6 +2194,8 @@ export type Database = {
           shipping_recipient_name?: string | null
           shipping_recipient_phone?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           submitted_at?: string | null
           tax_id?: string | null
           token?: string
@@ -2769,6 +2771,48 @@ export type Database = {
           },
         ]
       }
+      user_notification_preferences: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          push_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          push_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          push_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notification_preferences_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: false
+            referencedRelation: "notification_event_config"
+            referencedColumns: ["event_type"]
+          },
+          {
+            foreignKeyName: "user_notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           birthday: string | null
@@ -3278,3 +3322,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

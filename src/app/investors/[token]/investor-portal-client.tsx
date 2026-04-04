@@ -30,6 +30,13 @@ type ReportClient = {
   projects: ClientProject[] | string;
 };
 
+type ReportExpense = {
+  id: string;
+  category: string;
+  amount: number;
+  vendor_count: number;
+};
+
 type Report = {
   id: string;
   quarter: number;
@@ -46,6 +53,7 @@ type Report = {
   next_quarter_goals: string | null;
   video_url: string | null;
   clients: ReportClient[];
+  expenses_breakdown: ReportExpense[];
 };
 
 type TeamMember = {
@@ -71,6 +79,24 @@ const ROLE_LABELS: Record<string, string> = {
   manager: "Manager",
   comercial: "Comercial",
   employee: "Producción",
+};
+
+const EXPENSE_LABELS: Record<string, string> = {
+  materials: "Materiales", shipping: "Envíos", software: "Software",
+  payroll: "Nóminas", financing: "Financiación", banking: "Banca",
+  taxes: "Impuestos", rent: "Alquiler", utilities: "Suministros",
+  telecom: "Telecomunicaciones", insurance: "Seguros", fuel: "Combustible",
+  meals: "Comidas", travel: "Viajes", marketing: "Marketing",
+  professional: "Servicios prof.", other: "Otros",
+};
+
+const EXPENSE_COLORS: Record<string, string> = {
+  payroll: "bg-blue-500", rent: "bg-amber-500", materials: "bg-green-500",
+  shipping: "bg-cyan-500", software: "bg-purple-500", financing: "bg-rose-500",
+  banking: "bg-zinc-500", taxes: "bg-red-500", utilities: "bg-yellow-500",
+  telecom: "bg-indigo-500", insurance: "bg-orange-500", fuel: "bg-lime-500",
+  meals: "bg-pink-500", travel: "bg-teal-500", marketing: "bg-violet-500",
+  professional: "bg-sky-500", other: "bg-zinc-400",
 };
 
 const PRINTER_STATES: Record<string, { label: string; color: string }> = {
@@ -253,8 +279,11 @@ function Card({ label, value }: { label: string; value: string }) {
 
 function ReportCard({ report }: { report: Report }) {
   const [expanded, setExpanded] = useState(false);
+  const [showExpenses, setShowExpenses] = useState(false);
   const clients = report.clients || [];
+  const expensesBreakdown = report.expenses_breakdown || [];
   const recurring = clients.filter((c) => c.is_recurring).length;
+  const totalExpenses = expensesBreakdown.reduce((s, e) => s + Number(e.amount), 0);
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -316,6 +345,81 @@ function ReportCard({ report }: { report: Report }) {
         {report.challenges && <TextBlock label="Retos" text={report.challenges} />}
         {report.next_quarter_goals && <TextBlock label="Objetivos próximo trimestre" text={report.next_quarter_goals} />}
       </div>
+
+      {/* Expenses breakdown */}
+      {expensesBreakdown.length > 0 && (
+        <div className="border-t border-zinc-100 px-6 py-3 dark:border-zinc-800">
+          <button
+            onClick={() => setShowExpenses(!showExpenses)}
+            className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"
+          >
+            <svg className={`h-3 w-3 transition-transform ${showExpenses ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            Desglose de gastos ({fmt(totalExpenses)})
+          </button>
+
+          {showExpenses && (
+            <div className="mt-3 space-y-3">
+              {/* Category bar */}
+              {totalExpenses > 0 && (
+                <div className="flex h-5 overflow-hidden rounded-full">
+                  {expensesBreakdown.map((exp) => {
+                    const pct = (Number(exp.amount) / totalExpenses) * 100;
+                    if (pct < 0.5) return null;
+                    return (
+                      <div
+                        key={exp.id}
+                        className={`${EXPENSE_COLORS[exp.category] || "bg-zinc-400"} flex items-center justify-center text-[9px] font-bold text-white`}
+                        style={{ width: `${pct}%` }}
+                        title={`${EXPENSE_LABELS[exp.category] || exp.category}: ${fmt(Number(exp.amount))}`}
+                      >
+                        {pct >= 12 ? EXPENSE_LABELS[exp.category] || exp.category : ""}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Table */}
+              <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-50 text-[11px] uppercase text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Categoría</th>
+                      <th className="px-3 py-2 text-right">Importe</th>
+                      <th className="px-3 py-2 text-right">%</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                    {expensesBreakdown.map((exp) => (
+                      <tr key={exp.id}>
+                        <td className="px-3 py-2 font-medium text-zinc-900 dark:text-white">
+                          <span className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${EXPENSE_COLORS[exp.category] || "bg-zinc-400"}`} />
+                            {EXPENSE_LABELS[exp.category] || exp.category}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-zinc-900 dark:text-white">{fmt(Number(exp.amount))}</td>
+                        <td className="px-3 py-2 text-right text-zinc-500">
+                          {totalExpenses > 0 ? ((Number(exp.amount) / totalExpenses) * 100).toFixed(1) : "0"}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-zinc-50 dark:bg-zinc-900">
+                    <tr>
+                      <td className="px-3 py-2 text-sm font-bold text-zinc-900 dark:text-white">Total</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-zinc-900 dark:text-white">{fmt(totalExpenses)}</td>
+                      <td className="px-3 py-2 text-right text-xs text-zinc-500">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Clients toggle */}
       {clients.length > 0 && (

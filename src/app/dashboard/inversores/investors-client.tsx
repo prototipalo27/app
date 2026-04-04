@@ -12,8 +12,14 @@ import {
   updateReportClient,
   addReportClient,
   deleteReportClient,
+  getReportExpenses,
+  populateReportExpenses,
+  updateReportExpense,
+  deleteReportExpenses,
+  CATEGORY_LABELS,
   type ReportClient,
   type ClientProject,
+  type ReportExpense,
 } from "./actions";
 
 type Investor = {
@@ -366,6 +372,7 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [clientRevenue, setClientRevenue] = useState<Record<string, number>>({});
+  const [clientExpenses, setClientExpenses] = useState<Record<string, number>>({});
 
   const currentYear = new Date().getFullYear();
   const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3);
@@ -453,7 +460,7 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                   {/* Financial metrics */}
                   <div className="mb-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
                     <Metric label="Facturación" value={formatCurrency(clientRevenue[report.id] ?? Number(report.revenue))} />
-                    <Metric label="Gastos" value={formatCurrency(Number(report.expenses))} />
+                    <Metric label="Gastos" value={formatCurrency(clientExpenses[report.id] ?? Number(report.expenses))} />
                     <Metric label="Beneficio neto" value={formatCurrency(Number(report.net_profit))} color={Number(report.net_profit) >= 0 ? "green" : "red"} />
                     <Metric label="Saldo en caja" value={formatCurrency(Number(report.cash_balance))} />
                     <Metric label="Nuevos clientes" value={String(report.new_clients)} />
@@ -481,6 +488,17 @@ function ReportsTab({ reports }: { reports: QuarterlyReport[] }) {
                     quarter={report.quarter}
                     year={report.year}
                     onRevenueChange={(total) => setClientRevenue((prev) => {
+                      if (prev[report.id] === total) return prev;
+                      return { ...prev, [report.id]: total };
+                    })}
+                  />
+
+                  {/* Expenses section */}
+                  <QuarterExpensesSection
+                    reportId={report.id}
+                    quarter={report.quarter}
+                    year={report.year}
+                    onExpensesChange={(total) => setClientExpenses((prev) => {
                       if (prev[report.id] === total) return prev;
                       return { ...prev, [report.id]: total };
                     })}
@@ -862,6 +880,223 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
               <div className="w-8 shrink-0" />
             </div>
           </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Expenses Section ────────────────────────────────────────────
+
+const CATEGORY_COLORS: Record<string, string> = {
+  payroll: "bg-blue-500", rent: "bg-amber-500", materials: "bg-green-500",
+  shipping: "bg-cyan-500", software: "bg-purple-500", financing: "bg-rose-500",
+  banking: "bg-zinc-500", taxes: "bg-red-500", utilities: "bg-yellow-500",
+  telecom: "bg-indigo-500", insurance: "bg-orange-500", fuel: "bg-lime-500",
+  meals: "bg-pink-500", travel: "bg-teal-500", marketing: "bg-violet-500",
+  professional: "bg-sky-500", other: "bg-zinc-400",
+};
+
+function QuarterExpensesSection({ reportId, quarter, year, onExpensesChange }: {
+  reportId: string; quarter: number; year: number; onExpensesChange: (total: number) => void;
+}) {
+  const [expenses, setExpenses] = useState<ReportExpense[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [shown, setShown] = useState(false);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const onExpensesRef = useRef(onExpensesChange);
+  onExpensesRef.current = onExpensesChange;
+  const prevExpenses = useRef<number | null>(null);
+
+  const totalExpenses = expenses?.reduce((s, e) => s + Number(e.amount), 0) ?? 0;
+
+  useEffect(() => {
+    if (expenses && totalExpenses !== prevExpenses.current) {
+      prevExpenses.current = totalExpenses;
+      onExpensesRef.current(totalExpenses);
+    }
+  }, [expenses, totalExpenses]);
+
+  async function loadExpenses() {
+    if (expenses) { setShown(!shown); return; }
+    setLoading(true);
+    const result = await getReportExpenses(reportId);
+    setExpenses((result.data ?? []) as ReportExpense[]);
+    setShown(true);
+    setLoading(false);
+  }
+
+  function handlePopulate() {
+    startTransition(async () => {
+      const result = await populateReportExpenses(reportId, quarter, year);
+      if (result.error) { alert(result.error); return; }
+      const fresh = await getReportExpenses(reportId);
+      setExpenses((fresh.data ?? []) as ReportExpense[]);
+    });
+  }
+
+  function handleClear() {
+    if (!confirm("¿Eliminar todos los gastos cargados?")) return;
+    startTransition(async () => {
+      await deleteReportExpenses(reportId);
+      setExpenses([]);
+    });
+  }
+
+  function handleUpdateAmount(id: string, amount: number) {
+    setExpenses((prev) =>
+      prev?.map((e) => (e.id === id ? { ...e, amount } : e)) ?? null
+    );
+    startTransition(async () => {
+      await updateReportExpense(id, { amount });
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+      <button
+        onClick={loadExpenses}
+        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+      >
+        <svg className={`h-3 w-3 transition-transform ${shown ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        Gastos del trimestre
+        {loading && <span className="text-zinc-400">cargando...</span>}
+      </button>
+
+      {shown && expenses !== null && (
+        <div className={`mt-3 space-y-3 ${isPending ? "opacity-70 pointer-events-none" : ""}`}>
+          {/* Summary */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {expenses.length} categorías
+            </span>
+            <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              {formatCurrency(totalExpenses)} total
+            </span>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            {expenses.length === 0 && (
+              <button onClick={handlePopulate} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                Cargar desde extractos
+              </button>
+            )}
+            {expenses.length > 0 && (
+              <button onClick={handleClear} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                Limpiar y recargar
+              </button>
+            )}
+          </div>
+
+          {/* Category bar */}
+          {expenses.length > 0 && totalExpenses > 0 && (
+            <div className="flex h-6 overflow-hidden rounded-full">
+              {expenses.map((exp) => {
+                const pct = (Number(exp.amount) / totalExpenses) * 100;
+                if (pct < 0.5) return null;
+                return (
+                  <div
+                    key={exp.id}
+                    className={`${CATEGORY_COLORS[exp.category] || "bg-zinc-400"} flex items-center justify-center text-[9px] font-bold text-white`}
+                    style={{ width: `${pct}%` }}
+                    title={`${CATEGORY_LABELS[exp.category] || exp.category}: ${formatCurrency(Number(exp.amount))}`}
+                  >
+                    {pct >= 10 ? CATEGORY_LABELS[exp.category] || exp.category : ""}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Expense table */}
+          {expenses.length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              {/* Header */}
+              <div className="flex items-center gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                <div className="w-4 shrink-0" />
+                <div className="min-w-0 flex-1">Categoría</div>
+                <div className="w-16 text-center">Proveedores</div>
+                <div className="w-24 text-right">Importe</div>
+                <div className="w-16 text-right">%</div>
+              </div>
+
+              {/* Rows */}
+              {expenses.map((exp) => {
+                const details = (Array.isArray(exp.details) ? exp.details : typeof exp.details === "string" ? JSON.parse(exp.details) : []) as Array<{ vendor: string; amount: number }>;
+                const isExpanded = expandedCat === exp.id;
+                const pct = totalExpenses > 0 ? ((Number(exp.amount) / totalExpenses) * 100).toFixed(1) : "0";
+
+                return (
+                  <div key={exp.id} className={`border-b border-zinc-100 last:border-b-0 dark:border-zinc-800 ${isExpanded ? "bg-zinc-50/50 dark:bg-zinc-950/50" : ""}`}>
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <button
+                        onClick={() => setExpandedCat(isExpanded ? null : exp.id)}
+                        className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                      >
+                        <svg className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${CATEGORY_COLORS[exp.category] || "bg-zinc-400"}`} />
+                        <span className="text-sm font-medium text-zinc-900 dark:text-white">
+                          {CATEGORY_LABELS[exp.category] || exp.category}
+                        </span>
+                      </div>
+
+                      <div className="w-16 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                        {exp.vendor_count}
+                      </div>
+
+                      <input
+                        type="number" step="0.01"
+                        className="w-24 bg-transparent text-right text-sm font-bold text-zinc-900 focus:outline-none dark:text-white"
+                        defaultValue={Number(exp.amount)}
+                        onBlur={(e) => handleUpdateAmount(exp.id, parseFloat(e.target.value) || 0)}
+                      />
+
+                      <div className="w-16 text-right text-xs text-zinc-500 dark:text-zinc-400">
+                        {pct}%
+                      </div>
+                    </div>
+
+                    {/* Vendor details */}
+                    {isExpanded && details.length > 0 && (
+                      <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-2 pl-11 dark:border-zinc-800 dark:bg-zinc-950">
+                        <div className="space-y-1">
+                          {details.map((d, idx) => (
+                            <div key={idx} className="flex items-center justify-between rounded border border-zinc-200 bg-white px-3 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
+                              <span className="text-xs text-zinc-700 dark:text-zinc-300">{d.vendor}</span>
+                              <span className="text-xs font-medium text-zinc-900 dark:text-white">{formatCurrency(d.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Footer total */}
+              <div className="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="w-4 shrink-0" />
+                <div className="min-w-0 flex-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                  Total gastos
+                </div>
+                <div className="w-16" />
+                <div className="w-24 text-right text-sm font-bold text-zinc-900 dark:text-white">
+                  {formatCurrency(totalExpenses)}
+                </div>
+                <div className="w-16" />
+              </div>
+            </div>
           )}
         </div>
       )}

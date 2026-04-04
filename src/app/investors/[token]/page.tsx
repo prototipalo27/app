@@ -75,6 +75,23 @@ export default async function InvestorPortalPage({
     }
   }
 
+  // Get expenses for each report
+  let reportExpenses: Record<string, unknown[]> = {};
+  if (reportIds.length > 0) {
+    const { data: expenses } = await supabase
+      .from("quarterly_report_expenses")
+      .select("*")
+      .in("report_id", reportIds)
+      .order("amount", { ascending: false });
+
+    if (expenses) {
+      for (const e of expenses) {
+        if (!reportExpenses[e.report_id]) reportExpenses[e.report_id] = [];
+        reportExpenses[e.report_id].push(e);
+      }
+    }
+  }
+
   // 4. Get team members
   const { data: team } = await supabase
     .from("user_profiles")
@@ -119,7 +136,7 @@ export default async function InvestorPortalPage({
         investor={investor}
         allInvestors={allInvestors ?? []}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      reports={(reports ?? []).map((r) => ({ ...r, clients: reportClients[r.id] ?? [] })) as any}
+      reports={(reports ?? []).map((r) => ({ ...r, clients: reportClients[r.id] ?? [], expenses_breakdown: reportExpenses[r.id] ?? [] })) as any}
         team={team ?? []}
         printers={printers ?? []}
       />
