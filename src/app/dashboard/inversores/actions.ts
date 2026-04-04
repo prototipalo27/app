@@ -208,10 +208,10 @@ export async function populateReportClients(reportId: string, quarter: number, y
 
   const lifetimeMap: Record<string, number> = {};
   for (const inv of allInvoices) {
-    lifetimeMap[inv.contact] = (lifetimeMap[inv.contact] || 0) + inv.total;
+    lifetimeMap[inv.contact] = (lifetimeMap[inv.contact] || 0) + inv.subtotal;
   }
   for (const cn of allCreditNotes) {
-    lifetimeMap[cn.contact] = (lifetimeMap[cn.contact] || 0) - cn.total;
+    lifetimeMap[cn.contact] = (lifetimeMap[cn.contact] || 0) - cn.subtotal;
   }
 
   // Recurring: contacts that had invoices BEFORE this quarter
@@ -260,7 +260,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
     if (!contactCNs?.length) return true;
 
     // Find a credit note with matching total
-    const matchIdx = contactCNs.findIndex((cn) => Math.abs(cn.total - inv.total) < 0.01);
+    const matchIdx = contactCNs.findIndex((cn) => Math.abs(cn.subtotal - inv.subtotal) < 0.01);
     if (matchIdx >= 0) {
       // Remove the matched credit note so it's not reused
       contactCNs.splice(matchIdx, 1);
@@ -282,11 +282,11 @@ export async function populateReportClients(reportId: string, quarter: number, y
     const projectEntry: ClientProject = {
       name: `${inv.docNumber} — ${inv.products?.map((p) => p.name).join(", ") || inv.desc || "Factura"}`,
       description: "",
-      value: inv.total,
+      value: inv.subtotal,
     };
 
     if (existing) {
-      existing.quarter_value += inv.total;
+      existing.quarter_value += inv.subtotal;
       existing.projects.push(projectEntry);
     } else {
       clientMap.set(key, {
@@ -294,8 +294,8 @@ export async function populateReportClients(reportId: string, quarter: number, y
         contact_id: inv.contact,
         source,
         is_recurring: recurringContacts.has(inv.contact),
-        quarter_value: inv.total,
-        lifetime_value: lifetimeMap[inv.contact] || inv.total,
+        quarter_value: inv.subtotal,
+        lifetime_value: lifetimeMap[inv.contact] || inv.subtotal,
         projects: [projectEntry],
       });
     }
@@ -309,11 +309,11 @@ export async function populateReportClients(reportId: string, quarter: number, y
     const rectEntry: ClientProject = {
       name: `${cn.docNumber} (Rectificativa)`,
       description: "",
-      value: -cn.total,
+      value: -cn.subtotal,
     };
 
     if (existing) {
-      existing.quarter_value -= cn.total;
+      existing.quarter_value -= cn.subtotal;
       existing.projects.push(rectEntry);
     } else {
       clientMap.set(key, {
@@ -321,7 +321,7 @@ export async function populateReportClients(reportId: string, quarter: number, y
         contact_id: cn.contact,
         source: "directo",
         is_recurring: true,
-        quarter_value: -cn.total,
+        quarter_value: -cn.subtotal,
         lifetime_value: lifetimeMap[cn.contact] || 0,
         projects: [rectEntry],
       });
@@ -348,6 +348,20 @@ export async function populateReportClients(reportId: string, quarter: number, y
 
   const { error } = await supabase.from("quarterly_report_clients").insert(rows);
   if (error) return { success: false, error: error.message };
+
+  // Auto-update revenue on the quarterly report
+  const totalRevenue = rows.reduce((sum, r) => sum + r.quarter_value, 0);
+  const totalClients = rows.length;
+  const newClientsCount = rows.filter((r) => !r.is_recurring).length;
+  await supabase
+    .from("quarterly_reports")
+    .update({
+      revenue: totalRevenue,
+      new_clients: newClientsCount,
+      projects_completed: rows.reduce((sum, r) => sum + ((JSON.parse(r.projects as string) as ClientProject[]).length), 0),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
 
   revalidatePath(PATH);
   return { success: true, error: null };
