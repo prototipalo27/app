@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
@@ -226,6 +227,18 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Tabl
 }
 
 export default async function TrackingPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-50 dark:bg-black" />}>
+      <TrackingContent params={params} />
+    </Suspense>
+  );
+}
+
+async function TrackingContent({
   params,
 }: {
   params: Promise<{ token: string }>;

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 export async function addSkillToUser(userId: string, skillId: string) {
   await requireRole("manager");
@@ -40,6 +40,7 @@ export async function assignZone(userId: string, zone: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard/equipo");
+  updateTag("zone-assignments");
 }
 
 export async function removeZone(userId: string, zone: string) {
@@ -54,6 +55,7 @@ export async function removeZone(userId: string, zone: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard/equipo");
+  updateTag("zone-assignments");
 }
 
 export async function createSkill(name: string) {

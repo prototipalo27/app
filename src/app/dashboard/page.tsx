@@ -5,7 +5,10 @@ import { KanbanBoard } from "./kanban-board";
 import { RealtimeProjectsListener } from "./realtime-projects";
 import { SyncHoldedButton } from "./sync-holded-button";
 import { AutoSync } from "./auto-sync";
-import { classifyTrafficSource, SOURCE_COLORS, ALL_SOURCES, type TrafficSource } from "@/lib/utm-utils";
+import {
+  getSharedUserProfiles,
+  getSharedZoneAssignments,
+} from "@/lib/supabase/cached-queries";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -15,17 +18,12 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const now = new Date();
-  const curMonth = now.getMonth();
-  const curYear = now.getFullYear();
-
+  // Fresh queries (change frequently / have realtime) + cached queries (stable data)
   const [
     { data: confirmedProjects },
     { data: syncMeta },
-    { data: zoneAssignments },
-    { data: userProfiles },
-    { data: allLeads },
-    { data: utmRows },
+    zoneAssignments,
+    userProfiles,
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -37,16 +35,14 @@ export default async function DashboardPage() {
       .select("value")
       .eq("key", "last_holded_sync")
       .single(),
-    supabase.from("zone_assignments").select("user_id, zone"),
-    supabase.from("user_profiles").select("id, full_name, nickname, email").eq("is_active", true),
-    supabase.from("leads").select("id, source, status, created_at"),
-    supabase.from("lead_utm_data").select("lead_id, utm_source, utm_medium, utm_campaign, gclid, fbclid, msclkid, ttclid, referrer"),
+    getSharedZoneAssignments(),       // cached: hours
+    getSharedUserProfiles(),          // cached: hours
   ]);
 
   // Build zone → responsible names map
-  const userMap = new Map((userProfiles ?? []).map((u) => [u.id, u.nickname || u.full_name || u.email.split("@")[0]]));
+  const userMap = new Map(userProfiles.map((u) => [u.id, u.nickname || u.full_name || u.email.split("@")[0]]));
   const zoneResponsibles: Record<string, string[]> = {};
-  for (const za of zoneAssignments ?? []) {
+  for (const za of zoneAssignments) {
     const name = userMap.get(za.user_id);
     if (name) {
       if (!zoneResponsibles[za.zone]) zoneResponsibles[za.zone] = [];
@@ -67,36 +63,6 @@ export default async function DashboardPage() {
       invoiceDocNumbers[p.holded_invoice_id] = p.invoice_doc_number;
     }
   }
-
-  /* ── Lead source analytics ── */
-  const utmByLeadId = new Map(
-    (utmRows ?? []).map((u) => [u.lead_id, u])
-  );
-
-  const prevMonth = curMonth === 0 ? 11 : curMonth - 1;
-  const prevMonthYear = curMonth === 0 ? curYear - 1 : curYear;
-
-  type SourceRow = { source: TrafficSource; total: number; thisMonth: number; lastMonth: number; won: number };
-  const sourceMap = new Map<TrafficSource, SourceRow>();
-
-  for (const l of allLeads ?? []) {
-    const ts = classifyTrafficSource(l.source, utmByLeadId.get(l.id) ?? null);
-    let row = sourceMap.get(ts);
-    if (!row) {
-      row = { source: ts, total: 0, thisMonth: 0, lastMonth: 0, won: 0 };
-      sourceMap.set(ts, row);
-    }
-    row.total++;
-    const d = new Date(l.created_at);
-    if (d.getMonth() === curMonth && d.getFullYear() === curYear) row.thisMonth++;
-    if (d.getMonth() === prevMonth && d.getFullYear() === prevMonthYear) row.lastMonth++;
-    if (l.status === "won" || l.status === "paid") row.won++;
-  }
-
-  const leadSourceRows = ALL_SOURCES
-    .filter((s) => sourceMap.has(s))
-    .map((s) => sourceMap.get(s)!)
-    .sort((a, b) => b.total - a.total);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">

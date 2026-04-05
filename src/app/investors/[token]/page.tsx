@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
@@ -25,6 +26,18 @@ export async function generateMetadata({
 }
 
 export default async function InvestorPortalPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-50 dark:bg-black" />}>
+      <InvestorPortalContent params={params} />
+    </Suspense>
+  );
+}
+
+async function InvestorPortalContent({
   params,
 }: {
   params: Promise<{ token: string }>;

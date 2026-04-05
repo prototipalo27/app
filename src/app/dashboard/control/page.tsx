@@ -5,7 +5,7 @@ import { getNextTaxDeadline } from "@/lib/finance/tax-calendar";
 import Link from "next/link";
 import { BillingBreakdown } from "./billing-breakdown";
 import { LeadsChart } from "../leads-chart";
-import { LeadAnalytics } from "./lead-analytics";
+import { LeadAnalytics } from "./lead-analytics-wrapper";
 import { classifyTrafficSource, SOURCE_COLORS, ALL_SOURCES, type TrafficSource } from "@/lib/utm-utils";
 
 /* ── helpers ── */

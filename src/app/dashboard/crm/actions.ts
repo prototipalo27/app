@@ -2,7 +2,7 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { decrypt } from "@/lib/encryption";
@@ -43,6 +43,7 @@ export async function updateBasePrice(
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/crm");
+  updateTag("base-prices");
   return { success: true };
 }
 
@@ -122,6 +123,7 @@ export async function createLead(formData: FormData) {
   }
 
   revalidatePath("/dashboard/crm");
+  updateTag("leads");
   redirect(`/dashboard/crm/${data.id}`);
 }
 
@@ -521,6 +523,7 @@ export async function updateLeadStatus(
 
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
+  updateTag("leads");
   return { success: true };
 }
 
@@ -1787,6 +1790,7 @@ export async function deleteLead(id: string): Promise<{ success: boolean; error?
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/crm");
+  updateTag("leads");
   redirect("/dashboard/crm");
 }
 

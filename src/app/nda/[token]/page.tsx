@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
@@ -9,6 +10,18 @@ export const metadata: Metadata = {
 };
 
 export default async function NdaPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950" />}>
+      <NdaContent params={params} />
+    </Suspense>
+  );
+}
+
+async function NdaContent({
   params,
 }: {
   params: Promise<{ token: string }>;

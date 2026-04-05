@@ -1,0 +1,24 @@
+export default function QueueLoading() {
+  return (
+    <div className="animate-pulse space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="h-7 w-40 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-9 w-32 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+      </div>
+
+      {/* Queue rows */}
+      <div className="space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="h-5 w-5 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 w-40 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 flex-1 rounded bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-6 w-16 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 w-20 rounded bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

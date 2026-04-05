@@ -2,7 +2,7 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import type { UserRole } from "@/lib/rbac";
 
 const PROTECTED_EMAIL = "manu@prototipalo.com";
@@ -37,6 +37,7 @@ export async function updateUserRole(userId: string, role: UserRole) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard/users");
+  updateTag("user-profiles");
 }
 
 export async function toggleUserActive(userId: string, isActive: boolean) {
@@ -68,6 +69,7 @@ export async function toggleUserActive(userId: string, isActive: boolean) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard/users");
+  updateTag("user-profiles");
 }
 
 export async function inviteUser(
@@ -91,6 +93,7 @@ export async function inviteUser(
   }
 
   revalidatePath("/dashboard/users");
+  updateTag("user-profiles");
   return { message: `Invitacion enviada a ${email}` };
 }
 
@@ -125,6 +128,7 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
   await supabase.from("user_profiles").delete().eq("id", userId);
 
   revalidatePath("/dashboard/users");
+  updateTag("user-profiles");
   return { success: true };
 }
 
@@ -146,5 +150,6 @@ export async function updateContractEndDate(
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/dashboard/users");
+  updateTag("user-profiles");
   return { success: true };
 }

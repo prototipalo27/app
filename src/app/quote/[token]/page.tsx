@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
@@ -16,6 +17,18 @@ interface QuoteItem {
 }
 
 export default async function QuotePage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950" />}>
+      <QuoteContent params={params} />
+    </Suspense>
+  );
+}
+
+async function QuoteContent({
   params,
 }: {
   params: Promise<{ token: string }>;

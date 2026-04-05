@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { getAllContactos, getTeamMembers } from "./actions";

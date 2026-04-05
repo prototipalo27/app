@@ -4,7 +4,7 @@
  */
 
 export type TrafficSource =
-  | "Google Organic"
+  | "SEO"
   | "Google Ads"
   | "Facebook/Instagram"
   | "LinkedIn"
@@ -12,7 +12,6 @@ export type TrafficSource =
   | "WhatsApp"
   | "Teléfono"
   | "Presencial"
-  | "Web Orgánico"
   | "Directo"
   | "Referral"
   | "Otros Paid"
@@ -44,8 +43,7 @@ export function classifyTrafficSource(
   if (leadSource === "in_person") return "Presencial";
   if (leadSource === "manual") return "Directo";
 
-  // Webflow leads without UTM data
-  if (leadSource === "webflow" && !utm) return "Web Orgánico";
+  // No UTM data → Directo (includes webflow without tracking params)
   if (!utm) return "Directo";
 
   const source = (utm.utm_source ?? "").toLowerCase();
@@ -55,9 +53,9 @@ export function classifyTrafficSource(
   if (utm.gclid || (source === "google" && (medium === "cpc" || medium === "ppc"))) {
     return "Google Ads";
   }
-  // Google Organic
-  if (source === "google" || (medium === "organic" && !source)) {
-    return "Google Organic";
+  // Search engine organic (Google, Bing, etc.)
+  if (source === "google" || source === "bing" || source === "duckduckgo" || source === "yahoo" || (medium === "organic" && !source)) {
+    return "SEO";
   }
   // Facebook / Instagram
   if (
@@ -82,15 +80,20 @@ export function classifyTrafficSource(
   if (medium === "cpc" || medium === "ppc" || medium === "paid" || medium === "display") {
     return "Otros Paid";
   }
-  // Referral
-  if (medium === "referral" || (utm.referrer && !source)) return "Referral";
+  // Referral — but check if referrer is actually a search engine
+  if (medium === "referral" || (utm.referrer && !source)) {
+    const ref = (utm.referrer ?? "").toLowerCase();
+    if (ref.includes("google.")) return "SEO";
+    if (ref.includes("bing.") || ref.includes("duckduckgo.") || ref.includes("yahoo.")) return "SEO";
+    return "Referral";
+  }
 
   return source ? "Otros" : "Directo";
 }
 
 /** Consistent color palette for traffic source charts */
 export const SOURCE_COLORS: Record<TrafficSource, string> = {
-  "Google Organic": "#34a853",
+  "SEO": "#34a853",
   "Google Ads": "#4285f4",
   "Facebook/Instagram": "#e1306c",
   "LinkedIn": "#0a66c2",
@@ -98,7 +101,6 @@ export const SOURCE_COLORS: Record<TrafficSource, string> = {
   "WhatsApp": "#25d366",
   "Teléfono": "#0ea5e9",
   "Presencial": "#f97316",
-  "Web Orgánico": "#14b8a6",
   "Directo": "#6b7280",
   "Referral": "#8b5cf6",
   "Otros Paid": "#ef4444",
@@ -107,7 +109,7 @@ export const SOURCE_COLORS: Record<TrafficSource, string> = {
 
 /** All possible sources in display order */
 export const ALL_SOURCES: TrafficSource[] = [
-  "Google Organic",
+  "SEO",
   "Google Ads",
   "Facebook/Instagram",
   "LinkedIn",
@@ -115,7 +117,6 @@ export const ALL_SOURCES: TrafficSource[] = [
   "WhatsApp",
   "Teléfono",
   "Presencial",
-  "Web Orgánico",
   "Directo",
   "Referral",
   "Otros Paid",

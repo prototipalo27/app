@@ -1,4 +1,5 @@
-import * as XLSX from "xlsx";
+// XLSX is imported dynamically to avoid bundling ~500KB on the client
+// Use parseBBVAStatement only on the server (via server actions)
 
 export interface BankTransaction {
   date: string;
@@ -20,13 +21,12 @@ export interface VendorGroup {
  * Parse a BBVA bank statement Excel file (.xlsx).
  * Returns all transactions found in the sheet.
  */
-export function parseBBVAStatement(data: ArrayBuffer): BankTransaction[] {
+export async function parseBBVAStatement(data: ArrayBuffer): Promise<BankTransaction[]> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(data, { type: "array" });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
-  // Convert to array of arrays for flexible parsing
-  // Use raw: true to get native numbers from Excel cells instead of formatted strings
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: "",

@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 process.env.TZ = "Europe/Madrid";
 
 const nextConfig: NextConfig = {
+  cacheComponents: true,
   turbopack: {
     root: __dirname,
   },

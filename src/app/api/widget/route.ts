@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req: NextRequest) {
   const key = req.headers.get("x-api-key");
   if (key !== process.env.WIDGET_API_KEY) {

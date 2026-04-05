@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -23,6 +24,18 @@ export async function generateMetadata({
 }
 
 export default async function ClientNamesPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-50 dark:bg-black" />}>
+      <ClientNamesContent params={params} />
+    </Suspense>
+  );
+}
+
+async function ClientNamesContent({
   params,
 }: {
   params: Promise<{ token: string }>;

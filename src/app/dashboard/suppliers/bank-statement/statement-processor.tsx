@@ -181,7 +181,7 @@ export default function StatementProcessor({
 
       try {
         const buffer = await file.arrayBuffer();
-        const parsed = parseBBVAStatement(buffer);
+        const parsed = await parseBBVAStatement(buffer);
 
         const detected = targetMonth != null
           ? { month: targetMonth, year: selectedYear }

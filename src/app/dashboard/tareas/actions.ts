@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 async function isSuperAdmin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
@@ -62,6 +62,7 @@ export async function createTask(formData: FormData) {
   }
 
   revalidatePath("/dashboard/tareas");
+  updateTag("tasks");
   redirect("/dashboard/tareas");
 }
 
@@ -122,6 +123,7 @@ export async function updateTask(formData: FormData) {
 
   revalidatePath("/dashboard/tareas");
   revalidatePath(`/dashboard/tareas/${id}`);
+  updateTag("tasks");
   redirect(`/dashboard/tareas/${id}`);
 }
 
@@ -166,6 +168,7 @@ export async function updateTaskStatus(
 
   revalidatePath("/dashboard/tareas");
   revalidatePath(`/dashboard/tareas/${id}`);
+  updateTag("tasks");
   return { success: true };
 }
 
@@ -186,5 +189,6 @@ export async function deleteTask(formData: FormData) {
   }
 
   revalidatePath("/dashboard/tareas");
+  updateTag("tasks");
   redirect("/dashboard/tareas");
 }

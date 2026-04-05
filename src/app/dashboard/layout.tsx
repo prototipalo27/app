@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,7 +10,7 @@ import ImpersonationBanner from "@/components/ImpersonationBanner";
 import ImpersonateButton from "@/components/ImpersonateButton";
 import { getUserProfile, getRealProfile, hasRole, type UserRole } from "@/lib/rbac";
 import { getImpersonatedUserId } from "@/lib/impersonate";
-import { createClient } from "@/lib/supabase/server";
+import { getSharedUserProfiles, getUserTaskCount } from "@/lib/supabase/cached-queries";
 import DesktopNav from "./desktop-nav";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -20,42 +21,68 @@ const ROLE_LABELS: Record<UserRole, string> = {
   comercial: "Comercial",
 };
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const profile = await getUserProfile();
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <AuthenticatedDashboard>{children}</AuthenticatedDashboard>
+    </Suspense>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col bg-zinc-50 md:flex-row dark:bg-black">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:flex dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="shrink-0 border-b border-zinc-200/80 px-5 py-3 dark:border-zinc-800/50">
+          <div className="h-[5.25rem] w-40 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+        </div>
+        <div className="flex-1 p-3 space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-8 rounded-lg bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          ))}
+        </div>
+      </aside>
+      <main className="flex min-w-0 flex-1 flex-col p-4 md:p-8">
+        <div className="h-8 w-48 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+      </main>
+    </div>
+  );
+}
+
+async function AuthenticatedDashboard({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Parallelize auth calls (these need cookies, can't be cached)
+  const [profile, realProfile, impersonatedUserId] = await Promise.all([
+    getUserProfile(),
+    getRealProfile(),
+    getImpersonatedUserId(),
+  ]);
 
   if (!profile || !profile.is_active) {
     redirect("/login");
   }
 
-  const realProfile = await getRealProfile();
   const realIsSuperAdmin = realProfile?.role === "super_admin";
-  const impersonatedUserId = await getImpersonatedUserId();
   const isImpersonating = realIsSuperAdmin && impersonatedUserId && impersonatedUserId !== realProfile?.id;
 
-  // Fetch users list for impersonation dropdown (only for super_admin)
-  let impersonatableUsers: { id: string; email: string; role: string }[] = [];
-  if (realIsSuperAdmin) {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("user_profiles")
-      .select("id, email, role")
-      .eq("is_active", true)
-      .neq("id", realProfile!.id)
-      .order("email");
-    impersonatableUsers = data ?? [];
-  }
+  // Cached queries: task count (minutes) + user profiles for impersonation (hours)
+  const [pendingTaskCount, sharedProfiles] = await Promise.all([
+    getUserTaskCount(profile.id),
+    realIsSuperAdmin ? getSharedUserProfiles() : Promise.resolve([]),
+  ]);
 
-  // Count pending/in_progress tasks assigned to this user
-  const supabaseForTasks = await createClient();
-  const { count: pendingTaskCount } = await supabaseForTasks
-    .from("tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("assigned_to", profile.id)
-    .in("status", ["pending", "in_progress"]);
+  const impersonatableUsers = realIsSuperAdmin
+    ? sharedProfiles
+        .filter((u) => u.id !== realProfile!.id)
+        .map((u) => ({ id: u.id, email: u.email, role: u.role }))
+    : [];
 
   const isManager = hasRole(profile.role, "manager");
   const isSuperAdmin = profile.role === "super_admin";
@@ -109,7 +136,7 @@ export default async function DashboardLayout({
       )}
 
       {/* Mobile sidebar + top bar */}
-      <MobileSidebar isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount ?? 0}>{bottomSection}</MobileSidebar>
+      <MobileSidebar isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount}>{bottomSection}</MobileSidebar>
 
       {/* Desktop sidebar */}
       <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 md:flex dark:border-zinc-800 dark:bg-zinc-950 ${isImpersonating ? "pt-10" : ""}`}>
@@ -120,7 +147,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
 
-        <DesktopNav isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount ?? 0} />
+        <DesktopNav isManager={isManager} isSuperAdmin={isSuperAdmin} pendingTaskCount={pendingTaskCount} />
 
         <div className="shrink-0 border-t border-zinc-200/80 p-2 dark:border-zinc-800/50">
           {bottomSection}

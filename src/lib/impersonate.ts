@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { connection } from "next/server";
 import { getRealProfile } from "./rbac";
 
 const COOKIE_NAME = "x-impersonate-user-id";
@@ -33,6 +34,7 @@ export async function stopImpersonating() {
 }
 
 export async function getImpersonatedUserId(): Promise<string | null> {
+  await connection();
   const cookieStore = await cookies();
   return cookieStore.get(COOKIE_NAME)?.value ?? null;
 }

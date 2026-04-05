@@ -66,8 +66,12 @@ export default async function TareasPage({
     .select("*, assigned:user_profiles!tasks_assigned_to_fkey(email), creator:user_profiles!tasks_created_by_fkey(email), project:projects!tasks_project_id_fkey(id, name)")
     .order("created_at", { ascending: false });
 
-  if (params.status && params.status !== "all") {
+  if (params.status === "done") {
+    query = query.eq("status", "done");
+  } else if (params.status && params.status !== "all") {
     query = query.eq("status", params.status);
+  } else {
+    query = query.neq("status", "done");
   }
 
   if (params.mine === "true" && userId) {
