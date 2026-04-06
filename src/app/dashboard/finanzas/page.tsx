@@ -8,6 +8,7 @@ import TaxCalendarSection from "./tax-calendar-section";
 import CashFlowPipeline from "./cash-flow-pipeline";
 import PaymentCalendarSection from "./payment-calendar-section";
 import ReportDownloadButton from "./report-download-button";
+import { CATEGORY_LABELS } from "@/lib/finance/categories";
 
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -166,14 +167,6 @@ export default async function FinanzasPage() {
     const label = d.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
     months6.push({ key, label });
   }
-
-  const CATEGORY_LABELS: Record<string, string> = {
-    payroll: "Nominas", rent: "Alquiler", utilities: "Suministros",
-    insurance: "Seguros", software: "Software/SaaS", telecom: "Telecomunicaciones",
-    taxes: "Impuestos", materials: "Material", travel: "Viajes", meals: "Comidas", fuel: "Gasolinas", shipping: "Envios",
-    banking: "Bancos", financing: "Financiaciones", marketing: "Marketing",
-    professional: "Serv. profesionales", income: "Ingresos", other: "Otros",
-  };
 
   const monthlyData = months6.map(({ key, label }) => {
     const offered = upcomingProjects

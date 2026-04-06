@@ -20,6 +20,7 @@ import {
   type ClientProject,
   type ReportExpense,
 } from "./actions";
+import { CATEGORY_LABELS } from "@/lib/finance/categories";
 
 type Investor = {
   id: string;
@@ -899,22 +900,11 @@ function QuarterClientsSection({ reportId, quarter, year, onRevenueChange }: { r
 
 // ─── Expenses Section ────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, string> = {
-  materials: "Materiales", shipping: "Envíos", software: "Software",
-  payroll: "Nóminas", financing: "Financiación", banking: "Banca",
-  taxes: "Impuestos", rent: "Alquiler", utilities: "Suministros",
-  telecom: "Telecomunicaciones", insurance: "Seguros", fuel: "Combustible",
-  meals: "Comidas", travel: "Viajes", marketing: "Marketing",
-  professional: "Servicios profesionales", other: "Otros",
-};
-
 const CATEGORY_COLORS: Record<string, string> = {
-  payroll: "bg-blue-500", rent: "bg-amber-500", materials: "bg-green-500",
-  shipping: "bg-cyan-500", software: "bg-purple-500", financing: "bg-rose-500",
-  banking: "bg-zinc-500", taxes: "bg-red-500", utilities: "bg-yellow-500",
-  telecom: "bg-indigo-500", insurance: "bg-orange-500", fuel: "bg-lime-500",
-  meals: "bg-pink-500", travel: "bg-teal-500", marketing: "bg-violet-500",
-  professional: "bg-sky-500", other: "bg-zinc-400",
+  production: "bg-amber-500", payroll: "bg-blue-500", facilities: "bg-purple-500",
+  software: "bg-violet-500", finance: "bg-rose-500", taxes: "bg-red-500",
+  operations: "bg-emerald-500", marketing: "bg-pink-500",
+  income: "bg-green-500", other: "bg-zinc-400",
 };
 
 function QuarterExpensesSection({ reportId, quarter, year, onExpensesChange }: {

@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail } from "@/lib/email";
 import { getOrCreateSubfolder } from "@/lib/google-drive/client";
+import { matchCategoryByRules } from "@/lib/finance/category-rules";
+import { aiCategorizeVendorsBatch } from "@/lib/finance/ai-categorize";
 
 const INVOICES_DRIVE_PARENT = "1bzQ0UaPk3VDltG3hyX--cHTRqJYJRczV";
 
@@ -328,4 +330,46 @@ export async function toggleCheckedVendor(
     .eq("year", year);
 
   if (error) throw new Error(error.message);
+}
+
+// ── Auto-categorization ──
+
+export type AutoCategorySuggestion = {
+  category: string;
+  confidence: number;
+  source: "rule" | "ai";
+};
+
+export async function autoCategorizeVendors(
+  vendors: { vendorName: string; description: string; amount: number }[]
+): Promise<Record<string, AutoCategorySuggestion>> {
+  await requireRole("manager");
+
+  const result: Record<string, AutoCategorySuggestion> = {};
+  const unmatched: { vendorName: string; description: string; amount: number }[] = [];
+
+  // Pass 1: keyword rules + amount-based income detection
+  for (const v of vendors) {
+    // Positive amounts are income
+    if (v.amount > 0) {
+      result[v.vendorName] = { category: "income", confidence: 0.95, source: "rule" };
+      continue;
+    }
+    const match = matchCategoryByRules(v.vendorName);
+    if (match) {
+      result[v.vendorName] = { ...match, source: "rule" };
+    } else {
+      unmatched.push(v);
+    }
+  }
+
+  // Pass 2: AI fallback for unmatched vendors
+  if (unmatched.length > 0) {
+    const aiResults = await aiCategorizeVendorsBatch(unmatched);
+    for (const [vendorName, suggestion] of aiResults) {
+      result[vendorName] = { ...suggestion, source: "ai" };
+    }
+  }
+
+  return result;
 }

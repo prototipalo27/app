@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
+import { CATEGORY_LABELS } from "@/lib/finance/categories";
 
 const PATH = "/dashboard/inversores";
 
@@ -446,26 +447,6 @@ export type ReportExpense = {
   amount: number;
   vendor_count: number;
   details: ExpenseDetail[];
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  materials: "Materiales",
-  shipping: "Envíos",
-  software: "Software",
-  payroll: "Nóminas",
-  financing: "Financiación",
-  banking: "Banca",
-  taxes: "Impuestos",
-  rent: "Alquiler",
-  utilities: "Suministros",
-  telecom: "Telecomunicaciones",
-  insurance: "Seguros",
-  fuel: "Combustible",
-  meals: "Comidas",
-  travel: "Viajes",
-  marketing: "Marketing",
-  professional: "Servicios profesionales",
-  other: "Otros",
 };
 
 export async function getReportExpenses(reportId: string) {

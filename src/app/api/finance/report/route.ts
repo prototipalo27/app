@@ -28,26 +28,7 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString("es-ES");
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  payroll: "Nominas",
-  rent: "Alquiler",
-  utilities: "Suministros",
-  insurance: "Seguros",
-  software: "Software/SaaS",
-  telecom: "Telecomunicaciones",
-  taxes: "Impuestos",
-  materials: "Material",
-  travel: "Viajes",
-  meals: "Comidas",
-  fuel: "Gasolinas",
-  shipping: "Envios",
-  banking: "Bancos",
-  financing: "Financiaciones",
-  marketing: "Marketing",
-  professional: "Serv. profesionales",
-  income: "Ingresos",
-  other: "Otros",
-};
+import { CATEGORY_LABELS } from "@/lib/finance/categories";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",

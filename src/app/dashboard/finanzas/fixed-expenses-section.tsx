@@ -16,16 +16,7 @@ interface FixedExpense {
   end_date: string | null;
 }
 
-const CATEGORIES: Record<string, string> = {
-  payroll: "Nominas",
-  rent: "Alquiler",
-  utilities: "Suministros",
-  insurance: "Seguros",
-  software: "Software",
-  telecom: "Telecomunicaciones",
-  taxes: "Impuestos",
-  other: "Otros",
-};
+import { CATEGORY_LABELS as CATEGORIES } from "@/lib/finance/categories";
 
 const FREQUENCIES: Record<string, string> = {
   monthly: "Mensual",

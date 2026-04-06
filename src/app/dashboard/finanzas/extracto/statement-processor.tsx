@@ -15,7 +15,13 @@ import {
   deleteStatement,
   getOrCreateMonthFolder,
   toggleCheckedVendor,
+  autoCategorizeVendors,
 } from "./actions";
+import {
+  EXPENSE_CATEGORIES as CATEGORIES,
+  CATEGORY_LABELS,
+  CATEGORY_COLORS,
+} from "@/lib/finance/categories";
 
 interface Supplier {
   id: string;
@@ -31,52 +37,6 @@ interface VendorMapping {
   notes: string | null;
   url: string | null;
 }
-
-const CATEGORIES: { value: string; label: string }[] = [
-  { value: "materials", label: "Material" },
-  { value: "shipping", label: "Envios" },
-  { value: "software", label: "Software/SaaS" },
-  { value: "payroll", label: "Nominas" },
-  { value: "financing", label: "Financiaciones" },
-  { value: "banking", label: "Bancos" },
-  { value: "taxes", label: "Impuestos" },
-  { value: "rent", label: "Alquiler" },
-  { value: "utilities", label: "Suministros" },
-  { value: "telecom", label: "Telecomunicaciones" },
-  { value: "insurance", label: "Seguros" },
-  { value: "fuel", label: "Gasolinas" },
-  { value: "meals", label: "Comidas" },
-  { value: "travel", label: "Viajes" },
-  { value: "marketing", label: "Marketing" },
-  { value: "professional", label: "Serv. profesionales" },
-  { value: "income", label: "Ingresos" },
-  { value: "other", label: "Otros" },
-];
-
-const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
-  CATEGORIES.map((c) => [c.value, c.label])
-);
-
-const CATEGORY_COLORS: Record<string, string> = {
-  payroll: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  rent: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  utilities: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-  insurance: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
-  software: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-  telecom: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-  taxes: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  materials: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  travel: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  meals: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  fuel: "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400",
-  shipping: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  banking: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400",
-  financing: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-  marketing: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-  professional: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-  income: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  other: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-};
 
 interface ClaimHistoryItem {
   id: string;
@@ -177,6 +137,12 @@ export default function StatementProcessor({
   // Checked vendors (invoice filed in Drive)
   const [checkedVendors, setCheckedVendors] = useState<Set<string>>(new Set());
 
+  // Auto-categorization suggestion state
+  const [suggestions, setSuggestions] = useState<
+    Record<string, { category: string; confidence: number; source: "rule" | "ai" }>
+  >({});
+  const [autoCategorizingCount, setAutoCategorizingCount] = useState(0);
+
   // Claims state
   const [selectedVendors, setSelectedVendors] = useState<Set<string>>(new Set());
   const [sendingClaim, setSendingClaim] = useState<string | null>(null);
@@ -273,6 +239,44 @@ export default function StatementProcessor({
     return { month: parseInt(monthStr, 10), year: parseInt(yearStr, 10) };
   }, []);
 
+  // Auto-categorize vendors that don't have a mapping yet
+  const runAutoCategorize = useCallback(
+    async (txs: BankTransaction[]) => {
+      const groups = groupByVendor(txs);
+      const unknowns = groups.filter(
+        (g) => !categoryMappings[g.vendorName]
+      );
+      if (unknowns.length === 0) return;
+
+      setAutoCategorizingCount(unknowns.length);
+      try {
+        const input = unknowns.map((g) => ({
+          vendorName: g.vendorName,
+          description: g.transactions[0]?.description ?? "",
+          amount: g.totalAmount,
+        }));
+        const result = await autoCategorizeVendors(input);
+        setSuggestions(result);
+
+        // Auto-apply high-confidence suggestions
+        const newCats: Record<string, string> = {};
+        for (const [vendor, s] of Object.entries(result)) {
+          if (s.confidence >= 0.85) {
+            newCats[vendor] = s.category;
+          }
+        }
+        if (Object.keys(newCats).length > 0) {
+          setCategoryMappings((prev) => ({ ...prev, ...newCats }));
+        }
+      } catch {
+        // Non-fatal
+      } finally {
+        setAutoCategorizingCount(0);
+      }
+    },
+    [categoryMappings]
+  );
+
   // Handle file upload and save to DB
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>, targetMonth?: number) => {
@@ -326,13 +330,16 @@ export default function StatementProcessor({
         });
 
         setView("review");
+
+        // Auto-categorize unknown vendors in the background
+        runAutoCategorize(parsed);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al procesar el archivo");
       } finally {
         setLoading(false);
       }
     },
-    [selectedYear, detectMonthYear]
+    [selectedYear, detectMonthYear, runAutoCategorize]
   );
 
   // Load a month from DB
@@ -351,13 +358,16 @@ export default function StatementProcessor({
         setActiveFileName(stmt.file_name);
         setCheckedVendors(new Set((stmt.checked_vendors as string[]) || []));
         setView("review");
+
+        // Auto-categorize unknown vendors in the background
+        runAutoCategorize(stmt.transactions as unknown as BankTransaction[]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al cargar extracto");
       } finally {
         setLoading(false);
       }
     },
-    [selectedYear]
+    [selectedYear, runAutoCategorize]
   );
 
   // Delete a month
@@ -1131,6 +1141,25 @@ export default function StatementProcessor({
           )}
           </div>
 
+          {/* Auto-categorization status */}
+          {autoCategorizingCount > 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-700 dark:bg-violet-900/20 dark:text-violet-400">
+              <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Auto-categorizando {autoCategorizingCount} proveedor(es)...
+            </div>
+          )}
+          {Object.keys(suggestions).length > 0 && autoCategorizingCount === 0 && (
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {Object.keys(suggestions).length} proveedor(es) auto-categorizados
+            </div>
+          )}
+
           {/* Vendor groups */}
           <div className="space-y-4">
             {searchQuery && (
@@ -1148,6 +1177,7 @@ export default function StatementProcessor({
                 currentNotes={notesMappings[group.vendorName] || ""}
                 currentUrl={urlMappings[group.vendorName] || ""}
                 isChecked={checkedVendors.has(group.vendorName)}
+                suggestion={suggestions[group.vendorName] ?? null}
                 onMappingChange={(sid) => handleMappingChange(group.vendorName, sid)}
                 onCategoryChange={(cat) => handleCategoryChange(group.vendorName, cat)}
                 onNotesChange={(notes) => handleNotesChange(group.vendorName, notes)}
@@ -1404,6 +1434,7 @@ function VendorGroupCard({
   currentNotes,
   currentUrl,
   isChecked,
+  suggestion,
   onMappingChange,
   onCategoryChange,
   onNotesChange,
@@ -1417,6 +1448,7 @@ function VendorGroupCard({
   currentNotes: string;
   currentUrl: string;
   isChecked: boolean;
+  suggestion: { category: string; confidence: number; source: "rule" | "ai" } | null;
   onMappingChange: (supplierId: string) => void;
   onCategoryChange: (category: string) => void;
   onNotesChange: (notes: string) => void;
@@ -1488,18 +1520,41 @@ function VendorGroupCard({
           <span className="text-sm font-semibold text-zinc-900 dark:text-white">
             {group.totalAmount.toFixed(2)}€
           </span>
-          <select
-            value={currentCategory}
-            onChange={(e) => onCategoryChange(e.target.value)}
-            className="w-36 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-          >
-            <option value="">— Categoria —</option>
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={currentCategory}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              className="w-36 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            >
+              <option value="">— Categoria —</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            {suggestion && currentCategory === suggestion.category && (
+              <span
+                title={`${Math.round(suggestion.confidence * 100)}% confianza`}
+                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  suggestion.source === "rule"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+                }`}
+              >
+                {suggestion.source === "rule" ? "Auto" : "IA"}
+              </span>
+            )}
+            {suggestion && !currentCategory && suggestion.confidence < 0.85 && (
+              <button
+                onClick={() => onCategoryChange(suggestion.category)}
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:hover:bg-violet-900/50"
+                title={`Sugerencia IA: ${CATEGORY_LABELS[suggestion.category]} (${Math.round(suggestion.confidence * 100)}%)`}
+              >
+                IA: {CATEGORY_LABELS[suggestion.category]}?
+              </button>
+            )}
+          </div>
           <select
             value={currentMapping}
             onChange={(e) => onMappingChange(e.target.value)}
