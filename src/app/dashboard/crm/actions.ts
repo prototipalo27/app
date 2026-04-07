@@ -1382,6 +1382,53 @@ export async function sendQuoteToClient(
   // Get per-user SMTP config
   const smtpConfig = await getUserSmtpConfig(profile.id);
 
+  // Create Stripe Checkout session so the client can pay directly without billing data
+  let stripeCheckoutUrl: string | null = null;
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+    const chargeAmount = Math.round(total * 100); // cents, IVA incluido
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+    const existingCust = lead.email
+      ? await stripe.customers.list({ email: lead.email, limit: 1 })
+      : { data: [] };
+    const stripeCust = existingCust.data.length > 0
+      ? existingCust.data[0]
+      : await stripe.customers.create({ email: lead.email, name: lead.full_name || undefined });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer: stripeCust.id,
+      line_items: [{
+        price_data: {
+          currency: "eur",
+          product_data: { name: "Pago completo — Proyecto Prototipalo" },
+          unit_amount: chargeAmount,
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        lead_id: leadId,
+        quote_request_id: qr.id,
+        payment_type: "full",
+      },
+      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/payment/cancel`,
+    });
+
+    stripeCheckoutUrl = session.url;
+
+    await supabase
+      .from("quote_requests")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", qr.id);
+  } catch (e) {
+    console.error("[sendQuoteToClient] Stripe checkout creation failed:", e);
+  }
+
   // Create estimate (presupuesto no vinculante) in Holded FIRST so we can attach its PDF
   let holdedContactId = qr.holded_contact_id || null;
   let holdedEstimateId: string | null = null;
@@ -1442,8 +1489,8 @@ export async function sendQuoteToClient(
       to: lead.email,
       cc: ccString,
       subject: "Presupuesto — Prototipalo",
-      text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
-      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
+      text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\n${stripeCheckoutUrl ? `Si no necesitas factura, puedes pagar directamente aquí:\n${stripeCheckoutUrl}\n\n` : ""}Gracias,\nEl equipo de Prototipalo`,
+      html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto con factura, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p>${stripeCheckoutUrl ? `<p style="margin-top:20px;">Si no necesitas factura, puedes pagar directamente:</p><p><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:10px 20px;background:#18181b;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Pagar ahora</a></p>` : ""}<p>Gracias,<br>El equipo de Prototipalo</p>`,
       smtpConfig,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     }, { createdBy: profile.id });
