@@ -303,6 +303,45 @@ export type Database = {
           },
         ]
       }
+      debts: {
+        Row: {
+          created_at: string
+          creditor: string
+          description: string | null
+          due_date: string | null
+          id: string
+          is_paid: boolean
+          notes: string | null
+          paid_amount: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creditor: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          paid_amount?: number
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creditor?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          paid_amount?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_snippets: {
         Row: {
           category: string
@@ -2102,6 +2141,7 @@ export type Database = {
           billing_name: string | null
           billing_postal_code: string | null
           billing_province: string | null
+          cc_emails: Json | null
           created_at: string | null
           holded_contact_id: string | null
           holded_estimate_id: string | null
@@ -2137,6 +2177,7 @@ export type Database = {
           billing_name?: string | null
           billing_postal_code?: string | null
           billing_province?: string | null
+          cc_emails?: Json | null
           created_at?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
@@ -2172,6 +2213,7 @@ export type Database = {
           billing_name?: string | null
           billing_postal_code?: string | null
           billing_province?: string | null
+          cc_emails?: Json | null
           created_at?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
@@ -3322,4 +3364,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
