@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings, getCashFlowPipeline } from "./actions";
+import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings, getCashFlowPipeline, getDebts } from "./actions";
 import { getNextTaxDeadline, getModelName } from "@/lib/finance/tax-calendar";
 import FixedExpensesSection from "./fixed-expenses-section";
 import FinancingsSection from "./financings-section";
@@ -8,6 +8,7 @@ import TaxCalendarSection from "./tax-calendar-section";
 import CashFlowPipeline from "./cash-flow-pipeline";
 import PaymentCalendarSection from "./payment-calendar-section";
 import ReportDownloadButton from "./report-download-button";
+import DebtsSection from "./debts-section";
 import { CATEGORY_LABELS } from "@/lib/finance/categories";
 
 function formatEur(n: number) {
@@ -56,6 +57,7 @@ export default async function FinanzasPage() {
     pendingInvoices,
     financings,
     cashFlowData,
+    debts,
     { data: projects },
     { data: purchaseItems },
     { data: shipments },
@@ -67,6 +69,7 @@ export default async function FinanzasPage() {
     getPendingInvoices(),
     getFinancings(),
     getCashFlowPipeline(),
+    getDebts(),
     supabase
       .from("projects")
       .select("id, name, price, invoice_date, status, project_type"),
@@ -414,6 +417,9 @@ export default async function FinanzasPage() {
 
       {/* ── D. Financiaciones ── */}
       <FinancingsSection financings={financings} />
+
+      {/* ── D2. Deudas ── */}
+      <DebtsSection debts={debts} />
 
       {/* ── E. Calendario Fiscal ── */}
       <TaxCalendarSection taxPayments={taxPayments} />

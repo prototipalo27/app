@@ -407,6 +407,83 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
   return { stages };
 }
 
+// ── Debts (Checklist de deudas) ──
+
+export async function getDebts() {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("debts")
+    .select("*")
+    .order("is_paid")
+    .order("due_date", { nullsFirst: false });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createDebt(data: {
+  creditor: string;
+  description?: string;
+  total_amount: number;
+  paid_amount?: number;
+  due_date?: string;
+  notes?: string;
+}) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("debts").insert({
+    creditor: data.creditor,
+    description: data.description ?? null,
+    total_amount: data.total_amount,
+    paid_amount: data.paid_amount ?? 0,
+    due_date: data.due_date ?? null,
+    notes: data.notes ?? null,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function updateDebt(
+  id: string,
+  data: {
+    creditor?: string;
+    description?: string | null;
+    total_amount?: number;
+    paid_amount?: number;
+    is_paid?: boolean;
+    due_date?: string | null;
+    notes?: string | null;
+  }
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("debts")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function deleteDebt(id: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("debts").delete().eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
 export async function getTaxPayments(year?: number) {
   await requireRole("manager");
   const supabase = await createClient();
