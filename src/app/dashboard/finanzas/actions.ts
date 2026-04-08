@@ -417,10 +417,10 @@ export async function getDebts() {
     .from("debts")
     .select("*")
     .order("is_paid")
-    .order("due_date", { nullsFirst: false });
+    .order("due_date");
 
   if (error) throw new Error(error.message);
-  return data;
+  return data ?? [];
 }
 
 export async function createDebt(data: {
