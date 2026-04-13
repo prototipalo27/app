@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CrmKanban } from "./crm-kanban-wrapper";
 import type { LeadWithAssignee } from "./crm-card";
 import PricingConfig from "./pricing-config";
-import { getMyCommissionData } from "./actions";
+
 import { NewOrderButton } from "./new-order-button";
 import { generateMissingSummaries } from "@/lib/ai-summary";
 import {
@@ -23,14 +23,11 @@ export default async function CrmPage() {
     { leads, lastActivityMap },
     sharedProfiles,
     basePrices,
-    myCommissionData,
   ] = await Promise.all([
     getCachedLeadsWithActivity(),     // cached: minutes
     getSharedUserProfiles(),          // cached: hours
     getSharedBasePrices(),            // cached: hours
-    getMyCommissionData(),            // not cached (uses cookies for auth)
   ]);
-  const myCommission = myCommissionData?.preview ?? null;
 
   const managers = sharedProfiles
     .filter((m) => m.role === "manager" || m.role === "super_admin")
@@ -38,8 +35,7 @@ export default async function CrmPage() {
 
   // Build unique owners (captadores) list from leads + current user
   const ownerIdsFromLeads = leads.map((l) => l.owned_by).filter(Boolean) as string[];
-  const myId = myCommission?.ownerId;
-  const ownerIds = [...new Set([...ownerIdsFromLeads, ...(myId ? [myId] : [])])];
+  const ownerIds = [...new Set([...ownerIdsFromLeads, profile.id])];
 
   // Build email map from cached shared profiles (no extra query needed)
   const userEmailMap = new Map(sharedProfiles.map((u) => [u.id, u.email]));
@@ -92,7 +88,7 @@ export default async function CrmPage() {
         </div>
       </div>
 
-      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} myCommission={myCommission} />
+      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} myCommission={null} />
 
       <PricingConfig basePrices={basePrices} />
     </div>
