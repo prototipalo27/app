@@ -41,6 +41,30 @@ function getSkillColor(index: number) {
   return SKILL_COLORS[index % SKILL_COLORS.length];
 }
 
+function contractBadge(dateStr: string | null): { label: string; className: string } | null {
+  if (!dateStr) return null;
+  const end = new Date(dateStr);
+  const now = new Date();
+  const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
+  if (daysLeft < 0) return { label: "Vencido", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+  if (daysLeft <= 30) return { label: `${daysLeft}d`, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+  if (daysLeft <= 90) return { label: `${daysLeft}d`, className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
+  return { label: `${daysLeft}d`, className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" };
+}
+
+function formatTenure(hireDate: string | null): string | null {
+  if (!hireDate) return null;
+  const hire = new Date(hireDate);
+  const now = new Date();
+  const months = (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth());
+  if (months < 1) return "< 1 mes";
+  if (months < 12) return `${months} ${months === 1 ? "mes" : "meses"}`;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (rem === 0) return `${years} ${years === 1 ? "año" : "años"}`;
+  return `${years}a ${rem}m`;
+}
+
 function parseBirthday(birthday: string | null): { month: number; day: number } | null {
   if (!birthday) return null;
   const parts = birthday.split("-");
@@ -93,11 +117,11 @@ export default async function EquipoPage() {
     { data: timeOffRequests },
     { data: overtimeEntries },
   ] = await Promise.all([
-    supabase
+    (supabase as any)
       .from("user_profiles")
-      .select("id, email, role, is_active, full_name, nickname, birthday, hire_date")
+      .select("id, email, role, is_active, full_name, nickname, birthday, hire_date, phone, contract_end_date")
       .eq("is_active", true)
-      .order("email"),
+      .order("email") as ReturnType<ReturnType<typeof supabase.from>["select"]>,
     supabase.from("skills").select("id, name").order("name"),
     supabase.from("user_skills").select("user_id, skill_id"),
     supabase.from("zone_assignments").select("user_id, zone"),
@@ -179,11 +203,19 @@ export default async function EquipoPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(users ?? []).map((user) => {
           const displayName = user.nickname || user.full_name || user.email.split("@")[0];
+          const initials = (user.full_name || user.email.split("@")[0])
+            .split(" ")
+            .map((w: string) => w[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
           const skillIds = userSkillMap.get(user.id) ?? [];
           const zoneIds = userZoneMap.get(user.id) ?? [];
           const overtimeMinutes = overtimeBalances.get(user.id) ?? 0;
           const birthdaySoon = isBirthdaySoon(user.birthday);
           const birthdayStr = formatBirthday(user.birthday);
+          const tenure = formatTenure(user.hire_date);
+          const contract = contractBadge((user as any).contract_end_date);
 
           return (
             <Link
@@ -191,42 +223,97 @@ export default async function EquipoPage() {
               href={`/dashboard/equipo/${user.id}`}
               className="group rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold capitalize text-zinc-900 dark:text-white">
-                  {displayName}
-                </h3>
+              {/* Header: avatar + name + role */}
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${ROLE_COLORS[user.role] || ROLE_COLORS.employee}`}>
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+                      {displayName}
+                    </h3>
+                    {birthdaySoon && (
+                      <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-400 animate-pulse" title="Cumpleaños pronto" />
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</p>
+                </div>
                 <span
-                  className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[user.role] || ROLE_COLORS.employee}`}
+                  className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${ROLE_COLORS[user.role] || ROLE_COLORS.employee}`}
                 >
                   {ROLE_LABELS[user.role] ?? user.role}
                 </span>
               </div>
 
-              {birthdayStr && (
-                <div className="mt-1.5 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  {birthdaySoon && (
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  )}
-                  <span>{birthdayStr}</span>
+              {/* Info row: tenure, birthday, phone */}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {tenure && (
+                  <span className="flex items-center gap-1">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {tenure}
+                  </span>
+                )}
+                {birthdayStr && (
+                  <span className="flex items-center gap-1">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0A1.75 1.75 0 003 15.546M12 3v1m0 11v1m-4.93-9.07l.707.707M5.05 14.95l.707.707M3 10h1m11 0h1m-2.05-4.364l.707-.707M18.95 14.95l-.707.707" />
+                    </svg>
+                    {birthdayStr}
+                  </span>
+                )}
+                {(user as any).phone && (
+                  <span className="flex items-center gap-1">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    {(user as any).phone}
+                  </span>
+                )}
+              </div>
+
+              {/* Contract end date */}
+              {contract && (
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <svg className="h-3 w-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Contrato</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${contract.className}`}>
+                    {contract.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    {new Date((user as any).contract_end_date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                  </span>
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap gap-1">
-                {skillIds.length === 0 && (
-                  <span className="text-xs text-zinc-400">Sin skills asignados</span>
-                )}
-                {skillIds.map((sid) => (
-                  <span
-                    key={sid}
-                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${skillColorMap.get(sid) ?? SKILL_COLORS[0]}`}
-                  >
-                    {skillMap.get(sid)}
+              {/* Overtime (managers only) */}
+              {isManager && overtimeMinutes !== 0 && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <svg className="h-3 w-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">Horas extra</span>
+                  <span className={`text-xs font-semibold ${overtimeMinutes > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                    {overtimeMinutes > 0 ? "+" : ""}{Math.floor(Math.abs(overtimeMinutes) / 60) > 0 ? `${Math.floor(Math.abs(overtimeMinutes) / 60)}h` : ""}{Math.abs(overtimeMinutes) % 60 > 0 ? ` ${Math.abs(overtimeMinutes) % 60}min` : ""}
                   </span>
-                ))}
-              </div>
+                </div>
+              )}
 
-              {zoneIds.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
+              {/* Divider + Skills & Zones */}
+              <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <div className="flex flex-wrap gap-1">
+                  {skillIds.map((sid) => (
+                    <span
+                      key={sid}
+                      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${skillColorMap.get(sid) ?? SKILL_COLORS[0]}`}
+                    >
+                      {skillMap.get(sid)}
+                    </span>
+                  ))}
                   {zoneIds.map((zone) => (
                     <span
                       key={zone}
@@ -235,19 +322,11 @@ export default async function EquipoPage() {
                       {getZoneLabel(zone)}
                     </span>
                   ))}
+                  {skillIds.length === 0 && zoneIds.length === 0 && (
+                    <span className="text-[10px] text-zinc-400">Sin skills ni zonas</span>
+                  )}
                 </div>
-              )}
-
-              {isManager && overtimeMinutes !== 0 && (
-                <div className="mt-2 flex items-center gap-1.5">
-                  <svg className="h-3 w-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className={`text-xs font-medium ${overtimeMinutes > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                    {overtimeMinutes > 0 ? "+" : ""}{Math.floor(Math.abs(overtimeMinutes) / 60) > 0 ? `${Math.floor(Math.abs(overtimeMinutes) / 60)}h` : ""}{Math.abs(overtimeMinutes) % 60 > 0 ? ` ${Math.abs(overtimeMinutes) % 60}min` : ""}
-                  </span>
-                </div>
-              )}
+              </div>
 
               {isManager && (
                 <LinkStop>
