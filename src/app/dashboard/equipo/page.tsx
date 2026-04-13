@@ -117,11 +117,11 @@ export default async function EquipoPage() {
     { data: timeOffRequests },
     { data: overtimeEntries },
   ] = await Promise.all([
-    (supabase as any)
+    supabase
       .from("user_profiles")
-      .select("id, email, role, is_active, full_name, nickname, birthday, hire_date, phone, contract_end_date")
+      .select("id, email, role, is_active, full_name, nickname, birthday, hire_date")
       .eq("is_active", true)
-      .order("email") as ReturnType<ReturnType<typeof supabase.from>["select"]>,
+      .order("email"),
     supabase.from("skills").select("id, name").order("name"),
     supabase.from("user_skills").select("user_id, skill_id"),
     supabase.from("zone_assignments").select("user_id, zone"),
@@ -136,6 +136,16 @@ export default async function EquipoPage() {
       ? supabase.from("overtime_entries").select("user_id, minutes, type")
       : Promise.resolve({ data: null }),
   ]);
+
+  // Fetch extra fields not in generated types (phone, contract_end_date)
+  const { data: extraFields } = await (supabase as any)
+    .from("user_profiles")
+    .select("id, phone, contract_end_date")
+    .eq("is_active", true);
+  const extraMap = new Map<string, { phone: string | null; contract_end_date: string | null }>(
+    ((extraFields ?? []) as { id: string; phone: string | null; contract_end_date: string | null }[])
+      .map((e) => [e.id, e])
+  );
 
   // Fetch ALL users for admin section (including inactive + contract_end_date)
   let adminUsers: { id: string; email: string; role: string; is_active: boolean; full_name: string | null; contract_end_date: string | null }[] = [];
@@ -215,7 +225,8 @@ export default async function EquipoPage() {
           const birthdaySoon = isBirthdaySoon(user.birthday);
           const birthdayStr = formatBirthday(user.birthday);
           const tenure = formatTenure(user.hire_date);
-          const contract = contractBadge((user as any).contract_end_date);
+          const extra = extraMap.get(user.id);
+          const contract = contractBadge(extra?.contract_end_date ?? null);
 
           return (
             <Link
@@ -264,12 +275,12 @@ export default async function EquipoPage() {
                     {birthdayStr}
                   </span>
                 )}
-                {(user as any).phone && (
+                {extra?.phone && (
                   <span className="flex items-center gap-1">
                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
-                    {(user as any).phone}
+                    {extra.phone}
                   </span>
                 )}
               </div>
@@ -285,7 +296,7 @@ export default async function EquipoPage() {
                     {contract.label}
                   </span>
                   <span className="text-[10px] text-zinc-400">
-                    {new Date((user as any).contract_end_date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                    {new Date(extra!.contract_end_date!).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                   </span>
                 </div>
               )}
