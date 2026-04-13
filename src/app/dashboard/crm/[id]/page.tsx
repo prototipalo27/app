@@ -19,7 +19,7 @@ import {
   type ActivityType,
 } from "@/lib/crm-config";
 import { classifyTrafficSource, SOURCE_COLORS } from "@/lib/utm-utils";
-import { getBasePrices, getCommissionSummary, getNdaStatus, getMyCommissionData } from "../actions";
+import { getBasePrices, getCommissionSummary, getNdaStatus } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -353,27 +353,22 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase.from("leads").select("*").eq("id", id).single();
   if (!lead) notFound();
 
-  // Fast parallel: nav + commission (all we need for first paint)
-  const [{ data: prevLeads }, { data: nextLeads }, myCommissionData] = await Promise.all([
+  // Fast parallel: nav + user names (all we need for first paint)
+  const leadUserIds = [lead.assigned_to, lead.owned_by].filter(Boolean) as string[];
+  const [{ data: prevLeads }, { data: nextLeads }, userMap] = await Promise.all([
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
-    getMyCommissionData(lead.estimated_value),
+    leadUserIds.length > 0
+      ? supabase.from("user_profiles").select("id, email").in("id", leadUserIds).then(({ data: users }) =>
+          new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || [])
+        )
+      : Promise.resolve(new Map<string, string>()),
   ]);
 
   const prevId = prevLeads?.[0]?.id ?? null;
   const nextId = nextLeads?.[0]?.id ?? null;
 
-  // Resolve user names for lead owner/assignee (just 2 users max)
-  const leadUserIds = [lead.assigned_to, lead.owned_by].filter(Boolean) as string[];
-  let userMap = new Map<string, string>();
-  if (leadUserIds.length > 0) {
-    const { data: users } = await supabase.from("user_profiles").select("id, email").in("id", leadUserIds);
-    userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
-  }
-
   const statusColumn = LEAD_COLUMNS.find((c) => c.id === lead.status);
-  const preview = myCommissionData?.preview;
-  const estimate = myCommissionData?.estimate;
 
   return (
     <div className="mx-auto max-w-5xl">
