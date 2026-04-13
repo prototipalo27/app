@@ -39,7 +39,7 @@ export async function sendStatusNotification(
   const config = STATUS_EMAIL_MAP[newStatus];
   if (!config) return;
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.prototipalo.com";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const trackingLink = `${baseUrl}/track/${trackingToken}`;
 
   await sendEmail({
