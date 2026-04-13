@@ -28,8 +28,8 @@ export default function MobileSidebar({
       {/* Mobile top bar */}
       <header className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 md:hidden dark:border-zinc-800 dark:bg-zinc-900">
         <Link href={logoHref}>
-          <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="h-10 w-auto dark:hidden" />
-          <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-10 w-auto dark:block" />
+          <Image src="/logo-light.png" alt="Prototipalo" width={120} height={60} className="h-10 w-auto dark:hidden" />
+          <Image src="/logo-dark.png" alt="Prototipalo" width={120} height={60} className="hidden h-10 w-auto dark:block" />
         </Link>
         <button
           onClick={() => setOpen(!open)}
@@ -78,7 +78,8 @@ export default function MobileSidebar({
               <div className="flex items-center gap-0.5">
                 <Link
                   href="/dashboard/whatsapp"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                     pathname?.startsWith("/dashboard/whatsapp")
                       ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -92,7 +93,8 @@ export default function MobileSidebar({
                 </Link>
                 <Link
                   href="/dashboard/whatsapp/settings"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
                     pathname?.startsWith("/dashboard/whatsapp/settings")
                       ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -109,7 +111,8 @@ export default function MobileSidebar({
               <div className="flex items-center gap-0.5">
                 <Link
                   href="/dashboard/crm"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                     pathname?.startsWith("/dashboard/crm")
                       ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -123,7 +126,8 @@ export default function MobileSidebar({
                 </Link>
                 <Link
                   href="/dashboard/contactos"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
                     pathname?.startsWith("/dashboard/contactos")
                       ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -137,7 +141,8 @@ export default function MobileSidebar({
                 </Link>
                 <Link
                   href="/dashboard/settings/email-snippets"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
                     pathname?.startsWith("/dashboard/settings/email-snippets")
                       ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -160,7 +165,8 @@ export default function MobileSidebar({
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard"
-              onClick={handleNavClick}
+              prefetch={false}
+            onClick={handleNavClick}
               className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                 pathname === "/dashboard" || pathname?.startsWith("/dashboard/projects")
                   ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -175,7 +181,8 @@ export default function MobileSidebar({
             {isManager && (
               <Link
                 href="/dashboard/settings/templates"
-                onClick={handleNavClick}
+                prefetch={false}
+            onClick={handleNavClick}
                 className={`flex items-center rounded-md p-2 ${
                   pathname?.startsWith("/dashboard/settings/templates")
                     ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -192,7 +199,8 @@ export default function MobileSidebar({
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard/printers"
-              onClick={handleNavClick}
+              prefetch={false}
+            onClick={handleNavClick}
               className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                 pathname?.startsWith("/dashboard/printers")
                   ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -206,7 +214,8 @@ export default function MobileSidebar({
             </Link>
             <Link
               href="/dashboard/queue"
-              onClick={handleNavClick}
+              prefetch={false}
+            onClick={handleNavClick}
               className={`flex items-center rounded-md p-2 ${
                 pathname?.startsWith("/dashboard/queue")
                   ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -221,6 +230,7 @@ export default function MobileSidebar({
           </div>
           <Link
             href="/dashboard/shipments"
+            prefetch={false}
             onClick={handleNavClick}
             className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
               pathname?.startsWith("/dashboard/shipments")
@@ -240,6 +250,7 @@ export default function MobileSidebar({
           </p>
           <Link
             href="/dashboard/tareas"
+            prefetch={false}
             onClick={handleNavClick}
             className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
               pathname?.startsWith("/dashboard/tareas")
@@ -259,6 +270,7 @@ export default function MobileSidebar({
           </Link>
           <Link
             href="/dashboard/equipo"
+            prefetch={false}
             onClick={handleNavClick}
             className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
               pathname?.startsWith("/dashboard/equipo")
@@ -273,6 +285,7 @@ export default function MobileSidebar({
           </Link>
           <Link
             href="/dashboard/requests"
+            prefetch={false}
             onClick={handleNavClick}
             className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
               pathname?.startsWith("/dashboard/requests")
@@ -293,7 +306,8 @@ export default function MobileSidebar({
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard/purchases"
-              onClick={handleNavClick}
+              prefetch={false}
+            onClick={handleNavClick}
               className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                 pathname?.startsWith("/dashboard/purchases")
                   ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -308,7 +322,8 @@ export default function MobileSidebar({
             {isManager && (
               <Link
                 href="/dashboard/suppliers"
-                onClick={handleNavClick}
+                prefetch={false}
+            onClick={handleNavClick}
                 className={`flex items-center rounded-md p-2 ${
                   pathname === "/dashboard/suppliers"
                     ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -324,6 +339,7 @@ export default function MobileSidebar({
           </div>
           <Link
             href="/dashboard/herramientas"
+            prefetch={false}
             onClick={handleNavClick}
             className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
               pathname?.startsWith("/dashboard/herramientas")
@@ -346,7 +362,8 @@ export default function MobileSidebar({
               <div className="flex items-center gap-0.5">
                 <Link
                   href="/dashboard/finanzas"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                     pathname === "/dashboard/finanzas"
                       ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -360,7 +377,8 @@ export default function MobileSidebar({
                 </Link>
                 <Link
                   href="/dashboard/finanzas/extracto"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
                     pathname?.startsWith("/dashboard/finanzas/extracto")
                       ? "bg-brand/5 text-zinc-900 dark:text-white"
@@ -376,7 +394,8 @@ export default function MobileSidebar({
               {isSuperAdmin && (
                 <Link
                   href="/dashboard/inversores"
-                  onClick={handleNavClick}
+                  prefetch={false}
+            onClick={handleNavClick}
                   className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
                     pathname?.startsWith("/dashboard/inversores")
                       ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"

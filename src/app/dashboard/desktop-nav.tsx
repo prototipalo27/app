@@ -14,6 +14,7 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
     <div className="flex items-center gap-0.5">
       <Link
         href={href}
+        prefetch={false}
         className={`flex flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
           isActive
             ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
@@ -34,6 +35,7 @@ function NavLink({ href, label, icon, exact = false, alsoMatch, actionHref, acti
           <Link
             key={action.href}
             href={action.href}
+            prefetch={false}
             className={`flex items-center rounded-md p-2 ${
               active
                 ? "bg-brand/5 text-zinc-900 dark:text-white"
