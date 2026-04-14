@@ -209,17 +209,18 @@ async function EmailSection({ leadId, lead }: { leadId: string; lead: any }) {
 
 async function ActivitySection({ leadId }: { leadId: string }) {
   const supabase = await createClient();
-  const [{ data: activities }] = await Promise.all([
-    supabase.from("lead_activities").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }),
-  ]);
+  const { data: activities } = await supabase
+    .from("lead_activities")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false });
 
-  // Build user map from activity creators
+  // Build user map from activity creators (depends on activities result)
   const creatorIds = [...new Set((activities || []).map((a) => a.created_by).filter(Boolean))] as string[];
-  let userMap = new Map<string, string>();
-  if (creatorIds.length > 0) {
-    const { data: users } = await supabase.from("user_profiles").select("id, email").in("id", creatorIds);
-    userMap = new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []);
-  }
+  const userMap = creatorIds.length > 0
+    ? await supabase.from("user_profiles").select("id, email").in("id", creatorIds)
+        .then(({ data: users }) => new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || []))
+    : new Map<string, string>();
 
   return (
     <Card>

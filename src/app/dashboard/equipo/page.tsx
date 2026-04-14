@@ -116,6 +116,7 @@ export default async function EquipoPage() {
     { data: holidays },
     { data: timeOffRequests },
     { data: overtimeEntries },
+    { data: extraFields },
   ] = await Promise.all([
     supabase
       .from("user_profiles")
@@ -135,13 +136,12 @@ export default async function EquipoPage() {
     isManager
       ? supabase.from("overtime_entries").select("user_id, minutes, type")
       : Promise.resolve({ data: null }),
+    (supabase as any)
+      .from("user_profiles")
+      .select("id, phone, contract_end_date")
+      .eq("is_active", true),
   ]);
 
-  // Fetch extra fields not in generated types (phone, contract_end_date)
-  const { data: extraFields } = await (supabase as any)
-    .from("user_profiles")
-    .select("id, phone, contract_end_date")
-    .eq("is_active", true);
   const extraMap = new Map<string, { phone: string | null; contract_end_date: string | null }>(
     ((extraFields ?? []) as { id: string; phone: string | null; contract_end_date: string | null }[])
       .map((e) => [e.id, e])

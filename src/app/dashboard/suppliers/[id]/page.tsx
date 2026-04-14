@@ -27,18 +27,19 @@ export default async function SupplierDetailPage({
 
   if (!supplier) notFound();
 
-  const { data: payments } = await supabase
-    .from("supplier_payments")
-    .select("*")
-    .eq("supplier_id", id)
-    .order("payment_date", { ascending: false });
-
-  const { data: products } = await supabase
-    .from("supplier_products")
-    .select("*")
-    .eq("supplier_id", id)
-    .order("category")
-    .order("name");
+  const [{ data: payments }, { data: products }] = await Promise.all([
+    supabase
+      .from("supplier_payments")
+      .select("*")
+      .eq("supplier_id", id)
+      .order("payment_date", { ascending: false }),
+    supabase
+      .from("supplier_products")
+      .select("*")
+      .eq("supplier_id", id)
+      .order("category")
+      .order("name"),
+  ]);
 
   const deleteForm = (
     <form action={deleteSupplier}>
