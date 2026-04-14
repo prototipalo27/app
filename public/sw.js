@@ -1,4 +1,4 @@
-const CACHE_NAME = "prototipalo-v1";
+const CACHE_NAME = "prototipalo-v2";
 const OFFLINE_URL = "/offline";
 
 // Pre-cache the offline page and key assets on install
@@ -31,9 +31,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  // Skip API requests and auth endpoints from caching
+  // Skip requests that should not be cached or intercepted by the SW
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return;
+  if (url.pathname.startsWith("/_next/")) return; // Next.js static/chunks
+  if (url.searchParams.has("_rsc")) return; // React Server Component payloads
 
   event.respondWith(
     fetch(event.request)

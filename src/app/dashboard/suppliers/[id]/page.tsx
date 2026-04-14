@@ -21,7 +21,7 @@ export default async function SupplierDetailPage({
 
   const { data: supplier } = await supabase
     .from("suppliers")
-    .select("*")
+    .select("id, name, email, phone, nif_cif, address, city, country, notes, holded_contact_id")
     .eq("id", id)
     .single();
 
@@ -30,12 +30,12 @@ export default async function SupplierDetailPage({
   const [{ data: payments }, { data: products }] = await Promise.all([
     supabase
       .from("supplier_payments")
-      .select("*")
+      .select("id, amount, payment_date, description, has_invoice, invoice_number, invoice_date, notes")
       .eq("supplier_id", id)
       .order("payment_date", { ascending: false }),
     supabase
       .from("supplier_products")
-      .select("*")
+      .select("id, name, category, url, notes, price")
       .eq("supplier_id", id)
       .order("category")
       .order("name"),

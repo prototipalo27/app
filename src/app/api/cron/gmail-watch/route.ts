@@ -58,8 +58,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log("[gmail-watch] Watch renewed, expiration:", res.data.expiration);
-
     return NextResponse.json({
       ok: true,
       historyId: res.data.historyId,

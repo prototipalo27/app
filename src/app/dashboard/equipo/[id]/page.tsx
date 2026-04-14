@@ -36,14 +36,14 @@ export default async function EmployeeDetailPage({
   ] = await Promise.all([
     supabase
       .from("user_profiles")
-      .select("*")
+      .select("id, full_name, nickname, email, birthday, phone, hire_date, career_plan")
       .eq("id", id)
       .single(),
     supabase.from("skills").select("id, name").order("name"),
     supabase.from("user_skills").select("user_id, skill_id").eq("user_id", id),
     supabase
       .from("employee_documents")
-      .select("*")
+      .select("id, file_name, file_path, document_type, uploaded_at, notes")
       .eq("user_id", id)
       .order("uploaded_at", { ascending: false }),
   ]);

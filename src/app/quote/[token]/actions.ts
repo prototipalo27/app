@@ -342,7 +342,7 @@ export async function submitBillingData(
         }],
       });
 
-      console.log("[submitBillingData] Proforma email sent to", lead.email);
+      // Email sent successfully
     } catch (e) {
       console.error("[submitBillingData] Failed to send proforma email:", e);
     }

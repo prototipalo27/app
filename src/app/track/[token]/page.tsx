@@ -55,7 +55,7 @@ export async function generateMetadata({
   };
 }
 
-function ItemProgress({ item }: { item: Tables<"project_items"> }) {
+function ItemProgress({ item }: { item: Pick<Tables<"project_items">, "id" | "name" | "quantity" | "completed"> }) {
   const pct = item.quantity > 0 ? (item.completed / item.quantity) * 100 : 0;
   const isComplete = item.completed === item.quantity;
 
@@ -139,7 +139,7 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
   );
 }
 
-function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Tables<"shipping_info">; trackingEvents: TrackingEvent[]; glsBarcode?: string | null }) {
+function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Pick<Tables<"shipping_info">, "carrier" | "tracking_number" | "shipment_status" | "address_line" | "postal_code" | "city" | "country" | "shipped_at" | "delivered_at">; trackingEvents: TrackingEvent[]; glsBarcode?: string | null }) {
   const addressParts = [
     shipping.address_line,
     shipping.postal_code,
@@ -259,12 +259,12 @@ async function TrackingContent({
   const [{ data: items }, { data: shipping }] = await Promise.all([
     supabase
       .from("project_items")
-      .select("*")
+      .select("id, name, quantity, completed")
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
     supabase
       .from("shipping_info")
-      .select("*")
+      .select("carrier, tracking_number, shipment_status, address_line, postal_code, city, country, shipped_at, delivered_at, packlink_shipment_ref, gls_barcode, mrw_albaran")
       .eq("project_id", project.id)
       .single(),
   ]);

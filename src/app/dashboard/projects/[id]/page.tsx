@@ -102,7 +102,7 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("project_checklist_items")
-      .select("*")
+      .select("id, name, item_type, position, completed, data")
       .eq("project_id", id)
       .order("position", { ascending: true }),
     supabase

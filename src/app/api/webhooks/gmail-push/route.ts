@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
 
     if (!lastHistoryId) {
       // First run — just store the historyId, don't process backlog
-      console.log("[gmail-push] First run, stored historyId:", newHistoryId);
       return NextResponse.json({ ok: true, reason: "initial_sync" });
     }
 

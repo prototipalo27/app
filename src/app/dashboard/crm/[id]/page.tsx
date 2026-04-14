@@ -67,7 +67,7 @@ async function UtmSection({ leadId, leadSource }: { leadId: string; leadSource: 
   const supabase = await createClient();
   const { data: utm } = await supabase
     .from("lead_utm_data")
-    .select("*")
+    .select("utm_source, utm_medium, utm_campaign, utm_term, utm_content, landing_page, referrer, gclid, fbclid, first_touch_timestamp, last_touch_timestamp")
     .eq("lead_id", leadId)
     .maybeSingle();
 
