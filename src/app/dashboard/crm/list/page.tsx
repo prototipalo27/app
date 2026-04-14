@@ -92,7 +92,7 @@ export default async function CrmListPage({
 
   let query = supabase
     .from("leads")
-    .select("id, full_name, company, email, status, estimated_value, created_at, assigned_to, project_type_tag")
+    .select("id, full_name, company, email, phone, status, estimated_value, created_at, assigned_to, project_type_tag")
     .order(dbColumn, { ascending });
 
   if (
