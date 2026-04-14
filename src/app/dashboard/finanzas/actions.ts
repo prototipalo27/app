@@ -108,23 +108,16 @@ export async function ensureTaxCalendar(year: number) {
 
   const deadlines = getTaxDeadlines(year);
 
-  for (const d of deadlines) {
-    const { data: existing } = await supabase
-      .from("tax_payments")
-      .select("id")
-      .eq("model", d.model)
-      .eq("period", d.period)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabase.from("tax_payments").insert({
-        model: d.model,
-        period: d.period,
-        due_date: d.dueDate,
-        status: "pending",
-      });
-    }
-  }
+  // Batch upsert: insert all deadlines in one query, skip existing ones
+  await supabase.from("tax_payments").upsert(
+    deadlines.map((d) => ({
+      model: d.model,
+      period: d.period,
+      due_date: d.dueDate,
+      status: "pending",
+    })),
+    { onConflict: "model,period", ignoreDuplicates: true }
+  );
 
   revalidatePath("/dashboard/finanzas");
   return { success: true, error: null };

@@ -7,16 +7,21 @@ export default async function SuppliersPage() {
 
   const supabase = await createClient();
 
-  const { data: suppliers } = await supabase
-    .from("suppliers")
-    .select("*")
-    .order("name");
+  // Current month boundaries (needed for monthPending query)
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    .toISOString()
+    .split("T")[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    .toISOString()
+    .split("T")[0];
 
-  // Get payment counts without invoice per supplier
-  const { data: pendingInvoices } = await supabase
-    .from("supplier_payments")
-    .select("supplier_id, amount")
-    .eq("has_invoice", false);
+  // All 3 queries are independent — run in parallel
+  const [{ data: suppliers }, { data: pendingInvoices }, { data: monthPending }] = await Promise.all([
+    supabase.from("suppliers").select("id, name, email, phone, holded_contact_id").order("name"),
+    supabase.from("supplier_payments").select("supplier_id, amount").eq("has_invoice", false),
+    supabase.from("supplier_payments").select("supplier_id, amount, description").eq("has_invoice", false).gte("payment_date", monthStart).lte("payment_date", monthEnd),
+  ]);
 
   // Aggregate pending invoice counts and totals per supplier
   const pendingBySupplier = new Map<
@@ -32,22 +37,6 @@ export default async function SuppliersPage() {
     existing.total += p.amount;
     pendingBySupplier.set(p.supplier_id, existing);
   });
-
-  // Current month pending invoices
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .split("T")[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-    .toISOString()
-    .split("T")[0];
-
-  const { data: monthPending } = await supabase
-    .from("supplier_payments")
-    .select("supplier_id, amount, description")
-    .eq("has_invoice", false)
-    .gte("payment_date", monthStart)
-    .lte("payment_date", monthEnd);
 
   const monthBySupplier = new Map<
     string,

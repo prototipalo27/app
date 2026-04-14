@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-interface BoxPreset {
+export interface BoxPreset {
   id: string;
   name: string;
   width_cm: number;
@@ -24,16 +24,18 @@ interface PackageListEditorProps {
   packages: PackageItem[];
   onChange: (packages: PackageItem[]) => void;
   inputClass: string;
+  initialPresets?: BoxPreset[];
 }
 
 export function createEmptyPackage(): PackageItem {
   return { width: "", height: "", length: "", weight: "", presetId: "" };
 }
 
-export function PackageListEditor({ packages, onChange, inputClass }: PackageListEditorProps) {
-  const [presets, setPresets] = useState<BoxPreset[]>([]);
+export function PackageListEditor({ packages, onChange, inputClass, initialPresets }: PackageListEditorProps) {
+  const [presets, setPresets] = useState<BoxPreset[]>(initialPresets ?? []);
 
   useEffect(() => {
+    if (initialPresets) return; // Skip client fetch if presets provided by server
     const supabase = createClient();
     supabase
       .from("box_presets")
@@ -42,7 +44,7 @@ export function PackageListEditor({ packages, onChange, inputClass }: PackageLis
       .then(({ data }) => {
         if (data) setPresets(data);
       });
-  }, []);
+  }, [initialPresets]);
 
   function updatePackage(index: number, patch: Partial<PackageItem>) {
     const updated = packages.map((p, i) => (i === index ? { ...p, ...patch } : p));

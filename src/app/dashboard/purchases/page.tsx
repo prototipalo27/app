@@ -10,23 +10,12 @@ export default async function PurchasesPage() {
   const isManager = hasRole(profile.role, "manager");
   const supabase = await createClient();
 
-  // Fetch all items with creator email and project name
-  const { data: items } = await supabase
-    .from("purchase_items")
-    .select("*, project:projects(id, name)")
-    .order("created_at", { ascending: false });
-
-  // Fetch projects for the dropdown
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id, name")
-    .order("name");
-
-  // Fetch suppliers for the purchase prompt
-  const { data: suppliers } = await supabase
-    .from("suppliers")
-    .select("id, name")
-    .order("name");
+  // All 3 queries are independent — run in parallel
+  const [{ data: items }, { data: projects }, { data: suppliers }] = await Promise.all([
+    supabase.from("purchase_items").select("*, project:projects(id, name)").order("created_at", { ascending: false }),
+    supabase.from("projects").select("id, name").order("name"),
+    supabase.from("suppliers").select("id, name").order("name"),
+  ]);
 
   // Get creator emails
   const creatorIds = [
