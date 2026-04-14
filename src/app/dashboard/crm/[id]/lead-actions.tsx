@@ -184,18 +184,17 @@ export default function LeadActions({
         <p className="mb-2 text-xs text-muted-foreground">
           Actual: {STATUS_LABELS[currentStatus]}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
           {nextStatuses.map((col) => (
-            <Button
+            <button
               key={col.id}
-              variant="secondary"
-              size="sm"
+              type="button"
               onClick={() => handleStatusChange(col.id)}
               disabled={isPending}
-              className={col.badge}
+              className={`rounded-md px-2 py-1.5 text-xs font-medium disabled:opacity-50 sm:px-3 sm:text-sm ${col.badge}`}
             >
               {col.label}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
