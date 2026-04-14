@@ -36,12 +36,12 @@ export default function LeadNav({ prevId, nextId }: LeadNavProps) {
   }, [prevId, nextId, router, suffix]);
 
   return (
-    <div className="mb-6 flex items-center justify-between">
+    <div className="mb-4 flex items-center justify-between md:mb-6">
       <Link
         href={backHref}
-        className="text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:text-foreground active:bg-accent md:h-auto md:px-0"
       >
-        &larr; {backLabel}
+        &larr; <span className="hidden sm:inline">{backLabel}</span><span className="sm:hidden">Volver</span>
       </Link>
 
       <div className="flex items-center gap-1">
@@ -49,13 +49,15 @@ export default function LeadNav({ prevId, nextId }: LeadNavProps) {
           <Link
             href={`/dashboard/crm/${prevId}${suffix}`}
             title="Anterior (k)"
-            className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-sm text-foreground hover:bg-accent active:bg-accent md:h-8 md:w-auto md:px-3"
           >
-            &larr; Ant
+            <span className="md:hidden">&larr;</span>
+            <span className="hidden md:inline">&larr; Ant</span>
           </Link>
         ) : (
-          <span className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-muted-foreground opacity-50">
-            &larr; Ant
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-sm text-muted-foreground opacity-50 md:h-8 md:w-auto md:px-3">
+            <span className="md:hidden">&larr;</span>
+            <span className="hidden md:inline">&larr; Ant</span>
           </span>
         )}
 
@@ -63,13 +65,15 @@ export default function LeadNav({ prevId, nextId }: LeadNavProps) {
           <Link
             href={`/dashboard/crm/${nextId}${suffix}`}
             title="Siguiente (j)"
-            className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-sm text-foreground hover:bg-accent active:bg-accent md:h-8 md:w-auto md:px-3"
           >
-            Sig &rarr;
+            <span className="md:hidden">&rarr;</span>
+            <span className="hidden md:inline">Sig &rarr;</span>
           </Link>
         ) : (
-          <span className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-muted-foreground opacity-50">
-            Sig &rarr;
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-sm text-muted-foreground opacity-50 md:h-8 md:w-auto md:px-3">
+            <span className="md:hidden">&rarr;</span>
+            <span className="hidden md:inline">Sig &rarr;</span>
           </span>
         )}
       </div>
