@@ -3309,3 +3309,60 @@ async function getCcString(
     .filter((e: string) => e && e !== leadEmail.toLowerCase());
   return emails.length > 0 ? emails.join(", ") : undefined;
 }
+
+// ── Follow-ups (agenda) ─────────────────────────────────────
+
+export async function createFollowUp(
+  leadId: string,
+  scheduledDate: string,
+  note: string,
+  actionType: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("lead_follow_ups").insert({
+    lead_id: leadId,
+    scheduled_date: scheduledDate,
+    note,
+    action_type: actionType,
+    created_by: profile.id,
+  });
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath("/dashboard/crm/timeline");
+  return { success: true };
+}
+
+export async function completeFollowUp(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("lead_follow_ups")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/crm/timeline");
+  return { success: true };
+}
+
+export async function deleteFollowUp(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("lead_follow_ups")
+    .delete()
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/crm/timeline");
+  return { success: true };
+}

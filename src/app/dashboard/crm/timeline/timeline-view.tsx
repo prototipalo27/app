@@ -1,9 +1,12 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_LABELS } from "@/lib/crm-config";
 import { tagClasses } from "../crm-card";
+import { completeFollowUp } from "../actions";
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   email_sent: "Email enviado",
@@ -13,6 +16,31 @@ const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   status_change: "Cambio estado",
   email_scheduled: "Email programado",
 };
+
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  call: "Llamada",
+  meeting: "Reunion",
+  email: "Email",
+  other: "Otro",
+};
+
+const ACTION_TYPE_ICONS: Record<string, string> = {
+  call: "\u{1F4DE}",
+  meeting: "\u{1F91D}",
+  email: "\u{2709}\u{FE0F}",
+  other: "\u{1F4C5}",
+};
+
+interface AgendaItem {
+  id: string;
+  lead_id: string;
+  scheduled_date: string;
+  note: string;
+  action_type: string;
+  completed_at: string | null;
+  lead_name: string;
+  lead_company: string | null;
+}
 
 interface TimelineLead {
   id: string;
@@ -92,7 +120,10 @@ function formatDays(days: number): string {
   return `${Math.floor(days)}d`;
 }
 
-export function TimelineView({ leads }: { leads: TimelineLead[] }) {
+export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[]; agendaItems?: AgendaItem[] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState<"agenda" | "tracker">(agendaItems.length > 0 ? "agenda" : "tracker");
   // Calculate days since last interaction for each lead
   const leadsWithDays = leads.map((l) => {
     const interactionDate = l.last_activity_at || l.created_at;
@@ -121,8 +152,105 @@ export function TimelineView({ leads }: { leads: TimelineLead[] }) {
   const totalActive = leadsWithDays.length;
   const needsAction = groups.critical.length + groups.warning.length;
 
+  const handleComplete = (id: string) => {
+    startTransition(async () => {
+      await completeFollowUp(id);
+      router.refresh();
+    });
+  };
+
+  // Group agenda items by date
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const overdueItems = agendaItems.filter((i) => i.scheduled_date < todayStr);
+  const upcomingByDate = new Map<string, AgendaItem[]>();
+  for (const item of agendaItems.filter((i) => i.scheduled_date >= todayStr)) {
+    const existing = upcomingByDate.get(item.scheduled_date) || [];
+    existing.push(item);
+    upcomingByDate.set(item.scheduled_date, existing);
+  }
+  const sortedDates = [...upcomingByDate.keys()].sort();
+
   return (
     <div className="space-y-6">
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-lg bg-muted p-1">
+        <button
+          onClick={() => setTab("agenda")}
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            tab === "agenda" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Agenda {agendaItems.length > 0 && <span className="ml-1 text-xs text-muted-foreground">({agendaItems.length})</span>}
+        </button>
+        <button
+          onClick={() => setTab("tracker")}
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            tab === "tracker" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Seguimiento {needsAction > 0 && <span className="ml-1 text-xs text-red-500">({needsAction})</span>}
+        </button>
+      </div>
+
+      {/* ── Agenda tab ─────────────────────────────── */}
+      {tab === "agenda" && (
+        <div className="space-y-4">
+          {agendaItems.length === 0 ? (
+            <div className="rounded-xl border bg-card py-12 text-center">
+              <p className="text-muted-foreground">No hay acciones programadas</p>
+              <p className="mt-1 text-xs text-muted-foreground">Programa follow-ups desde la pagina de cada lead</p>
+            </div>
+          ) : (
+            <>
+              {/* Overdue */}
+              {overdueItems.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-500" />
+                    <h2 className="text-sm font-semibold text-foreground">Vencidas</h2>
+                    <span className="text-xs text-muted-foreground">({overdueItems.length})</span>
+                  </div>
+                  <div className="space-y-1">
+                    {overdueItems.map((item) => (
+                      <AgendaRow key={item.id} item={item} isOverdue onComplete={handleComplete} isPending={isPending} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* By date */}
+              {sortedDates.map((dateStr) => {
+                const items = upcomingByDate.get(dateStr)!;
+                const isToday = dateStr === todayStr;
+                const dateObj = new Date(dateStr + "T12:00:00");
+                const dayLabel = isToday
+                  ? "Hoy"
+                  : dateObj.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+
+                return (
+                  <div key={dateStr} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-3 w-3 rounded-full ${isToday ? "bg-amber-500" : "bg-blue-500"}`} />
+                      <h2 className="text-sm font-semibold capitalize text-foreground">{dayLabel}</h2>
+                      <span className="text-xs text-muted-foreground">({items.length})</span>
+                    </div>
+                    <div className="space-y-1">
+                      {items.map((item) => (
+                        <AgendaRow key={item.id} item={item} isToday={isToday} onComplete={handleComplete} isPending={isPending} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Tracker tab ────────────────────────────── */}
+      {tab === "tracker" && (
+        <div className="space-y-6">
+
       {/* Summary bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center dark:border-red-900/40 dark:bg-red-950/20">
@@ -271,6 +399,77 @@ export function TimelineView({ leads }: { leads: TimelineLead[] }) {
           <p className="text-muted-foreground">No hay leads activos</p>
         </div>
       )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgendaRow({
+  item,
+  isOverdue,
+  isToday,
+  onComplete,
+  isPending,
+}: {
+  item: AgendaItem;
+  isOverdue?: boolean;
+  isToday?: boolean;
+  onComplete: (id: string) => void;
+  isPending: boolean;
+}) {
+  return (
+    <div
+      className={`group flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
+        isOverdue
+          ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20"
+          : isToday
+            ? "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20"
+            : "border-border bg-card"
+      }`}
+    >
+      {/* Complete button */}
+      <button
+        onClick={() => onComplete(item.id)}
+        disabled={isPending}
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-muted-foreground/30 transition-colors hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950/30"
+        title="Marcar como hecho"
+      >
+        <span className="hidden text-[10px] text-green-600 group-hover:block">&#10003;</span>
+      </button>
+
+      {/* Action type icon */}
+      <span className="shrink-0 text-sm" title={ACTION_TYPE_LABELS[item.action_type] || item.action_type}>
+        {ACTION_TYPE_ICONS[item.action_type] || ACTION_TYPE_ICONS.other}
+      </span>
+
+      {/* Lead info + note */}
+      <Link href={`/dashboard/crm/${item.lead_id}`} className="min-w-0 flex-1 hover:opacity-80">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-foreground">{item.lead_name}</span>
+          {item.lead_company && (
+            <span className="hidden truncate text-xs text-muted-foreground sm:inline">{item.lead_company}</span>
+          )}
+        </div>
+        {item.note && (
+          <p className="truncate text-xs text-muted-foreground">{item.note}</p>
+        )}
+      </Link>
+
+      {/* Date (for overdue items) */}
+      {isOverdue && (
+        <span className="shrink-0 text-xs font-medium text-red-600 dark:text-red-400">
+          {new Date(item.scheduled_date + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+        </span>
+      )}
+
+      {/* Arrow */}
+      <Link href={`/dashboard/crm/${item.lead_id}`} className="shrink-0">
+        <svg className="h-4 w-4 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </Link>
     </div>
   );
 }

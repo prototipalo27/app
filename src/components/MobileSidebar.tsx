@@ -376,9 +376,25 @@ export default function MobileSidebar({
                   Finanzas
                 </Link>
                 <Link
+                  href="/dashboard/facturas/scan"
+                  prefetch={false}
+                  onClick={handleNavClick}
+                  className={`flex items-center rounded-md p-2 ${
+                    pathname?.startsWith("/dashboard/facturas")
+                      ? "bg-brand/5 text-zinc-900 dark:text-white"
+                      : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
+                  }`}
+                  title="Escanear factura"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </Link>
+                <Link
                   href="/dashboard/finanzas/extracto"
                   prefetch={false}
-            onClick={handleNavClick}
+                  onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${
                     pathname?.startsWith("/dashboard/finanzas/extracto")
                       ? "bg-brand/5 text-zinc-900 dark:text-white"

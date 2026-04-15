@@ -90,6 +90,65 @@ function CrmColumn({
   );
 }
 
+function LostSection({
+  column,
+  leads,
+}: {
+  column: (typeof LEAD_COLUMNS)[number];
+  leads: LeadWithAssignee[];
+}) {
+  const [open, setOpen] = useState(false);
+  const { ref, isDropTarget } = useDroppable({ id: column.id });
+
+  if (leads.length === 0 && !isDropTarget) return null;
+
+  return (
+    <div className="mt-2 shrink-0 rounded-xl bg-muted/60">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+      >
+        <span className={`h-2 w-2 rounded-full ${column.accent}`} />
+        <span className="text-sm font-medium text-muted-foreground">
+          {column.label}
+        </span>
+        <Badge variant="secondary" className={`${column.badge}`}>
+          {leads.length}
+        </Badge>
+        <svg
+          className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          ref={ref}
+          className={`grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 ${
+            isDropTarget ? "rounded-b-xl ring-2 ring-brand/50 ring-inset" : ""
+          }`}
+        >
+          {leads.map((lead) => (
+            <CrmCard key={lead.id} lead={lead} />
+          ))}
+        </div>
+      )}
+
+      {/* Hidden drop zone when collapsed */}
+      {!open && (
+        <div
+          ref={ref}
+          className={`h-1 ${isDropTarget ? "rounded-b-xl ring-2 ring-brand/50 ring-inset" : ""}`}
+        />
+      )}
+    </div>
+  );
+}
+
 // Default owner for filter
 const DEFAULT_OWNER = "gonzalo";
 
@@ -780,7 +839,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
-        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-[1fr_1fr_1fr_1fr_minmax(160px,0.5fr)] md:auto-cols-auto md:gap-4">
+        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
           {kanbanColumns.map((column) => (
             <CrmColumn
               key={column.id}
@@ -789,12 +848,15 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
               commissionRate={column.id !== "won" && column.id !== "paid" ? myCommission?.currentRate : undefined}
             />
           ))}
-          <CrmColumn
-            key={lostColumn.id}
-            column={lostColumn}
-            leads={filteredLeads.filter((l) => l.status === "lost").sort(sortFn)}
-          />
         </div>
+
+        {/* Perdidos — separate section below kanban */}
+        {(() => {
+          const lostLeads = filteredLeads.filter((l) => l.status === "lost").sort(sortFn);
+          return (
+            <LostSection column={lostColumn} leads={lostLeads} />
+          );
+        })()}
       </DragDropProvider>
 
       {/* Contact modal */}

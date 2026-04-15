@@ -4,7 +4,6 @@ import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateLeadStatus,
-  assignLead,
   addNote,
   deleteLead,
   blockEmailAndDeleteLead,
@@ -43,7 +42,6 @@ interface LeadActionsProps {
   leadEmail: string | null;
   currentStatus: LeadStatus;
   managers: { id: string; email: string }[];
-  assignedTo: string | null;
   quoteRequest: Tables<"quote_requests"> | null;
   paymentCondition: string | null;
   projectTypeTag: string | null;
@@ -70,8 +68,6 @@ export default function LeadActions({
   leadId,
   leadEmail,
   currentStatus,
-  managers,
-  assignedTo,
   quoteRequest,
   paymentCondition,
   projectTypeTag,
@@ -142,13 +138,6 @@ export default function LeadActions({
       } else {
         router.push("/dashboard/crm");
       }
-    });
-  };
-
-  const handleAssign = (userId: string) => {
-    startTransition(async () => {
-      await assignLead(leadId, userId || null);
-      router.refresh();
     });
   };
 
@@ -290,26 +279,6 @@ export default function LeadActions({
         {ndaError && (
           <p className="mt-1 text-xs text-destructive">{ndaError}</p>
         )}
-      </div>
-
-      {/* Assign */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Asignar a
-        </h3>
-        <select
-          value={assignedTo || ""}
-          onChange={(e) => handleAssign(e.target.value)}
-          disabled={isPending}
-          className={selectClass}
-        >
-          <option value="">Sin asignar</option>
-          {managers.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.email.split("@")[0]}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Payment condition */}

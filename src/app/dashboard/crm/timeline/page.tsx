@@ -30,6 +30,48 @@ export default async function TimelinePage() {
     userEmailMap = new Map(users?.map((u) => [u.id, u.email]) || []);
   }
 
+  // Fetch pending follow-ups for next 30 days
+  const today = new Date().toISOString().slice(0, 10);
+  const thirtyDaysOut = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const { data: followUps } = await supabase
+    .from("lead_follow_ups")
+    .select("id, lead_id, scheduled_date, note, action_type, completed_at")
+    .is("completed_at", null)
+    .gte("scheduled_date", today)
+    .lte("scheduled_date", thirtyDaysOut)
+    .order("scheduled_date");
+
+  // Also fetch overdue (past, not completed)
+  const { data: overdueFollowUps } = await supabase
+    .from("lead_follow_ups")
+    .select("id, lead_id, scheduled_date, note, action_type, completed_at")
+    .is("completed_at", null)
+    .lt("scheduled_date", today)
+    .order("scheduled_date");
+
+  const allFollowUps = [...(overdueFollowUps || []), ...(followUps || [])];
+
+  // Build a lead name map for follow-ups
+  const followUpLeadIds = [...new Set(allFollowUps.map((f) => f.lead_id))];
+  let leadNameMap = new Map<string, { name: string; company: string | null }>();
+  if (followUpLeadIds.length > 0) {
+    const { data: fLeads } = await supabase
+      .from("leads")
+      .select("id, full_name, company")
+      .in("id", followUpLeadIds);
+    if (fLeads) {
+      for (const l of fLeads) {
+        leadNameMap.set(l.id, { name: l.full_name, company: l.company });
+      }
+    }
+  }
+
+  const agendaItems = allFollowUps.map((f) => ({
+    ...f,
+    lead_name: leadNameMap.get(f.lead_id)?.name || "Lead",
+    lead_company: leadNameMap.get(f.lead_id)?.company || null,
+  }));
+
   // Fetch last activity + last activity type per lead
   const leadIds = (leads || []).map((l) => l.id);
   let activityMap = new Map<string, { last_at: string; activity_type: string }>();
@@ -82,7 +124,7 @@ export default async function TimelinePage() {
         </div>
       </div>
 
-      <TimelineView leads={timelineLeads} />
+      <TimelineView leads={timelineLeads} agendaItems={agendaItems} />
     </div>
   );
 }

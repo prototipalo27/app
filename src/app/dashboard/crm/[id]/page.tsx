@@ -10,6 +10,7 @@ import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
 import EditableContactInfo from "./editable-contact-info";
 import InlineAssignSelect from "./inline-assign-select";
+import { FollowUpSection } from "./follow-up-section";
 import ProformaEditor from "./proforma-editor";
 import {
   LEAD_COLUMNS,
@@ -295,12 +296,14 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
     { data: managers },
     { data: quoteRequest },
     { data: projectTemplates },
+    { data: followUps },
     commission,
     ndaStatusResult,
   ] = await Promise.all([
     supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
     supabase.from("quote_requests").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("project_templates").select("name").eq("is_active", true).order("name"),
+    supabase.from("lead_follow_ups").select("id, scheduled_date, note, action_type, completed_at, created_at").eq("lead_id", leadId).order("scheduled_date"),
     getCommissionSummary(leadId),
     getNdaStatus(leadId),
   ]);
@@ -308,31 +311,37 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
 
   return (
-    <Card>
-      <CardContent>
-        <LeadActions
-          leadId={leadId}
-          leadEmail={lead.email}
-          currentStatus={lead.status as LeadStatus}
-          managers={managers || []}
-          assignedTo={lead.assigned_to}
-          quoteRequest={quoteRequest}
-          paymentCondition={lead.payment_condition}
-          desiredDeliveryDate={lead.desired_delivery_date}
-          projectTypeTag={lead.project_type_tag}
-          projectTemplateTags={projectTemplateTags}
-          estimatedQuantity={lead.estimated_quantity}
-          estimatedComplexity={lead.estimated_complexity}
-          estimatedUrgency={lead.estimated_urgency}
-          estimatedValue={lead.estimated_value}
-          nextId={nextId}
-          commission={commission}
-          ndaStatus={ndaStatusResult.status}
-          ndaSignedAt={ndaStatusResult.signed_at}
-          ndaSignerName={ndaStatusResult.signer_name}
-        />
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardContent>
+          <LeadActions
+            leadId={leadId}
+            leadEmail={lead.email}
+            currentStatus={lead.status as LeadStatus}
+            managers={managers || []}
+            quoteRequest={quoteRequest}
+            paymentCondition={lead.payment_condition}
+            desiredDeliveryDate={lead.desired_delivery_date}
+            projectTypeTag={lead.project_type_tag}
+            projectTemplateTags={projectTemplateTags}
+            estimatedQuantity={lead.estimated_quantity}
+            estimatedComplexity={lead.estimated_complexity}
+            estimatedUrgency={lead.estimated_urgency}
+            estimatedValue={lead.estimated_value}
+            nextId={nextId}
+            commission={commission}
+            ndaStatus={ndaStatusResult.status}
+            ndaSignedAt={ndaStatusResult.signed_at}
+            ndaSignerName={ndaStatusResult.signer_name}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent>
+          <FollowUpSection leadId={leadId} followUps={followUps || []} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
