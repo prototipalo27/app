@@ -9,6 +9,7 @@ import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
 import AttachmentGallery from "./attachment-gallery";
 import EditableContactInfo from "./editable-contact-info";
+import InlineAssignSelect from "./inline-assign-select";
 import ProformaEditor from "./proforma-editor";
 import {
   LEAD_COLUMNS,
@@ -325,7 +326,6 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
           estimatedUrgency={lead.estimated_urgency}
           estimatedValue={lead.estimated_value}
           nextId={nextId}
-          ownedBy={lead.owned_by}
           commission={commission}
           ndaStatus={ndaStatusResult.status}
           ndaSignedAt={ndaStatusResult.signed_at}
@@ -354,9 +354,9 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase.from("leads").select("*").eq("id", id).single();
   if (!lead) notFound();
 
-  // Fast parallel: nav + user names (all we need for first paint)
+  // Fast parallel: nav + user names + managers (all we need for first paint)
   const leadUserIds = [lead.assigned_to, lead.owned_by].filter(Boolean) as string[];
-  const [{ data: prevLeads }, { data: nextLeads }, userMap] = await Promise.all([
+  const [{ data: prevLeads }, { data: nextLeads }, userMap, { data: managers }] = await Promise.all([
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
     leadUserIds.length > 0
@@ -364,6 +364,7 @@ export default async function LeadDetailPage({
           new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || [])
         )
       : Promise.resolve(new Map<string, string>()),
+    supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
   ]);
 
   const prevId = prevLeads?.[0]?.id ?? null;
@@ -455,18 +456,21 @@ export default async function LeadDetailPage({
                 </div>
               )}
 
-              <div className="mt-4 space-y-2">
-                {lead.assigned_to && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                    <span className="text-foreground">{userMap.get(lead.assigned_to) || "—"}</span>
-                  </div>
-                )}
-                {lead.owned_by && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
-                    <span className="text-foreground">Captado por {userMap.get(lead.owned_by) || "—"}</span>
-                  </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  <InlineAssignSelect
+                    leadId={lead.id}
+                    currentAssignedTo={lead.assigned_to}
+                    managers={managers ?? []}
+                    displayName={lead.assigned_to ? (userMap.get(lead.assigned_to) || "—") : null}
+                  />
+                </span>
+                {lead.source !== "webflow" && lead.owned_by && (
+                  <span className="inline-flex items-center gap-1">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+                    Captado por {userMap.get(lead.owned_by) || "—"}
+                  </span>
                 )}
               </div>
 
@@ -497,11 +501,6 @@ export default async function LeadDetailPage({
             </Suspense>
           </div>
 
-          {/* UTM attribution */}
-          <Suspense fallback={null}>
-            <UtmSection leadId={id} leadSource={lead.source} />
-          </Suspense>
-
           {/* Everything below streams in progressively */}
           <Suspense fallback={null}>
             <LinkedProjectsSection leadId={id} />
@@ -517,6 +516,11 @@ export default async function LeadDetailPage({
 
           <Suspense fallback={<CardSkeleton lines={6} />}>
             <ActivitySection leadId={id} />
+          </Suspense>
+
+          {/* UTM attribution — at the end, low priority info */}
+          <Suspense fallback={null}>
+            <UtmSection leadId={id} leadSource={lead.source} />
           </Suspense>
         </div>
 

@@ -20,7 +20,6 @@ import {
   markAsPaid,
   searchHoldedInvoices,
   linkInvoiceToLead,
-  updateLeadOwner,
   sendQuoteToClient,
   sendNdaToClient,
   updateQuoteCcEmails,
@@ -55,7 +54,6 @@ interface LeadActionsProps {
   estimatedValue: number | null;
   desiredDeliveryDate: string | null;
   nextId: string | null;
-  ownedBy: string | null;
   commission: {
     isReturning: boolean;
     rate: number;
@@ -84,7 +82,6 @@ export default function LeadActions({
   estimatedValue,
   desiredDeliveryDate,
   nextId,
-  ownedBy,
   commission,
   ndaStatus,
   ndaSignedAt,
@@ -313,33 +310,6 @@ export default function LeadActions({
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Owner */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Captado por
-        </h3>
-        <select
-          value={ownedBy || ""}
-          onChange={(e) => {
-            const value = e.target.value || null;
-            startTransition(async () => {
-              await updateLeadOwner(leadId, value);
-              router.refresh();
-            });
-          }}
-          disabled={isPending}
-          className={selectClass}
-        >
-          <option value="">Sin asignar</option>
-          {managers.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.email.split("@")[0]}
-            </option>
-          ))}
-        </select>
-
       </div>
 
       {/* Payment condition */}
