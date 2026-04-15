@@ -22,6 +22,17 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
 
   const supabase = getSupabase();
 
+  // Idempotency: skip if already processed
+  const { data: existing } = await supabase
+    .from("quote_requests")
+    .select("payment_status")
+    .eq("id", quoteRequestId)
+    .single();
+
+  if (existing?.payment_status === "paid") {
+    return;
+  }
+
   // Update payment status
   const amountTotal = (session.amount_total || 0) / 100;
   await supabase

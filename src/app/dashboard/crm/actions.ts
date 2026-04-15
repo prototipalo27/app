@@ -2991,6 +2991,18 @@ export async function linkInvoiceToLead(
     metadata: { holded_invoice_id: invoiceId, doc_number: invoice.docNumber },
   });
 
+  // Trigger auto-pipeline: create project + mark lead as paid
+  const { data: latestQr } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestQr) {
+    await onPaymentConfirmed(latestQr.id);
+  }
+
   revalidatePath(`/dashboard/crm/${leadId}`);
   return { success: true };
 }
@@ -3087,6 +3099,32 @@ export async function onPaymentConfirmed(
     .single();
 
   if (!qr) return { success: false, error: "Quote request not found" };
+
+  // Idempotency: check if a project already exists for this quote_request
+  const { data: existingProject } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("lead_id", (qr.leads as any).id)
+    .eq("holded_invoice_id", qr.holded_invoice_id ?? "")
+    .limit(1)
+    .maybeSingle();
+
+  // Broader check: any project linked to this lead with type "confirmed"
+  if (!existingProject) {
+    const { data: confirmedProject } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("lead_id", (qr.leads as any).id)
+      .eq("project_type", "confirmed")
+      .limit(1)
+      .maybeSingle();
+
+    if (confirmedProject) {
+      return { success: true, projectId: confirmedProject.id };
+    }
+  } else {
+    return { success: true, projectId: existingProject.id };
+  }
 
   const lead = qr.leads as unknown as {
     id: string; full_name: string; company: string | null;

@@ -368,7 +368,8 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   const newLeads = filteredLeads
     .filter((l) => l.status === "new")
     .sort(sortFn);
-  const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new");
+  const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new" && col.id !== "lost");
+  const lostColumn = LEAD_COLUMNS.find((col) => col.id === "lost")!;
 
   return (
     <>
@@ -779,15 +780,20 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
       {/* Kanban */}
       <DragDropProvider onDragEnd={handleDragEnd}>
-        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-4 md:auto-cols-auto md:gap-4">
+        <div className="grid min-h-0 flex-1 auto-cols-[200px] grid-flow-col gap-3 overflow-x-auto pb-4 md:grid-cols-[1fr_1fr_1fr_1fr_minmax(160px,0.5fr)] md:auto-cols-auto md:gap-4">
           {kanbanColumns.map((column) => (
             <CrmColumn
               key={column.id}
               column={column}
               leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
-              commissionRate={column.id !== "won" && column.id !== "paid" && column.id !== "lost" ? myCommission?.currentRate : undefined}
+              commissionRate={column.id !== "won" && column.id !== "paid" ? myCommission?.currentRate : undefined}
             />
           ))}
+          <CrmColumn
+            key={lostColumn.id}
+            column={lostColumn}
+            leads={filteredLeads.filter((l) => l.status === "lost").sort(sortFn)}
+          />
         </div>
       </DragDropProvider>
 
