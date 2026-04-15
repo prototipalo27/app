@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createFollowUp, completeFollowUp, deleteFollowUp } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { es } from "react-day-picker/locale";
 
 const ACTION_TYPES = [
   { value: "call", label: "Llamada", icon: "phone" },
@@ -13,7 +16,7 @@ const ACTION_TYPES = [
   { value: "other", label: "Otro", icon: "calendar" },
 ] as const;
 
-const ACTION_ICONS: Record<string, JSX.Element> = {
+const ACTION_ICONS: Record<string, React.ReactNode> = {
   call: (
     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -56,6 +59,7 @@ export function FollowUpSection({
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [note, setNote] = useState("");
   const [actionType, setActionType] = useState("call");
 
@@ -150,19 +154,43 @@ export function FollowUpSection({
             ))}
           </div>
 
-          {/* Custom date (collapsed by default) */}
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-              {selectedDateLabel ? `Fecha: ${selectedDateLabel}` : "Elegir fecha exacta"}
-            </summary>
-            <input
-              type="date"
-              value={date}
-              min={todayStr}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-            />
-          </details>
+          {/* Date display + calendar picker */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">
+              {date
+                ? new Date(date + "T12:00:00").toLocaleDateString("es-ES", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })
+                : "Sin fecha"}
+            </span>
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                Cambiar
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  locale={es}
+                  selected={date ? new Date(date + "T12:00:00") : undefined}
+                  onSelect={(day) => {
+                    if (day) {
+                      const y = day.getFullYear();
+                      const m = String(day.getMonth() + 1).padStart(2, "0");
+                      const d = String(day.getDate()).padStart(2, "0");
+                      setDate(`${y}-${m}-${d}`);
+                    }
+                    setCalendarOpen(false);
+                  }}
+                  disabled={{ before: new Date() }}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Action type */}
           <div className="grid grid-cols-4 gap-1">
@@ -209,8 +237,8 @@ export function FollowUpSection({
       {pending.length > 0 && (
         <div className="space-y-1.5">
           {pending.map((f) => {
-            const isOverdue = f.scheduled_date < today;
-            const isToday = f.scheduled_date === today;
+            const isOverdue = f.scheduled_date < todayStr;
+            const isToday = f.scheduled_date === todayStr;
             return (
               <div
                 key={f.id}
