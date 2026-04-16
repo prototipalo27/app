@@ -40,6 +40,7 @@ interface AgendaItem {
   completed_at: string | null;
   lead_name: string;
   lead_company: string | null;
+  assigned_to: string | null;
 }
 
 interface TimelineLead {
@@ -52,9 +53,15 @@ interface TimelineLead {
   estimated_value: number | null;
   project_type_tag: string | null;
   created_at: string;
+  assigned_to: string | null;
   assignee_name: string | null;
   last_activity_at: string | null;
   last_activity_type: string | null;
+}
+
+interface Comercial {
+  id: string;
+  name: string;
 }
 
 type UrgencyGroup = "critical" | "warning" | "ok" | "fresh";
@@ -120,12 +127,38 @@ function formatDays(days: number): string {
   return `${Math.floor(days)}d`;
 }
 
-export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[]; agendaItems?: AgendaItem[] }) {
+export function TimelineView({
+  leads,
+  agendaItems = [],
+  comerciales = [],
+  currentUserId,
+  isManager = false,
+}: {
+  leads: TimelineLead[];
+  agendaItems?: AgendaItem[];
+  comerciales?: Comercial[];
+  currentUserId: string;
+  isManager?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [tab, setTab] = useState<"agenda" | "tracker">(agendaItems.length > 0 ? "agenda" : "tracker");
+
+  // Comercial filter — comerciales default to their own leads, managers to "all"
+  const [selectedComercial, setSelectedComercial] = useState<string>(
+    isManager ? "all" : currentUserId
+  );
+
+  // Filter leads & agenda by selected comercial
+  const filteredLeads = selectedComercial === "all"
+    ? leads
+    : leads.filter((l) => l.assigned_to === selectedComercial);
+  const filteredAgenda = selectedComercial === "all"
+    ? agendaItems
+    : agendaItems.filter((a) => a.assigned_to === selectedComercial);
+
   // Calculate days since last interaction for each lead
-  const leadsWithDays = leads.map((l) => {
+  const leadsWithDays = filteredLeads.map((l) => {
     const interactionDate = l.last_activity_at || l.created_at;
     const days = daysSince(interactionDate);
     const group = getUrgencyGroup(days);
@@ -161,9 +194,9 @@ export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[
 
   // Group agenda items by date
   const todayStr = new Date().toISOString().slice(0, 10);
-  const overdueItems = agendaItems.filter((i) => i.scheduled_date < todayStr);
+  const overdueItems = filteredAgenda.filter((i) => i.scheduled_date < todayStr);
   const upcomingByDate = new Map<string, AgendaItem[]>();
-  for (const item of agendaItems.filter((i) => i.scheduled_date >= todayStr)) {
+  for (const item of filteredAgenda.filter((i) => i.scheduled_date >= todayStr)) {
     const existing = upcomingByDate.get(item.scheduled_date) || [];
     existing.push(item);
     upcomingByDate.set(item.scheduled_date, existing);
@@ -172,6 +205,23 @@ export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[
 
   return (
     <div className="space-y-6">
+      {/* Comercial selector */}
+      {isManager && comerciales.length > 0 && (
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-muted-foreground">Comercial:</label>
+          <select
+            value={selectedComercial}
+            onChange={(e) => setSelectedComercial(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground"
+          >
+            <option value="all">Todos</option>
+            {comerciales.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-lg bg-muted p-1">
         <button
@@ -180,7 +230,7 @@ export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[
             tab === "agenda" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Agenda {agendaItems.length > 0 && <span className="ml-1 text-xs text-muted-foreground">({agendaItems.length})</span>}
+          Agenda {filteredAgenda.length > 0 && <span className="ml-1 text-xs text-muted-foreground">({filteredAgenda.length})</span>}
         </button>
         <button
           onClick={() => setTab("tracker")}
@@ -195,7 +245,7 @@ export function TimelineView({ leads, agendaItems = [] }: { leads: TimelineLead[
       {/* ── Agenda tab ─────────────────────────────── */}
       {tab === "agenda" && (
         <div className="space-y-4">
-          {agendaItems.length === 0 ? (
+          {filteredAgenda.length === 0 ? (
             <div className="rounded-xl border bg-card py-12 text-center">
               <p className="text-muted-foreground">No hay acciones programadas</p>
               <p className="mt-1 text-xs text-muted-foreground">Programa follow-ups desde la pagina de cada lead</p>

@@ -8,8 +8,9 @@ import { TimelineView } from "./timeline-view";
 export default async function TimelinePage() {
   const profile = await getUserProfile();
   if (!profile || !profile.is_active) redirect("/login");
-  if (!hasRole(profile.role, "manager")) redirect("/dashboard");
+  if (!hasRole(profile.role, "comercial")) redirect("/dashboard");
 
+  const isManager = hasRole(profile.role, "manager");
   const supabase = await createClient();
 
   // Only active leads (not won/lost)
@@ -66,10 +67,26 @@ export default async function TimelinePage() {
     }
   }
 
+  // Build a map from lead_id → assigned_to (from all leads + follow-up leads)
+  const leadAssigneeMap = new Map<string, string | null>();
+  for (const l of leads || []) {
+    leadAssigneeMap.set(l.id, l.assigned_to);
+  }
+  if (followUpLeadIds.length > 0) {
+    const { data: fLeadsAssign } = await supabase
+      .from("leads")
+      .select("id, assigned_to")
+      .in("id", followUpLeadIds);
+    for (const l of fLeadsAssign || []) {
+      leadAssigneeMap.set(l.id, l.assigned_to);
+    }
+  }
+
   const agendaItems = allFollowUps.map((f) => ({
     ...f,
     lead_name: leadNameMap.get(f.lead_id)?.name || "Lead",
     lead_company: leadNameMap.get(f.lead_id)?.company || null,
+    assigned_to: leadAssigneeMap.get(f.lead_id) || null,
   }));
 
   // Fetch last activity + last activity type per lead
@@ -104,11 +121,27 @@ export default async function TimelinePage() {
       estimated_value: l.estimated_value,
       project_type_tag: l.project_type_tag,
       created_at: l.created_at,
+      assigned_to: l.assigned_to as string | null,
       assignee_name: l.assigned_to ? userEmailMap.get(l.assigned_to)?.split("@")[0] || null : null,
       last_activity_at: activity?.last_at || null,
       last_activity_type: activity?.activity_type || null,
     };
   });
+
+  // Fetch comerciales for the selector (managers see all, comerciales see only themselves)
+  let comerciales: { id: string; name: string }[] = [];
+  if (isManager) {
+    const { data: comUsers } = await supabase
+      .from("user_profiles")
+      .select("id, email, full_name")
+      .in("role", ["comercial", "manager", "super_admin"])
+      .eq("is_active", true)
+      .order("email");
+    comerciales = (comUsers || []).map((u) => ({
+      id: u.id,
+      name: u.full_name || u.email.split("@")[0],
+    }));
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -124,7 +157,13 @@ export default async function TimelinePage() {
         </div>
       </div>
 
-      <TimelineView leads={timelineLeads} agendaItems={agendaItems} />
+      <TimelineView
+        leads={timelineLeads}
+        agendaItems={agendaItems}
+        comerciales={comerciales}
+        currentUserId={profile.id}
+        isManager={isManager}
+      />
     </div>
   );
 }
