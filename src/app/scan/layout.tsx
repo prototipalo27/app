@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
+  themeColor: "#18181b",
 };
 
 export const metadata: Metadata = {
   title: "Escanear Factura - Prototipalo",
   description: "Escaneo rápido de facturas",
   manifest: "/scan-manifest.json",
-  themeColor: "#18181b",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -33,5 +34,15 @@ export default function ScanLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-dvh items-center justify-center bg-zinc-950">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
 }
