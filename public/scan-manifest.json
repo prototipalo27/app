@@ -1,0 +1,23 @@
+{
+  "name": "Scan Facturas - Prototipalo",
+  "short_name": "Scan Facturas",
+  "description": "Escaneo rapido de facturas",
+  "start_url": "/scan",
+  "scope": "/scan",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#18181b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
