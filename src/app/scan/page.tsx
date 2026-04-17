@@ -31,14 +31,19 @@ export default function ScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderIdCache = useRef<Record<string, string>>({});
 
-  // Check saved PIN on mount
+  // Check URL token or saved PIN on mount
   useEffect(() => {
-    const saved = localStorage.getItem(PIN_STORAGE_KEY);
+    const urlPin = new URLSearchParams(window.location.search).get("pin");
+    const saved = urlPin || localStorage.getItem(PIN_STORAGE_KEY);
     if (saved) {
       setPin(saved);
       verifyPin(saved).then((ok) => {
-        if (ok) setAuthenticated(true);
-        else localStorage.removeItem(PIN_STORAGE_KEY);
+        if (ok) {
+          localStorage.setItem(PIN_STORAGE_KEY, saved);
+          setAuthenticated(true);
+        } else {
+          localStorage.removeItem(PIN_STORAGE_KEY);
+        }
         setChecking(false);
       });
     } else {
