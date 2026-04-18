@@ -536,6 +536,45 @@ export type Database = {
           },
         ]
       }
+      google_accounts: {
+        Row: {
+          access_token_encrypted: string
+          connected_at: string
+          email: string
+          id: string
+          last_error: string | null
+          last_used_at: string | null
+          refresh_token_encrypted: string
+          scopes: string[]
+          token_expires_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          connected_at?: string
+          email: string
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          refresh_token_encrypted: string
+          scopes?: string[]
+          token_expires_at: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          connected_at?: string
+          email?: string
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          refresh_token_encrypted?: string
+          scopes?: string[]
+          token_expires_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       holded_contacts: {
         Row: {
           address: string | null
@@ -2326,6 +2365,45 @@ export type Database = {
         }
         Relationships: []
       }
+      sent_emails: {
+        Row: {
+          cc: string | null
+          entity_id: string | null
+          entity_type: string | null
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
+          id: string
+          sent_at: string
+          subject: string
+          to: string
+          user_id: string
+        }
+        Insert: {
+          cc?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          sent_at?: string
+          subject: string
+          to: string
+          user_id: string
+        }
+        Update: {
+          cc?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          sent_at?: string
+          subject?: string
+          to?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       shipping_info: {
         Row: {
           address_id: string | null
@@ -2900,6 +2978,7 @@ export type Database = {
         Row: {
           birthday: string | null
           career_plan: string | null
+          contract_end_date: string | null
           created_at: string | null
           email: string
           full_name: string | null
@@ -2914,6 +2993,7 @@ export type Database = {
         Insert: {
           birthday?: string | null
           career_plan?: string | null
+          contract_end_date?: string | null
           created_at?: string | null
           email: string
           full_name?: string | null
@@ -2928,6 +3008,7 @@ export type Database = {
         Update: {
           birthday?: string | null
           career_plan?: string | null
+          contract_end_date?: string | null
           created_at?: string | null
           email?: string
           full_name?: string | null
@@ -3405,3 +3486,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
