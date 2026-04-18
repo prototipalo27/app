@@ -289,6 +289,59 @@ async function ActivitySection({ leadId }: { leadId: string }) {
   );
 }
 
+async function SentEmailsSection({ leadId }: { leadId: string }) {
+  const supabase = await createClient();
+  const { data: sentEmails } = await supabase
+    .from("sent_emails")
+    .select("id, to, cc, subject, sent_at, gmail_message_id, user_id")
+    .eq("entity_type", "lead")
+    .eq("entity_id", leadId)
+    .order("sent_at", { ascending: false })
+    .limit(50);
+
+  if (!sentEmails || sentEmails.length === 0) return null;
+
+  // Get sender names
+  const senderIds = [...new Set(sentEmails.map((e) => e.user_id))];
+  const { data: senders } = await supabase
+    .from("user_profiles")
+    .select("id, email")
+    .in("id", senderIds);
+  const senderMap = new Map(senders?.map((s) => [s.id, s.email.split("@")[0]]) || []);
+
+  return (
+    <Card>
+      <CardContent>
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-card-foreground">
+            Emails enviados desde la plataforma ({sentEmails.length})
+          </summary>
+          <div className="mt-3 space-y-2">
+            {sentEmails.map((email) => (
+              <div
+                key={email.id}
+                className="flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-xs"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground truncate">{email.subject}</p>
+                  <p className="text-muted-foreground">
+                    Para: {email.to}
+                    {email.cc && <span> · CC: {email.cc}</span>}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right text-muted-foreground">
+                  <p>{new Date(email.sent_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                  <p className="text-[10px]">por {senderMap.get(email.user_id) || "—"}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      </CardContent>
+    </Card>
+  );
+}
+
 async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: any; nextId: string | null }) {
   const supabase = await createClient();
 
@@ -517,6 +570,10 @@ export default async function LeadDetailPage({
 
           <Suspense fallback={<CardSkeleton lines={4} />}>
             <ProformaSection leadId={id} lead={lead} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <SentEmailsSection leadId={id} />
           </Suspense>
 
           <Suspense fallback={<CardSkeleton lines={5} />}>
