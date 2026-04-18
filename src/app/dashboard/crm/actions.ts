@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
+import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
 import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
@@ -47,7 +48,7 @@ export async function updateBasePrice(
   return { success: true };
 }
 
-/** Fetch per-user SMTP config or return undefined for global fallback */
+/** @deprecated Use getUserEmailSender from @/lib/email-sender instead */
 async function getUserSmtpConfig(userId: string): Promise<SmtpConfig | undefined> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -1020,8 +1021,11 @@ export async function sendLeadEmail(
       .filter(Boolean);
   }
 
-  // Get per-user SMTP config (falls back to global if not configured)
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  // Get per-user email sender (OAuth or SMTP — no global fallback)
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
 
   // Optionally attach proforma PDF from Holded
   let attachments: EmailAttachment[] | undefined;
@@ -1095,8 +1099,10 @@ export async function sendLeadEmail(
       html: body.trim().replace(/\n/g, "<br>"),
       inReplyTo,
       references,
-      smtpConfig,
+      emailSender,
       attachments,
+      entityType: "lead",
+      entityId: id,
     }, { createdBy: profile.id, leadId: id, forceNow });
 
     // Determine thread_id for this sent email
@@ -1379,8 +1385,11 @@ export async function sendQuoteToClient(
     ? `<p style="white-space:pre-line;">${qr.notes}</p>`
     : "";
 
-  // Get per-user SMTP config
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  // Get per-user email sender (OAuth or SMTP)
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
 
   // Create Stripe Checkout session so the client can pay directly without billing data
   let stripeCheckoutUrl: string | null = null;
@@ -1491,8 +1500,10 @@ export async function sendQuoteToClient(
       subject: "Presupuesto — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe enviamos el presupuesto para tu proyecto.\n\nPuedes verlo y completar tus datos de facturación en el siguiente enlace:\n${quoteUrl}\n\n${stripeCheckoutUrl ? `Si no necesitas factura, puedes pagar directamente aquí:\n${stripeCheckoutUrl}\n\n` : ""}Gracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Te enviamos el presupuesto para tu proyecto:</p>${itemsHtml}${notesHtml}<p>Para confirmar el presupuesto con factura, necesitamos tus datos de facturación:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Ver presupuesto y rellenar datos</a></p>${stripeCheckoutUrl ? `<p style="margin-top:20px;">Si no necesitas factura, puedes pagar directamente:</p><p><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:10px 20px;background:#18181b;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Pagar ahora</a></p>` : ""}<p>Gracias,<br>El equipo de Prototipalo</p>`,
-      smtpConfig,
+      emailSender,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
+      entityType: "lead",
+      entityId: lead.id,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -1598,8 +1609,11 @@ export async function sendNdaToClient(
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const ndaUrl = `${baseUrl}/nda/${nda.token}`;
 
-  // Get per-user SMTP config
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  // Get per-user email sender (OAuth or SMTP)
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
 
   // Send email
   try {
@@ -1618,7 +1632,9 @@ export async function sendNdaToClient(
         </p>
         <p style="font-size:13px;color:#71717a;margin-top:16px;">Tu información estará protegida en todo momento.</p>
       `,
-      smtpConfig,
+      emailSender,
+      entityType: "lead",
+      entityId: leadId,
     }, { createdBy: profile.id, leadId });
   } catch {
     // Rollback: delete the NDA if email fails
@@ -1699,8 +1715,11 @@ export async function createQuoteRequest(
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const quoteUrl = `${baseUrl}/quote/${qr.token}`;
 
-  // Get per-user SMTP config
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  // Get per-user email sender (OAuth or SMTP)
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
 
   // Send email (or schedule if night hours)
   try {
@@ -1709,7 +1728,9 @@ export async function createQuoteRequest(
       subject: "Datos de facturación — Prototipalo",
       text: `Hola ${lead.full_name},\n\nPara preparar tu presupuesto necesitamos tus datos de facturación.\n\nPor favor, rellena el siguiente formulario:\n${quoteUrl}\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Para preparar tu presupuesto necesitamos tus datos de facturación.</p><p>Por favor, rellena el siguiente formulario:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Rellenar datos de facturación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-      smtpConfig,
+      emailSender,
+      entityType: "lead",
+      entityId: lead.id,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -2238,7 +2259,10 @@ export async function sendProformaToClient(
   }
 
   // Build email with both payment options
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
 
   const onlinePayText = stripeCheckoutUrl
     ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
@@ -2270,10 +2294,12 @@ export async function sendProformaToClient(
         <p>Una vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.</p>
         <p>Quedamos atentos a cualquier duda.</p>
       `,
-      smtpConfig,
+      emailSender,
       attachments: pdfBuffer && pdfBuffer.length > 0
         ? [{ filename: `Proforma${proformaRef.replace(/\s/g, "-")}-Prototipalo.pdf`, content: pdfBuffer, contentType: "application/pdf" }]
         : undefined,
+      entityType: "lead",
+      entityId: lead.id,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -2370,7 +2396,10 @@ export async function sendInvoiceToClient(
   }
 
   // Send email
-  const smtpConfig = await getUserSmtpConfig(profile.id);
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
   try {
     await sendEmailOrSchedule({
       to: lead.email,
@@ -2378,10 +2407,12 @@ export async function sendInvoiceToClient(
       subject: "Factura — Prototipalo",
       text: `Hola ${lead.full_name},\n\nTe adjuntamos la factura correspondiente a tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la factura correspondiente a tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-      smtpConfig,
+      emailSender,
       attachments: pdfBuffer && pdfBuffer.length > 0
         ? [{ filename: "Factura-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
         : undefined,
+      entityType: "lead",
+      entityId: leadId,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -2479,8 +2510,11 @@ export async function sendLeadProforma(
     // Download PDF from Holded
     const pdfBuffer = await getDocumentPdf("proform", qr.holded_proforma_id);
 
-    // Get per-user SMTP config
-    const smtpConfig = await getUserSmtpConfig(profile.id);
+    // Get per-user email sender (OAuth or SMTP)
+    const emailSender = await getUserEmailSender(profile.id);
+    if (!emailSender) {
+      return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+    }
 
     // Send email with PDF attachment (or schedule if night hours)
     await sendEmailOrSchedule({
@@ -2488,7 +2522,7 @@ export async function sendLeadProforma(
       subject: `Presupuesto — Prototipalo`,
       text: `Hola ${lead.full_name},\n\nAdjuntamos el presupuesto para tu proyecto.\n\nSi tienes alguna duda, no dudes en contestar a este email.\n\nGracias,\nEl equipo de Prototipalo`,
       html: `<p>Hola ${lead.full_name},</p><p>Adjuntamos el presupuesto para tu proyecto.</p><p>Si tienes alguna duda, no dudes en contestar a este email.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-      smtpConfig,
+      emailSender,
       attachments: [
         {
           filename: `Presupuesto-Prototipalo.pdf`,
@@ -2496,6 +2530,8 @@ export async function sendLeadProforma(
           contentType: "application/pdf",
         },
       ],
+      entityType: "lead",
+      entityId: leadId,
     }, { createdBy: profile.id });
 
     // Log activity
