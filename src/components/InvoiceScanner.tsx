@@ -10,6 +10,8 @@ const MONTH_NAMES = [
 interface UploadedFile {
   id: string;
   name: string;
+  company: string | null;
+  total: string | null;
   webViewLink: string | null;
   timestamp: number;
 }
@@ -57,7 +59,7 @@ export default function InvoiceScanner({
     return data.folderId;
   }, [folderEndpoint, extraHeaders]);
 
-  const detectCompany = async (file: File): Promise<string | null> => {
+  const detectInvoiceData = async (file: File): Promise<{ company: string | null; total: string | null }> => {
     try {
       setOcrStatus("Detectando empresa...");
       const formData = new FormData();
@@ -69,11 +71,11 @@ export default function InvoiceScanner({
         body: formData,
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) return { company: null, total: null };
       const data = await res.json();
-      return data.company || null;
+      return { company: data.company || null, total: data.total || null };
     } catch {
-      return null;
+      return { company: null, total: null };
     } finally {
       setOcrStatus(null);
     }
@@ -95,17 +97,18 @@ export default function InvoiceScanner({
       const folderId = await getFolderId(month, year);
 
       for (const file of Array.from(files)) {
-        // OCR: detect company name from image
-        const company = await detectCompany(file);
+        // OCR: detect company name + total from image
+        const { company, total } = await detectInvoiceData(file);
 
         const timestamp = Date.now();
         const ext = file.name.split(".").pop() || "jpg";
         const companySlug = company
           ? company.replace(/\s+/g, "-").toLowerCase()
           : null;
+        const totalSlug = total ? `_${total}eur` : "";
         const fileName = companySlug
-          ? `${companySlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`
-          : `factura_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`;
+          ? `${companySlug}${totalSlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`
+          : `factura${totalSlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`;
 
         const formData = new FormData();
         formData.append("file", file, fileName);
@@ -126,7 +129,9 @@ export default function InvoiceScanner({
         setUploads((prev) => [
           {
             id: driveFile.id,
-            name: company ? `${company} — ${fileName}` : fileName,
+            name: fileName,
+            company,
+            total,
             webViewLink: driveFile.webViewLink,
             timestamp,
           },
@@ -249,9 +254,14 @@ export default function InvoiceScanner({
                 <svg className="h-5 w-5 shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="truncate text-sm text-zinc-700 dark:text-zinc-300">
-                  {u.name}
-                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                    {u.company || "Factura"}
+                  </p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {u.total ? `${u.total} €` : "Sin importe"}
+                  </p>
+                </div>
               </div>
               {u.webViewLink && (
                 <a

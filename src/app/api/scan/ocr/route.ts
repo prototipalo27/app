@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
             },
             {
               type: "text",
-              text: "Esta es una factura o ticket. Extrae SOLO el nombre de la empresa que EMITE la factura (el proveedor/vendedor, NO el cliente). Responde UNICAMENTE con el nombre de la empresa, sin explicaciones, sin comillas, sin puntuación extra. Si no puedes identificarlo, responde exactamente: null",
+              text: 'Esta es una factura o ticket. Extrae el nombre de la empresa que EMITE la factura (proveedor/vendedor, NO el cliente) y el importe TOTAL. Responde en formato JSON exacto: {"company":"Nombre Empresa","total":"123.45"}. Si no puedes identificar alguno, pon null en ese campo. Solo el JSON, nada mas.',
             },
           ],
         },
@@ -72,18 +72,29 @@ export async function POST(request: NextRequest) {
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
-    const company = text === "null" || text === "" ? null : text;
+
+    // Parse JSON response from Claude
+    let company: string | null = null;
+    let total: string | null = null;
+    try {
+      const parsed = JSON.parse(text);
+      company = parsed.company || null;
+      total = parsed.total || null;
+    } catch {
+      // If not valid JSON, try to use raw text as company name
+      company = text === "null" || text === "" ? null : text;
+    }
 
     // Sanitize company name for use in filenames
-    const sanitized = company
+    const sanitizedCompany = company
       ? company
-          .replace(/[/\\:*?"<>|]/g, "") // Remove invalid filename chars
-          .replace(/\s+/g, " ")          // Normalize whitespace
+          .replace(/[/\\:*?"<>|]/g, "")
+          .replace(/\s+/g, " ")
           .trim()
-          .slice(0, 60)                  // Limit length
+          .slice(0, 60)
       : null;
 
-    return NextResponse.json({ company: sanitized });
+    return NextResponse.json({ company: sanitizedCompany, total });
   } catch (err) {
     console.error("[OCR] Error:", err);
     // Non-fatal: return null company so upload can continue
