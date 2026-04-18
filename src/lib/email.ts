@@ -160,8 +160,18 @@ function buildMimeMessage(options: {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const hasAttachments = options.attachments && options.attachments.length > 0;
 
+  // RFC 2047 encode display name for UTF-8 safety (e.g. "ñ", accents)
+  const encodeFrom = (from: string) => {
+    const match = from.match(/^"(.+)"\s*<(.+)>$/);
+    if (match) {
+      const encoded = `=?UTF-8?B?${Buffer.from(match[1]).toString("base64")}?=`;
+      return `${encoded} <${match[2]}>`;
+    }
+    return from;
+  };
+
   const headers: string[] = [
-    `From: ${options.from}`,
+    `From: ${encodeFrom(options.from)}`,
     `To: ${options.to}`,
     ...(options.cc ? [`Cc: ${options.cc}`] : []),
     `Subject: =?UTF-8?B?${Buffer.from(options.subject).toString("base64")}?=`,
