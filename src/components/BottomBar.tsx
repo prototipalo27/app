@@ -1,0 +1,138 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { startImpersonating } from "@/lib/impersonate";
+
+interface BottomBarProps {
+  email: string;
+  roleLabel: string;
+  isSuperAdmin: boolean;
+  impersonatableUsers: { id: string; email: string; role: string }[];
+  signOutAction: () => Promise<void>;
+  notificationBell: React.ReactNode;
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: "Admin",
+  manager: "Manager",
+  employee: "Empleado",
+  comercial: "Comercial",
+};
+
+export default function BottomBar({
+  email,
+  roleLabel,
+  isSuperAdmin,
+  impersonatableUsers,
+  signOutAction,
+  notificationBell,
+}: BottomBarProps) {
+  const [showSignOut, setShowSignOut] = useState(false);
+  const [showImpersonate, setShowImpersonate] = useState(false);
+  const signOutRef = useRef<HTMLDivElement>(null);
+  const impersonateRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (signOutRef.current && !signOutRef.current.contains(e.target as Node)) {
+        setShowSignOut(false);
+      }
+      if (impersonateRef.current && !impersonateRef.current.contains(e.target as Node)) {
+        setShowImpersonate(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div className="space-y-1">
+      {/* Email + role row */}
+      <div className="flex items-center gap-2 px-1">
+        <div className="relative min-w-0 flex-1" ref={signOutRef}>
+          <button
+            type="button"
+            onClick={() => { setShowSignOut((v) => !v); setShowImpersonate(false); }}
+            className="block truncate text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            {email}
+          </button>
+          {showSignOut && (
+            <div className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Cerrar sesion
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {isSuperAdmin && impersonatableUsers.length > 0 ? (
+          <div className="relative" ref={impersonateRef}>
+            <button
+              type="button"
+              onClick={() => { setShowImpersonate((v) => !v); setShowSignOut(false); }}
+              className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+            >
+              {roleLabel}
+            </button>
+            {showImpersonate && (
+              <div className="absolute bottom-full right-0 z-50 mb-1 w-56 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                <div className="max-h-60 overflow-y-auto p-1">
+                  <p className="px-2 py-1 text-[10px] font-medium uppercase text-zinc-400">Ver como...</p>
+                  {impersonatableUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={async () => {
+                        await startImpersonating(u.id);
+                        setShowImpersonate(false);
+                        router.refresh();
+                      }}
+                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      <span className="truncate text-zinc-700 dark:text-zinc-200">
+                        {u.email.split("@")[0]}
+                      </span>
+                      <span className="ml-2 shrink-0 text-[10px] text-zinc-400">
+                        {ROLE_LABELS[u.role] ?? u.role}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            {roleLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Action row: notifications + settings */}
+      <div className="flex items-center gap-0.5 px-1">
+        {notificationBell}
+        <Link
+          href="/dashboard/settings/email"
+          className="flex items-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          title="Ajustes"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </Link>
+      </div>
+    </div>
+  );
+}

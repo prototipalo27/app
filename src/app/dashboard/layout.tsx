@@ -7,12 +7,11 @@ import NotificationBell from "@/components/NotificationBell";
 import MobileSidebar from "@/components/MobileSidebar";
 import SessionRefresh from "@/components/SessionRefresh";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
-import ImpersonateButton from "@/components/ImpersonateButton";
+import BottomBar from "@/components/BottomBar";
 import { getUserProfile, getRealProfile, hasRole, type UserRole } from "@/lib/rbac";
 import { getImpersonatedUserId } from "@/lib/impersonate";
 import { getSharedUserProfiles, getUserTaskCount } from "@/lib/supabase/cached-queries";
 import DesktopNav from "./desktop-nav";
-import ThemeToggle from "@/components/ThemeToggle";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: "Admin",
@@ -88,42 +87,14 @@ async function AuthenticatedDashboard({
   const isSuperAdmin = profile.role === "super_admin";
 
   const bottomSection = (
-    <>
-      <div className="mb-1 flex items-center gap-2 px-3">
-        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {profile.email}
-        </p>
-        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-          {ROLE_LABELS[profile.role]}
-        </span>
-      </div>
-      <div className="flex items-center gap-1">
-        <NotificationBell />
-        <Link
-          href={`/dashboard/equipo/${profile.id}`}
-          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          title="Mi perfil y ajustes"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </Link>
-      </div>
-      <ThemeToggle />
-      {realIsSuperAdmin && <ImpersonateButton users={impersonatableUsers} />}
-      <form action={signOut}>
-        <button
-          type="submit"
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Sign out
-        </button>
-      </form>
-    </>
+    <BottomBar
+      email={profile.email}
+      roleLabel={ROLE_LABELS[profile.role]}
+      isSuperAdmin={realIsSuperAdmin}
+      impersonatableUsers={impersonatableUsers}
+      signOutAction={signOut}
+      notificationBell={<NotificationBell />}
+    />
   );
 
   return (
