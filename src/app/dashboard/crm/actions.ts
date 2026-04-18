@@ -1503,7 +1503,7 @@ export async function sendQuoteToClient(
       emailSender,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
       entityType: "lead",
-      entityId: lead.id,
+      entityId: leadId,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -1730,7 +1730,7 @@ export async function createQuoteRequest(
       html: `<p>Hola ${lead.full_name},</p><p>Para preparar tu presupuesto necesitamos tus datos de facturación.</p><p>Por favor, rellena el siguiente formulario:</p><p><a href="${quoteUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Rellenar datos de facturación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
       emailSender,
       entityType: "lead",
-      entityId: lead.id,
+      entityId: leadId,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
@@ -2299,7 +2299,7 @@ export async function sendProformaToClient(
         ? [{ filename: `Proforma${proformaRef.replace(/\s/g, "-")}-Prototipalo.pdf`, content: pdfBuffer, contentType: "application/pdf" }]
         : undefined,
       entityType: "lead",
-      entityId: lead.id,
+      entityId: leadId,
     }, { createdBy: profile.id });
   } catch {
     return { success: false, error: "Error al enviar el email" };
