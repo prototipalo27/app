@@ -223,7 +223,7 @@ export default function DesktopNav({ isManager, isSuperAdmin, pendingTaskCount =
             }
             actions={[
               {
-                href: "/dashboard/facturas/scan",
+                href: "/scan",
                 title: "Escanear factura",
                 icon: (
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -376,7 +376,7 @@ export default function MobileSidebar({
                   Finanzas
                 </Link>
                 <Link
-                  href="/dashboard/facturas/scan"
+                  href="/scan"
                   prefetch={false}
                   onClick={handleNavClick}
                   className={`flex items-center rounded-md p-2 ${

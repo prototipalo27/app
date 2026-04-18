@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadFile } from "@/lib/google-drive/client";
 
-function validatePin(request: NextRequest): boolean {
+function validateAuth(request: NextRequest): boolean {
   const pin = request.headers.get("x-scan-pin");
   const expected = process.env.SCAN_PIN;
-  if (!expected || !pin) return false;
-  return pin === expected;
+  if (pin && expected && pin === expected) return true;
+
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+  return hasAuthCookie;
 }
 
 /**
  * POST /api/scan/upload
  * FormData: file + folderId
- * Header: x-scan-pin
+ * Auth: x-scan-pin header OR Supabase session cookie
  */
 export async function POST(request: NextRequest) {
-  if (!validatePin(request)) {
-    return NextResponse.json({ error: "PIN incorrecto" }, { status: 401 });
+  if (!validateAuth(request)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   try {

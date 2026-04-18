@@ -9,21 +9,25 @@ const MONTH_NAMES_ES = [
   "09 - Septiembre", "10 - Octubre", "11 - Noviembre", "12 - Diciembre",
 ];
 
-function validatePin(request: NextRequest): boolean {
+function validateAuth(request: NextRequest): boolean {
+  // PIN auth (standalone scan)
   const pin = request.headers.get("x-scan-pin");
   const expected = process.env.SCAN_PIN;
-  if (!expected || !pin) return false;
-  return pin === expected;
+  if (pin && expected && pin === expected) return true;
+
+  // Cookie auth (dashboard user)
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+  return hasAuthCookie;
 }
 
 /**
  * POST /api/scan/folder
  * Body: { month: number, year: number }
- * Header: x-scan-pin
+ * Auth: x-scan-pin header OR Supabase session cookie
  */
 export async function POST(request: NextRequest) {
-  if (!validatePin(request)) {
-    return NextResponse.json({ error: "PIN incorrecto" }, { status: 401 });
+  if (!validateAuth(request)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
   try {
