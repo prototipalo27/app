@@ -572,10 +572,6 @@ export default async function LeadDetailPage({
             <ProformaSection leadId={id} lead={lead} />
           </Suspense>
 
-          <Suspense fallback={null}>
-            <SentEmailsSection leadId={id} />
-          </Suspense>
-
           <Suspense fallback={<CardSkeleton lines={5} />}>
             <EmailSection leadId={id} lead={lead} />
           </Suspense>
