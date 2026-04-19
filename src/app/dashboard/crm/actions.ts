@@ -455,6 +455,7 @@ export async function updateLeadContactInfo(
   id: string,
   fields: {
     full_name: string;
+    opportunity_name?: string | null;
     email: string | null;
     phone: string | null;
     company: string | null;

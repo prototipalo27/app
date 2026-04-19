@@ -1090,6 +1090,7 @@ export type Database = {
           lead_number: number
           lost_reason: string | null
           message: string | null
+          opportunity_name: string | null
           owned_by: string | null
           payment_condition: string | null
           phone: string | null
@@ -1122,6 +1123,7 @@ export type Database = {
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          opportunity_name?: string | null
           owned_by?: string | null
           payment_condition?: string | null
           phone?: string | null
@@ -1154,6 +1156,7 @@ export type Database = {
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
+          opportunity_name?: string | null
           owned_by?: string | null
           payment_condition?: string | null
           phone?: string | null

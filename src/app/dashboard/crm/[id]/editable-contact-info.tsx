@@ -6,18 +6,26 @@ import { updateLeadContactInfo } from "../actions";
 interface Props {
   leadId: string;
   fullName: string;
+  opportunityName: string | null;
   email: string | null;
   phone: string | null;
   company: string | null;
 }
 
-export default function EditableContactInfo({ leadId, fullName, email, phone, company }: Props) {
+export default function EditableContactInfo({ leadId, fullName, opportunityName, email, phone, company }: Props) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [values, setValues] = useState({ fullName, email: email || "", phone: phone || "", company: company || "" });
+  const [values, setValues] = useState({
+    fullName,
+    opportunityName: opportunityName || "",
+    email: email || "",
+    phone: phone || "",
+    company: company || "",
+  });
 
   const hasChanges =
     values.fullName !== fullName ||
+    values.opportunityName !== (opportunityName || "") ||
     values.email !== (email || "") ||
     values.phone !== (phone || "") ||
     values.company !== (company || "");
@@ -26,6 +34,7 @@ export default function EditableContactInfo({ leadId, fullName, email, phone, co
     setSaving(true);
     await updateLeadContactInfo(leadId, {
       full_name: values.fullName.trim(),
+      opportunity_name: values.opportunityName.trim() || null,
       email: values.email.trim() || null,
       phone: values.phone.trim() || null,
       company: values.company.trim() || null,
@@ -35,7 +44,13 @@ export default function EditableContactInfo({ leadId, fullName, email, phone, co
   };
 
   const cancel = () => {
-    setValues({ fullName, email: email || "", phone: phone || "", company: company || "" });
+    setValues({
+      fullName,
+      opportunityName: opportunityName || "",
+      email: email || "",
+      phone: phone || "",
+      company: company || "",
+    });
     setEditing(false);
   };
 
@@ -57,7 +72,10 @@ export default function EditableContactInfo({ leadId, fullName, email, phone, co
           </button>
         </div>
 
-        {company && <p className="mt-1 text-sm text-muted-foreground">{company}</p>}
+        {opportunityName && (
+          <p className="mt-0.5 text-sm font-medium text-brand/80 dark:text-brand/70">{opportunityName}</p>
+        )}
+        {company && <p className="mt-0.5 text-sm text-muted-foreground">{company}</p>}
 
         <div className="mt-4 space-y-2">
           {email && (
@@ -86,6 +104,16 @@ export default function EditableContactInfo({ leadId, fullName, email, phone, co
           value={values.fullName}
           onChange={(e) => setValues((v) => ({ ...v, fullName: e.target.value }))}
           className={inputClass}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">Nombre de oportunidad</label>
+        <input
+          type="text"
+          value={values.opportunityName}
+          onChange={(e) => setValues((v) => ({ ...v, opportunityName: e.target.value }))}
+          className={inputClass}
+          placeholder="Trofeos resina Anove"
         />
       </div>
       <div>

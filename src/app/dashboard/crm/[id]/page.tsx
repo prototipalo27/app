@@ -472,6 +472,7 @@ export default async function LeadDetailPage({
               <EditableContactInfo
                 leadId={lead.id}
                 fullName={lead.full_name}
+                opportunityName={lead.opportunity_name}
                 email={lead.email}
                 phone={lead.phone}
                 company={lead.company}

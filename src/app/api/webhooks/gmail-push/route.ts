@@ -212,7 +212,7 @@ async function processEmailAsLead(
         .insert({
           full_name: email.from_name !== from ? email.from_name : from.split("@")[0],
           email: from,
-          message: `[${email.subject}]\n\n${email.body}`.slice(0, 5000),
+          message: `[${email.subject}]\n\n${email.body}`.slice(0, 30000),
           source: "email",
           status: "new",
           owned_by: GONZALO_USER_ID,
@@ -310,6 +310,17 @@ async function processEmailAsLead(
       .catch((err) => console.error("Lead tagger error:", err));
   }
 
+  // Generate opportunity name (short 3-5 word nickname)
+  if (isNewLead) {
+    generateOpportunityName(email.subject, email.body, email.from_name)
+      .then(async (name) => {
+        if (name) {
+          await supabase.from("leads").update({ opportunity_name: name }).eq("id", leadId);
+        }
+      })
+      .catch((err) => console.error("Opportunity name error:", err));
+  }
+
   // AI draft
   if (isNewLead) {
     (async () => {
@@ -337,4 +348,35 @@ async function processEmailAsLead(
       url: `/dashboard/crm/${leadId}`,
     }).catch((err) => console.error("Push notification error:", err));
   }
+}
+
+// ── OPPORTUNITY NAME ───────────────────────────────────────────
+
+async function generateOpportunityName(
+  subject: string,
+  body: string,
+  fromName: string,
+): Promise<string | null> {
+  const Anthropic = (await import("@anthropic-ai/sdk")).default;
+  const client = new Anthropic();
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 30,
+    messages: [
+      {
+        role: "user",
+        content: `Eres un asistente de un taller de impresion 3D (Prototipalo). Genera un nombre corto (3-5 palabras) para esta oportunidad/lead, tipo mote informal para hablar de ellos en la oficina. Debe ser descriptivo del proyecto, no del cliente. Ejemplos: "Trofeos resina Anove", "Maqueta museo Valencia", "Piezas drone racing".
+
+De: ${fromName}
+Asunto: ${subject}
+Mensaje: ${body.slice(0, 1000)}
+
+Responde SOLO el nombre, nada mas.`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  return text || null;
 }

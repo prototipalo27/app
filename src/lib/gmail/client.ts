@@ -119,7 +119,7 @@ export function parseMessage(msg: gmail_v1.Schema$Message): ParsedEmail {
     to: getHeader(headers, "To").toLowerCase(),
     cc: getHeader(headers, "Cc").toLowerCase(),
     subject: getHeader(headers, "Subject") || "(sin asunto)",
-    body: extractBody(msg.payload).slice(0, 10_000),
+    body: extractBody(msg.payload).slice(0, 50_000),
     message_id: getHeader(headers, "Message-ID") || null,
     in_reply_to: getHeader(headers, "In-Reply-To") || null,
     date: getHeader(headers, "Date") || new Date().toISOString(),
