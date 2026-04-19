@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const gmail = getGmailClient();
+    // Watch manu@'s inbox — info@ is a group that delivers to manu@
+    const gmail = getGmailClient("manu@prototipalo.com");
 
     const res = await gmail.users.watch({
       userId: "me",

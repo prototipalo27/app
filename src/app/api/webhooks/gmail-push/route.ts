@@ -5,9 +5,11 @@ import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { checkSpam } from "@/lib/email-spam-filter";
+import { processInvoiceEmail } from "@/lib/invoice-processor";
 
 const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
 const ACCEPTED_INBOXES = ["info@prototipalo.com"];
+const INVOICE_INBOX = "administracion@prototipalo.com";
 
 /**
  * POST /api/webhooks/gmail-push
@@ -60,8 +62,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, reason: "initial_sync" });
     }
 
-    // Fetch new messages since last historyId
-    const gmail = getGmailClient();
+    // Fetch new messages since last historyId (manu@ inbox, filtering for info@)
+    const gmail = getGmailClient("manu@prototipalo.com");
     let messageIds: string[] = [];
 
     try {
@@ -113,9 +115,16 @@ export async function POST(request: NextRequest) {
         });
 
         const parsed = parseMessage(msg.data);
-
-        // Only process emails addressed to our accepted inboxes
         const allRecipients = `${parsed.to}, ${parsed.cc}`;
+
+        // Route: invoice emails to administracion@
+        if (allRecipients.includes(INVOICE_INBOX)) {
+          await processInvoiceEmail(gmail, msg.data);
+          processed++;
+          continue;
+        }
+
+        // Route: lead emails to info@
         if (!ACCEPTED_INBOXES.some((inbox) => allRecipients.includes(inbox))) {
           continue;
         }

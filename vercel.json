@@ -16,10 +16,6 @@
     {
       "path": "/api/cron/gmail-watch",
       "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/invoice-watch",
-      "schedule": "0 7 * * *"
     }
   ]
 }
