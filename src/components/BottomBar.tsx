@@ -128,10 +128,14 @@ export default function BottomBar({
       {/* Action row: notifications + settings */}
       <div className="flex items-center gap-0.5 px-1">
         {notificationBell}
-        <div className="relative" ref={settingsRef}>
-          <button
-            type="button"
-            onClick={() => { setShowSettings((v) => !v); setShowSignOut(false); setShowImpersonate(false); }}
+        <div
+          className="group relative"
+          onMouseEnter={() => setShowSettings(true)}
+          onMouseLeave={() => setShowSettings(false)}
+          ref={settingsRef}
+        >
+          <Link
+            href="/dashboard/settings"
             className="flex items-center rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
             title="Ajustes"
           >
@@ -139,11 +143,12 @@ export default function BottomBar({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-          </button>
+          </Link>
           {showSettings && (
             <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
               <div className="p-1">
-                <p className="px-2 py-1 text-[10px] font-medium uppercase text-zinc-400">Ajustes</p>
+                <SettingsLink href="/dashboard/settings" label="Todos los ajustes" currentPath={pathname} onClick={() => setShowSettings(false)} />
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-700" />
                 <SettingsLink href="/dashboard/settings/email" label="Mi cuenta de email" currentPath={pathname} onClick={() => setShowSettings(false)} />
                 <SettingsLink href="/dashboard/whatsapp/settings" label="WhatsApp" currentPath={pathname} onClick={() => setShowSettings(false)} />
                 <SettingsLink href="/dashboard/settings/notifications" label="Notificaciones" currentPath={pathname} onClick={() => setShowSettings(false)} />
