@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { COLUMNS } from "@/lib/kanban-config";
@@ -6,6 +7,7 @@ import Link from "next/link";
 import { BillingBreakdown } from "./billing-breakdown";
 import { LeadsChart } from "../leads-chart";
 import { LeadAnalytics } from "./lead-analytics-wrapper";
+import { CashflowKpis } from "./cashflow-kpis";
 import { classifyTrafficSource, SOURCE_COLORS, ALL_SOURCES, type TrafficSource } from "@/lib/utm-utils";
 
 /* ── helpers ── */
@@ -342,6 +344,17 @@ export default async function ControlPage() {
         <KpiCard label="Leads abiertos" value={openLeads.length} />
         <KpiCard label="Envíos pendientes" value={pendingShipments.length} />
       </div>
+
+      {/* ── 1b. Cashflow KPIs (streamed, loads independently) ── */}
+      <Suspense fallback={
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800" />
+          ))}
+        </div>
+      }>
+        <CashflowKpis />
+      </Suspense>
 
       {/* ── 2. Producción ── */}
       <div className="grid gap-6 lg:grid-cols-2">

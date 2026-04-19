@@ -470,3 +470,39 @@ export async function searchContacts(query: string): Promise<HoldedContact[]> {
       c.email?.toLowerCase().includes(q)
   );
 }
+
+// ── Treasury ──
+
+const HOLDED_TREASURY_BASE = "https://api.holded.com/api/treasury/v1";
+
+export interface HoldedTreasuryAccount {
+  id: string;
+  name: string;
+  balance: number;
+  currency: string;
+  type: string;
+}
+
+/** Fetch all treasury accounts (bank accounts) from Holded */
+export async function listTreasuryAccounts(): Promise<HoldedTreasuryAccount[]> {
+  const res = await fetch(`${HOLDED_TREASURY_BASE}/accounts`, {
+    headers: { key: getApiKey() },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    console.error(`[Holded Treasury] Error: ${res.status} ${res.statusText}`);
+    return [];
+  }
+
+  return (await res.json()) as HoldedTreasuryAccount[];
+}
+
+/** Get total pending receivables (unpaid/partially paid invoices) */
+export async function getPendingReceivables(): Promise<number> {
+  const invoices = await listDocuments("invoice");
+  // status: 0=not paid, 2=partially paid
+  return invoices
+    .filter((inv) => inv.status === 0 || inv.status === 2)
+    .reduce((sum, inv) => sum + (inv.total || 0), 0);
+}
