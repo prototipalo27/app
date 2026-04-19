@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getUserProfile, hasRole } from "@/lib/rbac";
+import { redirect } from "next/navigation";
 import { TaskFilters } from "./task-filters";
+import { TaskCheckbox } from "./task-checkbox";
 
 function PriorityBadge({ priority }: { priority: string }) {
   const classes = "rounded-full px-2 py-0.5 text-xs font-medium ";
@@ -9,15 +12,6 @@ function PriorityBadge({ priority }: { priority: string }) {
   if (priority === "low")
     return <span className={classes + "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"}>Baja</span>;
   return <span className={classes + "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"}>Media</span>;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const classes = "rounded-full px-2 py-0.5 text-xs font-medium ";
-  if (status === "done")
-    return <span className={classes + "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}>Hecho</span>;
-  if (status === "in_progress")
-    return <span className={classes + "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}>En curso</span>;
-  return <span className={classes + "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"}>Pendiente</span>;
 }
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
@@ -46,12 +40,18 @@ export default async function TareasPage({
   searchParams: Promise<{ status?: string; mine?: string }>;
 }) {
   const params = await searchParams;
-  const supabase = await createClient();
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id;
+  const profile = await getUserProfile();
+  if (!profile) redirect("/login");
 
-  // Fetch projects where I'm the PM (not delivered/discarded)
-  const { data: myProjects } = userId
+  const supabase = await createClient();
+  const userId = profile.id;
+  const isManager = hasRole(profile.role, "manager");
+
+  // Employees always see only their tasks
+  const showOnlyMine = !isManager || params.mine === "true";
+
+  // Fetch projects where I'm the PM (managers only)
+  const { data: myProjects } = isManager
     ? await supabase
         .from("projects")
         .select("id, name, client_name, status, deadline")
@@ -74,14 +74,14 @@ export default async function TareasPage({
     query = query.neq("status", "done");
   }
 
-  if (params.mine === "true" && userId) {
+  // Employees only see their own tasks
+  if (showOnlyMine) {
     query = query.eq("assigned_to", userId);
   }
 
   const { data: tasks } = await query;
 
   const statusFilter = params.status || "all";
-  const mineFilter = params.mine === "true";
 
   return (
     <div>
@@ -129,7 +129,7 @@ export default async function TareasPage({
         </div>
       )}
 
-      <TaskFilters currentStatus={statusFilter} showMine={mineFilter} />
+      <TaskFilters currentStatus={statusFilter} showMine={showOnlyMine} isManager={isManager} />
 
       {!tasks?.length ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
@@ -138,70 +138,47 @@ export default async function TareasPage({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">Título</th>
-                <th className="hidden px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400 sm:table-cell">Responsable</th>
-                <th className="hidden px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400 md:table-cell">Proyecto</th>
-                <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">Prioridad</th>
-                <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">Estado</th>
-                <th className="hidden px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400 lg:table-cell">Fecha límite</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => {
-                const assigned = t.assigned as { email: string } | null;
-                const project = t.project as { id: string; name: string } | null;
+        <div className="space-y-2">
+          {tasks.map((t) => {
+            const assigned = t.assigned as { email: string } | null;
+            const project = t.project as { id: string; name: string } | null;
+            const isDone = t.status === "done";
 
-                return (
-                  <tr
-                    key={t.id}
-                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/50"
+            return (
+              <div
+                key={t.id}
+                className={`flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900 ${isDone ? "opacity-60" : ""}`}
+              >
+                <TaskCheckbox taskId={t.id} isDone={isDone} />
+
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={t.title.startsWith("Compra solicitada:") ? "/dashboard/purchases" : `/dashboard/tareas/${t.id}`}
+                    className={`text-sm font-medium hover:text-green-600 dark:hover:text-green-400 ${isDone ? "text-zinc-400 line-through dark:text-zinc-500" : "text-zinc-900 dark:text-white"}`}
                   >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={t.title.startsWith("Compra solicitada:") ? "/dashboard/purchases" : `/dashboard/tareas/${t.id}`}
-                        className="font-medium text-zinc-900 hover:text-green-600 dark:text-white dark:hover:text-green-400"
-                      >
-                        {t.title}
+                    {t.title}
+                  </Link>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    {isManager && assigned && (
+                      <span>{assigned.email.split("@")[0]}</span>
+                    )}
+                    {project && (
+                      <Link href={`/dashboard/projects/${project.id}`} className="hover:text-green-600 dark:hover:text-green-400">
+                        {project.name}
                       </Link>
-                    </td>
-                    <td className="hidden px-4 py-3 text-zinc-600 dark:text-zinc-300 sm:table-cell">
-                      {assigned?.email?.split("@")[0] ?? "—"}
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      {project ? (
-                        <Link
-                          href={`/dashboard/projects/${project.id}`}
-                          className="text-zinc-600 hover:text-green-600 dark:text-zinc-300 dark:hover:text-green-400"
-                        >
-                          {project.name}
-                        </Link>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge priority={t.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={t.status} />
-                    </td>
-                    <td className="hidden px-4 py-3 text-zinc-500 dark:text-zinc-400 lg:table-cell">
-                      {t.due_date
-                        ? new Date(t.due_date + "T00:00:00").toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                          })
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    )}
+                    {t.due_date && (
+                      <span>
+                        {new Date(t.due_date + "T00:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <PriorityBadge priority={t.priority} />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
