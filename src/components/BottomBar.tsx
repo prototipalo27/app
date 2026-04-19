@@ -35,6 +35,7 @@ export default function BottomBar({
   const signOutRef = useRef<HTMLDivElement>(null);
   const impersonateRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const settingsTimeout = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -139,8 +140,8 @@ export default function BottomBar({
         </Link>
         <div
           className="group relative"
-          onMouseEnter={() => setShowSettings(true)}
-          onMouseLeave={() => setShowSettings(false)}
+          onMouseEnter={() => { if (settingsTimeout.current) clearTimeout(settingsTimeout.current); setShowSettings(true); }}
+          onMouseLeave={() => { settingsTimeout.current = setTimeout(() => setShowSettings(false), 300); }}
           ref={settingsRef}
         >
           <Link
