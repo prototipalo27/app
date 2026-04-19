@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { acceptProforma } from "./actions";
+import { acceptProforma, DISCOUNT_THRESHOLD_EUR, type PaymentCondition } from "./actions";
 import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
 
 interface ProformaLine {
@@ -19,6 +19,10 @@ interface ProformaFormProps {
   total: number;
 }
 
+function formatEur(n: number) {
+  return n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+
 export default function ProformaForm({
   token,
   lines,
@@ -27,7 +31,6 @@ export default function ProformaForm({
   total,
 }: ProformaFormProps) {
   const [isPending, startTransition] = useTransition();
-  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const billingPostalRef = useRef<HTMLInputElement>(null);
   const billingCityRef = useRef<HTMLInputElement>(null);
@@ -37,6 +40,18 @@ export default function ProformaForm({
   const shippingCityRef = useRef<HTMLInputElement>(null);
   const shippingProvinceRef = useRef<HTMLInputElement>(null);
   const shippingCountryRef = useRef<HTMLInputElement>(null);
+
+  const canChoose = subtotal >= DISCOUNT_THRESHOLD_EUR;
+  const [paymentCondition, setPaymentCondition] = useState<PaymentCondition>(
+    canChoose ? "50-50" : "100-0"
+  );
+
+  const chargeAmount =
+    paymentCondition === "100-5"
+      ? total * 0.95
+      : paymentCondition === "50-50"
+        ? total * 0.5
+        : total;
 
   const fillBillingAddress = (c: AddressComponents) => {
     if (billingPostalRef.current) billingPostalRef.current.value = c.postalCode;
@@ -78,33 +93,20 @@ export default function ProformaForm({
           province: fd.get("shipping_province") as string,
           country: (fd.get("shipping_country") as string) || "España",
         },
+        paymentCondition,
       );
 
       if (result.success) {
-        setDone(true);
+        if (result.redirectUrl) {
+          window.location.href = result.redirectUrl;
+        } else {
+          setError("No se pudo generar el enlace de pago. Contacta con nosotros.");
+        }
       } else {
         setError(result.error || "Error al aceptar el presupuesto");
       }
     });
   };
-
-  if (done) {
-    return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-          <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-          Presupuesto aceptado
-        </h2>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Gracias por confirmar. Nos pondremos en marcha con tu proyecto. Te mantendremos informado del progreso por email.
-        </p>
-      </div>
-    );
-  }
 
   const inputClass =
     "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-white";
@@ -270,6 +272,43 @@ export default function ProformaForm({
         </div>
       </div>
 
+      {/* Section 4: Payment method */}
+      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
+          Método de pago
+        </h2>
+
+        {canChoose ? (
+          <div className="space-y-2">
+            <PaymentOption
+              value="50-50"
+              current={paymentCondition}
+              onSelect={setPaymentCondition}
+              title="Pago 50 / 50"
+              description="Paga el 50% ahora para arrancar la producción y el 50% restante al entregar."
+              amountLabel={`Pagas ahora ${formatEur(total * 0.5)}`}
+              total={formatEur(total)}
+            />
+            <PaymentOption
+              value="100-5"
+              current={paymentCondition}
+              onSelect={setPaymentCondition}
+              title="Pago completo con 5% de descuento"
+              description="Paga el total ahora y te aplicamos un 5% de descuento por anticipado."
+              amountLabel={`Pagas ahora ${formatEur(total * 0.95)}`}
+              total={`${formatEur(total)} (ahorras ${formatEur(total * 0.05)})`}
+              highlight
+            />
+          </div>
+        ) : (
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+            <p className="text-zinc-700 dark:text-zinc-300">
+              Pago único del total: <strong>{formatEur(total)}</strong>
+            </p>
+          </div>
+        )}
+      </div>
+
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
@@ -277,10 +316,73 @@ export default function ProformaForm({
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+        className="w-full rounded-lg bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
       >
-        {isPending ? "Procesando..." : "Aceptar presupuesto"}
+        {isPending ? "Procesando..." : `Aceptar y pagar ${formatEur(chargeAmount)}`}
       </button>
+      <p className="text-center text-xs text-zinc-400">
+        Al pulsar se abre la pasarela de pago segura (Stripe). También puedes pagar por transferencia; consulta los datos en el email.
+      </p>
     </form>
+  );
+}
+
+function PaymentOption({
+  value,
+  current,
+  onSelect,
+  title,
+  description,
+  amountLabel,
+  total,
+  highlight,
+}: {
+  value: PaymentCondition;
+  current: PaymentCondition;
+  onSelect: (v: PaymentCondition) => void;
+  title: string;
+  description: string;
+  amountLabel: string;
+  total: string;
+  highlight?: boolean;
+}) {
+  const selected = current === value;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      className={`w-full rounded-lg border p-4 text-left transition ${
+        selected
+          ? "border-brand bg-brand/5 dark:bg-brand/10"
+          : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div
+            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+              selected ? "border-brand" : "border-zinc-300 dark:border-zinc-600"
+            }`}
+          >
+            {selected && <div className="h-2 w-2 rounded-full bg-brand" />}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+              {title}
+              {highlight && (
+                <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  Recomendado
+                </span>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{description}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">{amountLabel}</p>
+          <p className="text-[10px] text-zinc-400">Total {total}</p>
+        </div>
+      </div>
+    </button>
   );
 }

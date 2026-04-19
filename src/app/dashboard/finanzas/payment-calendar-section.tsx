@@ -9,13 +9,23 @@ interface FixedExpense {
   day_of_month: number | null;
 }
 
+interface TaxInstallment {
+  id: string;
+  numero_plazo: number;
+  fecha_vencimiento: string;
+  importe: number;
+  pagado: boolean;
+}
+
 interface TaxPayment {
   id: string;
   model: string;
   period: string;
   amount: number | null;
   status: string;
+  situacion?: string;
   due_date: string;
+  installments?: TaxInstallment[] | null;
 }
 
 interface Financing {
@@ -111,15 +121,35 @@ function getPaymentsForMonth(
   // Tax payments pending in this month
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   for (const tp of taxPayments) {
-    if (tp.status === "paid") continue;
-    if (!tp.due_date.startsWith(monthStr)) continue;
-    const day = parseInt(tp.due_date.split("-")[2], 10);
-    entries.push({
-      day,
-      name: `Mod. ${tp.model} (${tp.period})`,
-      amount: tp.amount ?? 0,
-      type: "tax",
-    });
+    if (tp.status === "paid" || tp.situacion === "pagado") continue;
+
+    const hasInstallments =
+      (tp.situacion === "aplazada" || tp.situacion === "fraccionada") &&
+      (tp.installments?.length ?? 0) > 0;
+
+    if (hasInstallments) {
+      // One entry per unpaid installment in this month
+      for (const inst of tp.installments ?? []) {
+        if (inst.pagado) continue;
+        if (!inst.fecha_vencimiento.startsWith(monthStr)) continue;
+        const day = parseInt(inst.fecha_vencimiento.split("-")[2], 10);
+        entries.push({
+          day,
+          name: `Mod. ${tp.model} (${tp.period}) — Plazo ${inst.numero_plazo}`,
+          amount: Number(inst.importe),
+          type: "tax",
+        });
+      }
+    } else {
+      if (!tp.due_date.startsWith(monthStr)) continue;
+      const day = parseInt(tp.due_date.split("-")[2], 10);
+      entries.push({
+        day,
+        name: `Mod. ${tp.model} (${tp.period})`,
+        amount: tp.amount ?? 0,
+        type: "tax",
+      });
+    }
   }
 
   // Active financings

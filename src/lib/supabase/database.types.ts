@@ -484,6 +484,7 @@ export type Database = {
           category: string
           created_at: string | null
           day_of_month: number | null
+          employee_id: string | null
           end_date: string | null
           frequency: string
           id: string
@@ -500,6 +501,7 @@ export type Database = {
           category?: string
           created_at?: string | null
           day_of_month?: number | null
+          employee_id?: string | null
           end_date?: string | null
           frequency?: string
           id?: string
@@ -516,6 +518,7 @@ export type Database = {
           category?: string
           created_at?: string | null
           day_of_month?: number | null
+          employee_id?: string | null
           end_date?: string | null
           frequency?: string
           id?: string
@@ -527,6 +530,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fixed_expenses_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fixed_expenses_supplier_id_fkey"
             columns: ["supplier_id"]
@@ -2760,6 +2770,8 @@ export type Database = {
       tax_payments: {
         Row: {
           amount: number | null
+          clave_liquidacion: string | null
+          concepto: string | null
           created_at: string | null
           due_date: string
           id: string
@@ -2767,11 +2779,14 @@ export type Database = {
           notes: string | null
           paid_date: string | null
           period: string
+          situacion: string
           status: string
           updated_at: string | null
         }
         Insert: {
           amount?: number | null
+          clave_liquidacion?: string | null
+          concepto?: string | null
           created_at?: string | null
           due_date: string
           id?: string
@@ -2779,11 +2794,14 @@ export type Database = {
           notes?: string | null
           paid_date?: string | null
           period: string
+          situacion?: string
           status?: string
           updated_at?: string | null
         }
         Update: {
           amount?: number | null
+          clave_liquidacion?: string | null
+          concepto?: string | null
           created_at?: string | null
           due_date?: string
           id?: string
@@ -2791,10 +2809,61 @@ export type Database = {
           notes?: string | null
           paid_date?: string | null
           period?: string
+          situacion?: string
           status?: string
           updated_at?: string | null
         }
         Relationships: []
+      }
+      tax_installments: {
+        Row: {
+          created_at: string | null
+          fecha_pago: string | null
+          fecha_vencimiento: string
+          id: string
+          importe: number
+          notes: string | null
+          numero_plazo: number
+          pagado: boolean
+          referencia: string | null
+          tax_payment_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fecha_pago?: string | null
+          fecha_vencimiento: string
+          id?: string
+          importe: number
+          notes?: string | null
+          numero_plazo: number
+          pagado?: boolean
+          referencia?: string | null
+          tax_payment_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fecha_pago?: string | null
+          fecha_vencimiento?: string
+          id?: string
+          importe?: number
+          notes?: string | null
+          numero_plazo?: number
+          pagado?: boolean
+          referencia?: string | null
+          tax_payment_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tax_installments_tax_payment_id_fkey"
+            columns: ["tax_payment_id"]
+            isOneToOne: false
+            referencedRelation: "tax_payments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       template_checklist_items: {
         Row: {

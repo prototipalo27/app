@@ -32,20 +32,24 @@ async function ProformaContent({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, holded_proforma_id, client_name, proforma_sent_at")
+    .select("id, name, holded_proforma_id, holded_contact_id, client_name, proforma_sent_at")
     .eq("tracking_token", token)
     .single();
 
   if (!project || !project.holded_proforma_id) notFound();
 
-  // Check if already accepted (shipping_info exists with recipient data)
-  const { data: shippingInfo } = await supabase
-    .from("shipping_info")
-    .select("recipient_name")
-    .eq("project_id", project.id)
-    .maybeSingle();
+  // "Already accepted" now means already paid (via Stripe webhook → payment_status = 'paid').
+  // That way if the client bails from the Stripe page they can re-enter and try again.
+  const { data: quoteRequest } = project.holded_contact_id
+    ? await supabase
+        .from("quote_requests")
+        .select("payment_status")
+        .eq("holded_contact_id", project.holded_contact_id)
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
 
-  const alreadyAccepted = !!shippingInfo?.recipient_name;
+  const alreadyAccepted = quoteRequest?.payment_status === "paid";
 
   if (alreadyAccepted) {
     return (

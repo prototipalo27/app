@@ -1,28 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { createFixedExpense, updateFixedExpense, deactivateFixedExpense } from "./actions";
+import {
+  createFixedExpense,
+  updateFixedExpense,
+  deactivateFixedExpense,
+} from "../../finanzas/actions";
+import { CATEGORY_LABELS as CATEGORIES } from "@/lib/finance/categories";
 
-interface FixedExpense {
+interface EmployeeFixedExpense {
   id: string;
   name: string;
   category: string;
   amount: number;
   frequency: string;
   day_of_month: number | null;
-  bank_vendor_name: string | null;
   notes: string | null;
   start_date: string | null;
   end_date: string | null;
-  employee?: {
-    id: string;
-    full_name: string | null;
-    nickname: string | null;
-    email: string;
-  } | null;
 }
-
-import { CATEGORY_LABELS as CATEGORIES } from "@/lib/finance/categories";
 
 const FREQUENCIES: Record<string, string> = {
   monthly: "Mensual",
@@ -38,12 +34,12 @@ function formatEur(n: number) {
   }).format(n);
 }
 
-export default function FixedExpensesSection({
+export default function EmployeeFixedExpenses({
+  employeeId,
   expenses: initialExpenses,
-  matchMap,
 }: {
-  expenses: FixedExpense[];
-  matchMap: Record<string, boolean>;
+  employeeId: string;
+  expenses: EmployeeFixedExpense[];
 }) {
   const [expenses, setExpenses] = useState(initialExpenses);
   const [showForm, setShowForm] = useState(false);
@@ -53,11 +49,10 @@ export default function FixedExpensesSection({
 
   const [form, setForm] = useState({
     name: "",
-    category: "other",
+    category: "payroll",
     amount: "",
     frequency: "monthly",
     day_of_month: "",
-    bank_vendor_name: "",
     notes: "",
     start_date: "",
     end_date: "",
@@ -65,19 +60,28 @@ export default function FixedExpensesSection({
   });
 
   const resetForm = () => {
-    setForm({ name: "", category: "other", amount: "", frequency: "monthly", day_of_month: "", bank_vendor_name: "", notes: "", start_date: "", end_date: "", indefinite: true });
+    setForm({
+      name: "",
+      category: "payroll",
+      amount: "",
+      frequency: "monthly",
+      day_of_month: "",
+      notes: "",
+      start_date: "",
+      end_date: "",
+      indefinite: true,
+    });
     setShowForm(false);
     setEditingId(null);
   };
 
-  const startEdit = (e: FixedExpense) => {
+  const startEdit = (e: EmployeeFixedExpense) => {
     setForm({
       name: e.name,
       category: e.category,
       amount: String(e.amount),
       frequency: e.frequency,
       day_of_month: e.day_of_month ? String(e.day_of_month) : "",
-      bank_vendor_name: e.bank_vendor_name ?? "",
       notes: e.notes ?? "",
       start_date: e.start_date ?? "",
       end_date: e.end_date ?? "",
@@ -96,10 +100,10 @@ export default function FixedExpensesSection({
       amount: parseFloat(form.amount),
       frequency: form.frequency,
       day_of_month: form.day_of_month ? parseInt(form.day_of_month) : undefined,
-      bank_vendor_name: form.bank_vendor_name || undefined,
       notes: form.notes || undefined,
       start_date: form.start_date || undefined,
-      end_date: form.indefinite ? null : (form.end_date || undefined),
+      end_date: form.indefinite ? null : form.end_date || undefined,
+      employee_id: employeeId,
     };
 
     const result = editingId
@@ -109,20 +113,21 @@ export default function FixedExpensesSection({
     if (!result.success) {
       setError(result.error);
     } else {
-      const localData: FixedExpense = {
+      const localData: EmployeeFixedExpense = {
         id: editingId ?? crypto.randomUUID(),
         name: actionData.name,
         category: actionData.category,
         amount: actionData.amount,
         frequency: actionData.frequency,
         day_of_month: actionData.day_of_month ?? null,
-        bank_vendor_name: actionData.bank_vendor_name ?? null,
         notes: actionData.notes ?? null,
         start_date: actionData.start_date ?? null,
         end_date: actionData.end_date ?? null,
       };
       if (editingId) {
-        setExpenses((prev) => prev.map((e) => (e.id === editingId ? localData : e)));
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === editingId ? localData : e))
+        );
       } else {
         setExpenses((prev) => [...prev, localData]);
       }
@@ -147,14 +152,16 @@ export default function FixedExpensesSection({
   }, 0);
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <div>
       <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Gastos fijos</h2>
-          <p className="text-xs text-zinc-400">Total mensual prorrateado: {formatEur(monthlyTotal)}</p>
-        </div>
+        <p className="text-xs text-zinc-400">
+          Total mensual prorrateado: {formatEur(monthlyTotal)}
+        </p>
         <button
-          onClick={() => { resetForm(); setShowForm(true); }}
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
+          }}
           className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark"
         >
           Anadir gasto
@@ -167,7 +174,6 @@ export default function FixedExpensesSection({
         </div>
       )}
 
-      {/* Form */}
       {showForm && (
         <div className="mb-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -176,6 +182,7 @@ export default function FixedExpensesSection({
               <input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Nomina, SS, dietas..."
                 className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
@@ -229,7 +236,9 @@ export default function FixedExpensesSection({
                   <input
                     type="checkbox"
                     checked={form.indefinite}
-                    onChange={(e) => setForm({ ...form, indefinite: e.target.checked, end_date: "" })}
+                    onChange={(e) =>
+                      setForm({ ...form, indefinite: e.target.checked, end_date: "" })
+                    }
                     className="h-3 w-3 rounded border-zinc-300 dark:border-zinc-600"
                   />
                   Indefinido
@@ -243,16 +252,7 @@ export default function FixedExpensesSection({
                 className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-zinc-500">Nombre en BBVA</label>
-              <input
-                value={form.bank_vendor_name}
-                onChange={(e) => setForm({ ...form, bank_vendor_name: e.target.value })}
-                placeholder="Para cruzar con extracto"
-                className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-              />
-            </div>
-            <div>
+            <div className="col-span-2">
               <label className="mb-1 block text-xs text-zinc-500">Notas</label>
               <input
                 value={form.notes}
@@ -279,15 +279,13 @@ export default function FixedExpensesSection({
         </div>
       )}
 
-      {/* Table */}
       {expenses.length === 0 ? (
-        <p className="text-sm text-zinc-400">No hay gastos fijos configurados</p>
+        <p className="text-sm text-zinc-400">Sin gastos fijos asociados</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Estado</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Nombre</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Categoria</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Importe</th>
@@ -299,29 +297,16 @@ export default function FixedExpensesSection({
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {expenses.map((e) => (
                 <tr key={e.id}>
-                  <td className="px-3 py-2">
-                    {e.bank_vendor_name ? (
-                      <span
-                        className={`inline-block h-2.5 w-2.5 rounded-full ${
-                          matchMap[e.id] ? "bg-green-500" : "bg-amber-400"
-                        }`}
-                        title={matchMap[e.id] ? "Encontrado en extracto" : "No encontrado en extracto"}
-                      />
-                    ) : (
-                      <span className="inline-block h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600" title="Sin nombre BBVA configurado" />
-                    )}
+                  <td className="px-3 py-2 font-medium text-zinc-900 dark:text-white">{e.name}</td>
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
+                    {CATEGORIES[e.category] ?? e.category}
                   </td>
-                  <td className="px-3 py-2 font-medium text-zinc-900 dark:text-white">
-                    {e.name}
-                    {e.employee && (
-                      <span className="ml-2 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                        {e.employee.nickname || e.employee.full_name || e.employee.email.split("@")[0]}
-                      </span>
-                    )}
+                  <td className="px-3 py-2 text-right font-medium text-zinc-900 dark:text-white">
+                    {formatEur(e.amount)}
                   </td>
-                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{CATEGORIES[e.category] ?? e.category}</td>
-                  <td className="px-3 py-2 text-right font-medium text-zinc-900 dark:text-white">{formatEur(e.amount)}</td>
-                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{FREQUENCIES[e.frequency] ?? e.frequency}</td>
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
+                    {FREQUENCIES[e.frequency] ?? e.frequency}
+                  </td>
                   <td className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
                     {e.start_date
                       ? new Date(e.start_date).toLocaleDateString("es-ES", { month: "short", year: "2-digit" })

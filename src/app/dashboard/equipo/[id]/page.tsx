@@ -8,6 +8,7 @@ import EmployeeProfileForm from "./employee-profile-form";
 import EmployeeDocuments from "./employee-documents";
 import CareerPlanEditor from "./career-plan-editor";
 import EmployeeCommissions from "./employee-commissions";
+import EmployeeFixedExpenses from "./employee-fixed-expenses";
 import NotificationSettingsClient from "../../settings/notifications/notification-settings-client";
 import {
   getNotificationEvents,
@@ -33,6 +34,7 @@ export default async function EmployeeDetailPage({
     { data: skills },
     { data: userSkills },
     { data: documents },
+    { data: employeeExpenses },
   ] = await Promise.all([
     supabase
       .from("user_profiles")
@@ -46,6 +48,15 @@ export default async function EmployeeDetailPage({
       .select("id, file_name, file_path, document_type, uploaded_at, notes")
       .eq("user_id", id)
       .order("uploaded_at", { ascending: false }),
+    isManager
+      ? supabase
+          .from("fixed_expenses")
+          .select("id, name, category, amount, frequency, day_of_month, notes, start_date, end_date")
+          .eq("employee_id", id)
+          .eq("is_active", true)
+          .order("category")
+          .order("name")
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!employee) notFound();
@@ -148,6 +159,19 @@ export default async function EmployeeDetailPage({
               Comisiones
             </h2>
             <EmployeeCommissions userId={employee.id} employeeName={displayName} />
+          </section>
+        )}
+
+        {/* Section 3.5: Fixed expenses (managers only) */}
+        {isManager && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Gastos fijos
+            </h2>
+            <EmployeeFixedExpenses
+              employeeId={employee.id}
+              expenses={employeeExpenses ?? []}
+            />
           </section>
         )}
 

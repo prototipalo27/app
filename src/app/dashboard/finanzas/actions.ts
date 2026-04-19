@@ -16,6 +16,7 @@ export async function createFixedExpense(data: {
   day_of_month?: number;
   bank_vendor_name?: string;
   supplier_id?: string;
+  employee_id?: string | null;
   notes?: string;
   start_date?: string;
   end_date?: string | null;
@@ -31,6 +32,7 @@ export async function createFixedExpense(data: {
     day_of_month: data.day_of_month ?? null,
     bank_vendor_name: data.bank_vendor_name ?? null,
     supplier_id: data.supplier_id ?? null,
+    employee_id: data.employee_id ?? null,
     notes: data.notes ?? null,
     start_date: data.start_date ?? null,
     end_date: data.end_date ?? null,
@@ -38,6 +40,7 @@ export async function createFixedExpense(data: {
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/dashboard/finanzas");
+  if (data.employee_id) revalidatePath(`/dashboard/equipo/${data.employee_id}`);
   return { success: true, error: null };
 }
 
@@ -51,6 +54,7 @@ export async function updateFixedExpense(
     day_of_month?: number | null;
     bank_vendor_name?: string | null;
     supplier_id?: string | null;
+    employee_id?: string | null;
     notes?: string | null;
     start_date?: string | null;
     end_date?: string | null;
@@ -66,6 +70,7 @@ export async function updateFixedExpense(
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/dashboard/finanzas");
+  if (data.employee_id) revalidatePath(`/dashboard/equipo/${data.employee_id}`);
   return { success: true, error: null };
 }
 
@@ -83,11 +88,35 @@ export async function deactivateFixedExpense(id: string) {
   return { success: true, error: null };
 }
 
+export async function getFixedExpensesByEmployee(employeeId: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("fixed_expenses")
+    .select("*")
+    .eq("employee_id", employeeId)
+    .eq("is_active", true)
+    .order("category")
+    .order("name");
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 // ── Tax Payments ──
 
 export async function updateTaxPayment(
   id: string,
-  data: { status?: string; amount?: number; paid_date?: string; notes?: string }
+  data: {
+    status?: string;
+    amount?: number | null;
+    paid_date?: string | null;
+    notes?: string | null;
+    clave_liquidacion?: string | null;
+    situacion?: string;
+    concepto?: string | null;
+  }
 ) {
   await requireRole("manager");
   const supabase = await createClient();
@@ -100,6 +129,164 @@ export async function updateTaxPayment(
   if (error) return { success: false, error: error.message };
   revalidatePath("/dashboard/finanzas");
   return { success: true, error: null };
+}
+
+// ── Tax Installments (plazos) ──
+
+export async function getTaxInstallments(taxPaymentId?: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("tax_installments")
+    .select("*")
+    .order("numero_plazo");
+
+  if (taxPaymentId) query = query.eq("tax_payment_id", taxPaymentId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function createTaxInstallment(data: {
+  tax_payment_id: string;
+  numero_plazo: number;
+  fecha_vencimiento: string;
+  importe: number;
+  pagado?: boolean;
+  fecha_pago?: string | null;
+  referencia?: string | null;
+  notes?: string | null;
+}) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: inserted, error } = await supabase
+    .from("tax_installments")
+    .insert({
+      tax_payment_id: data.tax_payment_id,
+      numero_plazo: data.numero_plazo,
+      fecha_vencimiento: data.fecha_vencimiento,
+      importe: data.importe,
+      pagado: data.pagado ?? false,
+      fecha_pago: data.fecha_pago ?? null,
+      referencia: data.referencia ?? null,
+      notes: data.notes ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) return { success: false, error: error.message, data: null };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null, data: inserted };
+}
+
+export async function updateTaxInstallment(
+  id: string,
+  data: {
+    numero_plazo?: number;
+    fecha_vencimiento?: string;
+    importe?: number;
+    pagado?: boolean;
+    fecha_pago?: string | null;
+    referencia?: string | null;
+    notes?: string | null;
+  }
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("tax_installments")
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+export async function deleteTaxInstallment(id: string) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("tax_installments").delete().eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null };
+}
+
+/** Split a tax payment into N equal installments, starting from a date. */
+export async function splitTaxIntoInstallments(
+  taxPaymentId: string,
+  data: {
+    total_amount: number;
+    num_installments: number;
+    first_due_date: string;
+    situacion: "aplazada" | "fraccionada";
+  }
+) {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  if (data.num_installments < 1) {
+    return { success: false, error: "Numero de plazos debe ser >= 1" };
+  }
+
+  // Equal split; last installment absorbs any rounding remainder
+  const per = Math.round((data.total_amount / data.num_installments) * 100) / 100;
+  const rows = [] as {
+    tax_payment_id: string;
+    numero_plazo: number;
+    fecha_vencimiento: string;
+    importe: number;
+  }[];
+
+  const baseDate = new Date(data.first_due_date);
+  let running = 0;
+  for (let i = 0; i < data.num_installments; i++) {
+    const d = new Date(baseDate);
+    d.setMonth(d.getMonth() + i);
+    const importe =
+      i === data.num_installments - 1
+        ? Math.round((data.total_amount - running) * 100) / 100
+        : per;
+    running += importe;
+    rows.push({
+      tax_payment_id: taxPaymentId,
+      numero_plazo: i + 1,
+      fecha_vencimiento: d.toISOString().split("T")[0],
+      importe,
+    });
+  }
+
+  // Clear existing installments and insert new ones
+  const { error: delError } = await supabase
+    .from("tax_installments")
+    .delete()
+    .eq("tax_payment_id", taxPaymentId);
+  if (delError) return { success: false, error: delError.message, data: null };
+
+  const { data: inserted, error: insError } = await supabase
+    .from("tax_installments")
+    .insert(rows)
+    .select();
+  if (insError) return { success: false, error: insError.message, data: null };
+
+  const { error: updError } = await supabase
+    .from("tax_payments")
+    .update({
+      situacion: data.situacion,
+      amount: data.total_amount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", taxPaymentId);
+  if (updError) return { success: false, error: updError.message, data: null };
+
+  revalidatePath("/dashboard/finanzas");
+  return { success: true, error: null, data: inserted ?? [] };
 }
 
 export async function ensureTaxCalendar(year: number) {
@@ -180,7 +367,7 @@ export async function getFixedExpenses() {
 
   const { data, error } = await supabase
     .from("fixed_expenses")
-    .select("*")
+    .select("*, employee:user_profiles!fixed_expenses_employee_id_fkey(id, full_name, nickname, email)")
     .eq("is_active", true)
     .order("category")
     .order("name");
@@ -483,7 +670,7 @@ export async function getTaxPayments(year?: number) {
 
   let query = supabase
     .from("tax_payments")
-    .select("*")
+    .select("*, installments:tax_installments(*)")
     .order("due_date");
 
   if (year) {

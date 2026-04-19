@@ -2186,9 +2186,10 @@ export async function sendProformaToClient(
     }
   }
 
-  // Fetch proforma details (docNumber) + download PDF in parallel
+  // Fetch proforma details (docNumber, totals) + download PDF in parallel
   let pdfBuffer: Buffer | null = null;
   let proformaDocNumber = "";
+  let proformaTotal = 0;
   try {
     const [pdf, proformaDoc] = await Promise.all([
       getDocumentPdf("proform", proformaId),
@@ -2196,103 +2197,80 @@ export async function sendProformaToClient(
     ]);
     pdfBuffer = pdf;
     proformaDocNumber = proformaDoc.docNumber || "";
+    proformaTotal = proformaDoc.total || 0;
   } catch (err) {
     console.error("[sendProformaToClient] PDF/doc fetch failed:", err);
     return { success: false, error: "Error al descargar la proforma de Holded" };
   }
 
-  // Compute payment amount
-  const isFull = lead.payment_condition === "100-5";
-  const isSplit = lead.payment_condition === "50-50";
-  const discountFactor = isFull ? 0.95 : 1;
-  const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
-  const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
-  const total = subtotal + taxTotal;
-  const payAmount = isSplit ? total * 0.5 : total;
-  const formattedAmount = payAmount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Ensure the project exists (sync may not have run yet) so /proforma/[token] works
+  let trackingToken: string | null = null;
+  {
+    const { data: existingProject } = await supabase
+      .from("projects")
+      .select("id, tracking_token")
+      .eq("holded_proforma_id", proformaId)
+      .maybeSingle();
 
-  const proformaRef = proformaDocNumber ? ` ${proformaDocNumber}` : "";
-  const paymentDesc = isSplit ? "primer pago (50%)" : isFull ? "pago total (100% con 5% dto.)" : "pago total";
-  const conceptoLine = (isSplit ? "Prototipalo – Inicio de proyecto (50%)" : "Prototipalo – Proyecto completo") + (proformaDocNumber ? ` – ${proformaDocNumber}` : "");
-  const introLine = isSplit
-    ? `Te adjuntamos la factura proforma correspondiente, para proceder al <strong>primer pago (50%)</strong> necesario para iniciar la produccion.`
-    : `Te adjuntamos la factura proforma correspondiente, para proceder al <strong>pago total</strong>${isFull ? " con un 5% de descuento por pago anticipado" : ""}.`;
-  const introText = isSplit
-    ? `Te adjuntamos la factura proforma correspondiente, para proceder al primer pago (50%) necesario para iniciar la produccion.`
-    : `Te adjuntamos la factura proforma correspondiente, para proceder al pago total${isFull ? " con un 5% de descuento por pago anticipado" : ""}.`;
-
-  // Create Stripe Checkout link for online payment option
-  let stripeCheckoutUrl: string | null = null;
-  try {
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
-    const chargeAmount = Math.round(payAmount * 100);
-    const productName = isSplit ? "Primer pago (50%) — Proyecto Prototipalo" : "Pago — Proyecto Prototipalo";
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-
-    const existingCust = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCust = existingCust.data.length > 0
-      ? existingCust.data[0]
-      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: [{
-        price_data: { currency: "eur", product_data: { name: productName }, unit_amount: chargeAmount },
-        quantity: 1,
-      }],
-      metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
-      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/payment/cancel`,
-      customer: stripeCust.id,
-    });
-
-    stripeCheckoutUrl = session.url;
-    await supabase
-      .from("quote_requests")
-      .update({ stripe_checkout_session_id: session.id })
-      .eq("id", qr.id);
-  } catch (err) {
-    console.error("[sendProformaToClient] Stripe checkout failed:", err);
+    if (existingProject) {
+      trackingToken = existingProject.tracking_token;
+    } else {
+      const { data: created, error: insErr } = await supabase
+        .from("projects")
+        .insert({
+          name: lead.full_name || lead.company || "Proyecto",
+          project_type: "upcoming",
+          status: "pending",
+          price: proformaTotal,
+          client_name: lead.full_name || lead.company || null,
+          holded_contact_id: qr.holded_contact_id,
+          holded_proforma_id: proformaId,
+        })
+        .select("id, tracking_token")
+        .single();
+      if (insErr || !created) {
+        console.error("[sendProformaToClient] Failed to ensure project:", insErr);
+        return { success: false, error: "No pudimos preparar el enlace del presupuesto" };
+      }
+      trackingToken = created.tracking_token;
+    }
   }
 
-  // Build email with both payment options
+  const proformaRef = proformaDocNumber ? ` ${proformaDocNumber}` : "";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+  const proformaUrl = `${baseUrl}/proforma/${trackingToken}`;
+  const formattedTotal = proformaTotal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const conceptoLine = `Prototipalo – Proyecto${proformaDocNumber ? ` – ${proformaDocNumber}` : ""}`;
+
   const emailSender = await getUserEmailSender(profile.id);
   if (!emailSender) {
     return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
   }
-
-  const onlinePayText = stripeCheckoutUrl
-    ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
-    : "";
 
   try {
     await sendEmailOrSchedule({
       to: lead.email,
       cc: ccString,
       subject: `Proforma${proformaRef} — Prototipalo`,
-      text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto — estamos listos para empezar.\n\n${introText}\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nUna vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.\n\nQuedamos atentos a cualquier duda.`,
+      text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto. Te adjuntamos la proforma${proformaRef} por importe de ${formattedTotal} €.\n\nPara arrancar la produccion revisa el presupuesto, completa tus datos y elige como pagar:\n${proformaUrl}\n\nTambien puedes pagar por transferencia bancaria:\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM\nConcepto: ${conceptoLine}\n\nUna vez recibido el pago comenzaremos la produccion de inmediato.\n\nQuedamos atentos a cualquier duda.`,
       html: `
         <p>Hola ${lead.full_name},</p>
-        <p>Muchas gracias por confirmar el proyecto — estamos listos para empezar.</p>
-        <p>${introLine}</p>
-        <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
-          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Importe</td><td style="padding:0;font-weight:600;">${formattedAmount} €</td></tr>
-          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${conceptoLine}</td></tr>
-        </table>
-        <p>Puedes realizar el pago mediante <strong>transferencia bancaria</strong> utilizando la referencia indicada:</p>
+        <p>Muchas gracias por confirmar el proyecto. Te adjuntamos la proforma${proformaRef} por importe de <strong>${formattedTotal} €</strong>.</p>
+        <p>Para arrancar la produccion revisa el presupuesto, completa tus datos y elige como pagar:</p>
+        <p style="margin:20px 0;">
+          <a href="${proformaUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+            Revisar y aceptar presupuesto
+          </a>
+        </p>
+        <p>Tambien puedes pagar por <strong>transferencia bancaria</strong>:</p>
         <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Banco</td><td style="padding:0;font-weight:600;">BBVA</td></tr>
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Titular</td><td style="padding:0;font-weight:600;">Prototipalo</td></tr>
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">IBAN</td><td style="padding:0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
           <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">SWIFT/BIC</td><td style="padding:0;font-weight:600;">BBVAESMM</td></tr>
+          <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${conceptoLine}</td></tr>
         </table>
-        <p>Tambien puedes completar el pago de forma rapida mediante tarjeta a traves del siguiente enlace:</p>
-        ${stripeCheckoutUrl ? `<p style="margin:16px 0;"><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Pagar con tarjeta</a></p>` : ""}
-        <p>Una vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.</p>
+        <p>Una vez recibido el pago comenzaremos la produccion de inmediato.</p>
         <p>Quedamos atentos a cualquier duda.</p>
       `,
       emailSender,
