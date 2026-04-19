@@ -473,20 +473,19 @@ export async function searchContacts(query: string): Promise<HoldedContact[]> {
 
 // ── Treasury ──
 
-const HOLDED_TREASURY_BASE = "https://api.holded.com/api/treasury/v1";
-
 export interface HoldedTreasuryAccount {
   id: string;
   name: string;
   balance: number;
-  currency: string;
-  type: string;
+  type: string; // "bank", "card", "cash", "gateway"
+  iban?: string;
+  accountNumber?: number;
 }
 
-/** Fetch all treasury accounts (bank accounts) from Holded */
+/** Fetch all treasury accounts (bank accounts, cards, cash) from Holded */
 export async function listTreasuryAccounts(): Promise<HoldedTreasuryAccount[]> {
-  const res = await fetch(`${HOLDED_TREASURY_BASE}/accounts`, {
-    headers: { key: getApiKey() },
+  const res = await fetch(`${HOLDED_API_BASE}/treasury`, {
+    headers: { accept: "application/json", key: getApiKey() },
     cache: "no-store",
   });
 
