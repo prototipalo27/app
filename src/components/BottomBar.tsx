@@ -145,7 +145,7 @@ export default function BottomBar({
             </svg>
           </Link>
           {showSettings && (
-            <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
               <div className="p-1">
                 <SettingsLink href="/dashboard/settings" label="Todos los ajustes" currentPath={pathname} onClick={() => setShowSettings(false)} />
                 <div className="my-1 border-t border-zinc-100 dark:border-zinc-700" />
