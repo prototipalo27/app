@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const topic = process.env.GOOGLE_PUBSUB_TOPIC;
+  const topic = process.env.GOOGLE_PUBSUB_TOPIC_INVOICES || process.env.GOOGLE_PUBSUB_TOPIC;
   if (!topic) {
     return NextResponse.json(
       { error: "GOOGLE_PUBSUB_TOPIC not configured" },
