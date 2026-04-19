@@ -37,7 +37,9 @@ export async function extractInvoiceData(
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  const rawText = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  // Strip markdown code fences if Claude wraps the response
+  const text = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 
   let company: string | null = null;
   let total: string | null = null;
@@ -55,11 +57,16 @@ export async function extractInvoiceData(
   // Sanitize company name for filenames
   const sanitizedCompany = company
     ? company
-        .replace(/[/\\:*?"<>|]/g, "")
+        .replace(/[/\\:*?"<>|,]/g, "")
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 60)
     : null;
+
+  // Sanitize total (replace comma decimal separator with dot)
+  if (total) {
+    total = total.replace(",", ".");
+  }
 
   // Validate date format
   const validDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
