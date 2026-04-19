@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Get the last processed historyId
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: state } = await (supabase as any)
-      .from("app_state")
+      .from("app_metadata")
       .select("value")
       .eq("key", "gmail_history_id")
       .single();
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Save new historyId immediately to avoid reprocessing on retries
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("app_state").upsert({
+    await (supabase as any).from("app_metadata").upsert({
       key: "gmail_history_id",
       value: newHistoryId,
       updated_at: new Date().toISOString(),

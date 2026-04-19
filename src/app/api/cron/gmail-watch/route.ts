@@ -45,13 +45,13 @@ export async function GET(request: NextRequest) {
     );
 
     const { data: existing } = await supabase
-      .from("app_state")
+      .from("app_metadata")
       .select("value")
       .eq("key", "gmail_history_id")
       .single();
 
     if (!existing && res.data.historyId) {
-      await supabase.from("app_state").upsert({
+      await supabase.from("app_metadata").upsert({
         key: "gmail_history_id",
         value: res.data.historyId,
         updated_at: new Date().toISOString(),
