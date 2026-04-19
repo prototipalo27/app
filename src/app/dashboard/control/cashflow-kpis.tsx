@@ -31,11 +31,9 @@ export async function CashflowKpis() {
       .eq("is_paid", false),
   ]);
 
-  // Only show bank accounts with balance (skip cash registers, gateways with 0)
-  const bankAccounts = accounts.filter((a) => a.type === "bank" && a.balance !== 0);
-  const totalBank = accounts
-    .filter((a) => a.type === "bank" || a.type === "card")
-    .reduce((sum, a) => sum + a.balance, 0);
+  // BBVA only
+  const bbva = accounts.find((a) => a.name === "BBVA");
+  const totalBank = bbva?.balance ?? 0;
 
   // Total debt
   const totalDebt = (debts || []).reduce(
@@ -47,19 +45,13 @@ export async function CashflowKpis() {
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Cashflow</h2>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {/* Bank total */}
+        {/* BBVA */}
         <div>
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Saldo bancos</p>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">BBVA</p>
           <p className="mt-1 text-2xl font-bold">
             <BalanceColor amount={totalBank}>{formatEur(totalBank)}</BalanceColor>
           </p>
-          <div className="mt-1 space-y-0.5">
-            {bankAccounts.map((a) => (
-              <p key={a.id} className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                {a.name}: <BalanceColor amount={a.balance}>{formatEur(a.balance)}</BalanceColor>
-              </p>
-            ))}
-          </div>
+          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Saldo actual</p>
         </div>
 
         {/* Receivables */}
