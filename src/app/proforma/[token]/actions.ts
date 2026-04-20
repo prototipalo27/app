@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { getDocument, updateContact } from "@/lib/holded/api";
+import { getDocument, updateContact, updateProforma } from "@/lib/holded/api";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
 
 interface BillingData {
@@ -51,15 +51,24 @@ export async function acceptProforma(
     return { success: false, error: "Presupuesto no disponible" };
   }
 
-  // Fetch proforma totals from Holded (authoritative amounts)
+  // Fetch proforma (items + totals) from Holded — authoritative data
   let proformaSubtotal = 0;
   let proformaTotal = 0;
   let proformaDocNumber = "";
+  let proformaProducts: Array<{
+    name: string;
+    desc: string;
+    units: number;
+    price: number;
+    tax: number;
+    discount: number;
+  }> = [];
   try {
     const doc = await getDocument("proform", project.holded_proforma_id);
     proformaSubtotal = doc.subtotal || 0;
     proformaTotal = doc.total || 0;
     proformaDocNumber = doc.docNumber || "";
+    proformaProducts = doc.products || [];
   } catch {
     return { success: false, error: "No pudimos cargar el presupuesto" };
   }
@@ -67,6 +76,32 @@ export async function acceptProforma(
   // Enforce threshold: under DISCOUNT_THRESHOLD_EUR (base imponible) force 100-0
   const effectiveCondition: PaymentCondition =
     proformaSubtotal < DISCOUNT_THRESHOLD_EUR ? "100-0" : paymentCondition;
+
+  // If the client picked 100-5, apply the 5% discount on every proforma line so
+  // the proforma (and later the invoice) reflects the same numbers we charge.
+  if (effectiveCondition === "100-5" && proformaProducts.length > 0) {
+    try {
+      await updateProforma(project.holded_proforma_id, {
+        items: proformaProducts.map((p) => ({
+          name: p.name,
+          desc: p.desc,
+          units: p.units,
+          subtotal: p.price,
+          tax: p.tax,
+          discount: 5,
+        })),
+      });
+      // Keep local totals in sync for the Stripe charge computation
+      proformaSubtotal = proformaSubtotal * 0.95;
+      proformaTotal = proformaTotal * 0.95;
+    } catch (err) {
+      console.error("[acceptProforma] Failed to apply discount in Holded:", err);
+      return {
+        success: false,
+        error: "No pudimos aplicar el descuento en el presupuesto. Inténtalo de nuevo.",
+      };
+    }
+  }
 
   try {
     // 1. Update Holded contact with billing data
@@ -121,7 +156,7 @@ export async function acceptProforma(
     const quoteRequests = project.holded_contact_id
       ? (await supabase
           .from("quote_requests")
-          .select("id, lead:leads(email, full_name)")
+          .select("id, lead_id, lead:leads(email, full_name)")
           .eq("holded_contact_id", project.holded_contact_id)
           .limit(1)).data
       : null;
@@ -148,9 +183,16 @@ export async function acceptProforma(
           shipping_recipient_name: shipping.recipient_name.trim(),
           shipping_recipient_phone: shipping.recipient_phone.trim(),
           proforma_accepted_at: new Date().toISOString(),
-          payment_condition: effectiveCondition,
         })
         .eq("id", quoteRequest.id);
+
+      // payment_condition lives on leads
+      if (quoteRequest.lead_id) {
+        await supabase
+          .from("leads")
+          .update({ payment_condition: effectiveCondition })
+          .eq("id", quoteRequest.lead_id);
+      }
     }
 
     // 4. Create Stripe checkout for the right amount
@@ -245,7 +287,7 @@ export async function acceptProforma(
 }
 
 function computeChargeAmount(proformaTotal: number, condition: PaymentCondition): number {
-  if (condition === "100-5") return proformaTotal * 0.95;
+  // For 100-5 the proformaTotal passed in is already the post-discount total.
   if (condition === "50-50") return proformaTotal * 0.5;
   return proformaTotal;
 }

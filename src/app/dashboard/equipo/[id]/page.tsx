@@ -9,6 +9,8 @@ import EmployeeDocuments from "./employee-documents";
 import CareerPlanEditor from "./career-plan-editor";
 import EmployeeCommissions from "./employee-commissions";
 import EmployeeFixedExpenses from "./employee-fixed-expenses";
+import EmployeeOvertime from "./employee-overtime";
+import EmployeeCalendar from "./employee-calendar";
 import NotificationSettingsClient from "../../settings/notifications/notification-settings-client";
 import {
   getNotificationEvents,
@@ -27,6 +29,9 @@ export default async function EmployeeDetailPage({
   if (!profile || !profile.is_active) redirect("/login");
 
   const isManager = hasRole(profile.role, "manager");
+  const isOwnProfile = profile.id === id;
+  const canSeeOvertime = isOwnProfile || isManager;
+  const currentYear = new Date().getFullYear();
   const supabase = await createClient();
 
   const [
@@ -35,6 +40,9 @@ export default async function EmployeeDetailPage({
     { data: userSkills },
     { data: documents },
     { data: employeeExpenses },
+    { data: overtimeRaw },
+    { data: timeOffRaw },
+    { data: holidaysRaw },
   ] = await Promise.all([
     supabase
       .from("user_profiles")
@@ -57,6 +65,23 @@ export default async function EmployeeDetailPage({
           .order("category")
           .order("name")
       : Promise.resolve({ data: null }),
+    canSeeOvertime
+      ? supabase
+          .from("overtime_entries")
+          .select("id, user_id, date, minutes, reason, type, created_at")
+          .eq("user_id", id)
+          .order("date", { ascending: false })
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("time_off_requests")
+      .select("id, start_date, end_date, type, status, notes")
+      .eq("user_id", id)
+      .order("start_date", { ascending: false }),
+    supabase
+      .from("holidays")
+      .select("id, date, name, scope")
+      .eq("year", currentYear)
+      .order("date"),
   ]);
 
   if (!employee) notFound();
@@ -65,8 +90,15 @@ export default async function EmployeeDetailPage({
   const userSkillIds = (userSkills ?? []).map((us) => us.skill_id);
   const displayName = employee.nickname || employee.full_name || employee.email.split("@")[0];
 
+  const overtimeEntries = overtimeRaw ?? [];
+  const overtimeBalance = overtimeEntries.reduce(
+    (acc, e) => acc + (e.type === "earned" ? e.minutes : -e.minutes),
+    0,
+  );
+  const timeOffRequests = timeOffRaw ?? [];
+  const holidays = holidaysRaw ?? [];
+
   // Only load notification settings for the user's own profile
-  const isOwnProfile = profile.id === id;
   let notifEvents: any[] = [];
   let notifPrefs: any[] = [];
   let notifUsers: any[] = [];
@@ -119,6 +151,33 @@ export default async function EmployeeDetailPage({
             isManager={isManager}
           />
         </section>
+
+        {/* Section 1.5: Calendar & vacations */}
+        <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Calendario y vacaciones
+          </h2>
+          <EmployeeCalendar
+            isOwnProfile={isOwnProfile}
+            timeOff={timeOffRequests}
+            holidays={holidays}
+            year={currentYear}
+          />
+        </section>
+
+        {/* Section 1.6: Overtime — own profile or manager only */}
+        {canSeeOvertime && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Horas extra
+            </h2>
+            <EmployeeOvertime
+              isOwnProfile={isOwnProfile}
+              initialBalance={overtimeBalance}
+              initialEntries={overtimeEntries}
+            />
+          </section>
+        )}
 
         {/* Section 2: Skills */}
         <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

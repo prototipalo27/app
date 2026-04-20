@@ -12,8 +12,12 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
-/** Scopes for Fase 0: send-only. Fase 1 will add gmail.readonly incrementally. */
-const SCOPES_FASE_0 = ["https://www.googleapis.com/auth/gmail.send"];
+/** Scopes for Fase 0: send-only + openid/email to identify the user via /userinfo. */
+const SCOPES_FASE_0 = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/gmail.send",
+];
 
 function getClientId(): string {
   const id = process.env.GOOGLE_OAUTH_CLIENT_ID;

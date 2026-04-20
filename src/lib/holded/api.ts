@@ -237,6 +237,7 @@ export async function createProforma(
       units: number;
       subtotal: number;
       tax: number;
+      discount?: number;
     }>;
     notes?: string;
   },
@@ -257,6 +258,7 @@ export async function createProforma(
       units: item.units,
       subtotal: item.subtotal,
       tax: item.tax,
+      ...(item.discount ? { discount: item.discount } : {}),
     }));
   } else {
     body.desc = "Borrador — pendiente de completar líneas";
@@ -331,6 +333,7 @@ export async function createInvoice(
       units: number;
       subtotal: number;
       tax: number;
+      discount?: number;
     }>;
     notes?: string;
   },
@@ -350,6 +353,7 @@ export async function createInvoice(
       units: item.units,
       subtotal: item.subtotal,
       tax: item.tax,
+      ...(item.discount ? { discount: item.discount } : {}),
     }));
   }
 
@@ -378,6 +382,7 @@ export async function updateProforma(
       units: number;
       subtotal: number;
       tax: number;
+      discount?: number;
     }>;
     notes?: string;
   },
@@ -389,6 +394,7 @@ export async function updateProforma(
       units: p.units,
       subtotal: p.subtotal,
       tax: p.tax,
+      ...(p.discount ? { discount: p.discount } : {}),
     })),
   };
   if (data.notes) body.notes = data.notes;

@@ -2342,7 +2342,14 @@ export async function sendInvoiceToClient(
     return { success: false, error: "No hay contacto de Holded vinculado" };
   }
 
-  // Create invoice in Holded if it doesn't exist yet
+  // Load payment_condition from lead (source of truth) to mirror proforma terms in invoice
+  const { data: leadCondition } = await supabase
+    .from("leads")
+    .select("payment_condition")
+    .eq("id", leadId)
+    .single();
+
+  const applyDiscount = leadCondition?.payment_condition === "100-5";
   let invoiceId = qr.holded_invoice_id;
   if (!invoiceId) {
     try {
@@ -2352,6 +2359,7 @@ export async function sendInvoiceToClient(
           units: item.units,
           subtotal: item.price,
           tax: item.tax,
+          ...(applyDiscount ? { discount: 5 } : {}),
         })),
         notes: qr.notes || undefined,
       });
@@ -3106,10 +3114,10 @@ export async function onPaymentConfirmed(
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   const supabase = useServiceRole ? createServiceClient() : await createClient();
 
-  // Get quote request with lead data
+  // Get quote request with lead data (includes payment_condition — source of truth for discount)
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("*, leads(id, full_name, company, email, phone, attachments, message)")
+    .select("*, leads(id, full_name, company, email, phone, attachments, message, payment_condition)")
     .eq("id", quoteRequestId)
     .single();
 
@@ -3148,7 +3156,8 @@ export async function onPaymentConfirmed(
 
   const items = (qr.items || []) as unknown as ProformaLineItem[];
 
-  // 1. Create invoice in Holded
+  // 1. Create invoice in Holded — mirror the proforma terms, including the 5% discount per line when applicable
+  const applyDiscount = (qr.leads as unknown as { payment_condition: string | null }).payment_condition === "100-5";
   let invoiceId = qr.holded_invoice_id;
   if (!invoiceId && qr.holded_contact_id) {
     try {
@@ -3158,6 +3167,7 @@ export async function onPaymentConfirmed(
           units: item.units,
           subtotal: item.price,
           tax: item.tax,
+          ...(applyDiscount ? { discount: 5 } : {}),
         })),
         notes: qr.notes || undefined,
       });
