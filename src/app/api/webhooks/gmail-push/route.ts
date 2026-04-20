@@ -129,15 +129,28 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        // Google Group "Info" rewrites From to info@prototipalo.com (DMARC).
+        // Recover the real sender from X-Original-Sender or Reply-To.
+        const effective = unwrapGroupSender(parsed);
+
         // Skip internal senders
-        const fromDomain = parsed.from.split("@")[1] || "";
+        const fromDomain = effective.from.split("@")[1] || "";
         if (fromDomain === "prototipalo.com") continue;
 
         // Run through spam filter
-        if (checkSpam(parsed).spam) continue;
+        if (checkSpam({
+          from: effective.from,
+          subject: parsed.subject,
+          body: parsed.body,
+          reply_to: parsed.reply_to || undefined,
+        }).spam) continue;
 
         // Process the email as a lead (pass Gmail threadId for reliable threading)
-        await processEmailAsLead(supabase, parsed, msg.data.threadId || undefined);
+        await processEmailAsLead(
+          supabase,
+          { ...parsed, from: effective.from, from_name: effective.from_name },
+          msg.data.threadId || undefined,
+        );
         processed++;
       } catch (msgErr) {
         console.error(`[gmail-push] Error processing message ${msgId}:`, msgErr);
@@ -150,6 +163,37 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// ── GOOGLE GROUP UNWRAP ─────────────────────────────────────────
+
+/**
+ * When info@prototipalo.com (Google Group) redelivers an external email,
+ * DMARC forces the From header to the group address. The original sender
+ * is preserved in X-Original-Sender and Reply-To, and the display name is
+ * suffixed with " via <Group>". This recovers the real external sender.
+ */
+function unwrapGroupSender(parsed: {
+  from: string;
+  from_name: string;
+  reply_to: string | null;
+  x_original_sender: string | null;
+}): { from: string; from_name: string } {
+  const fromDomain = parsed.from.split("@")[1] || "";
+  if (fromDomain !== "prototipalo.com") {
+    return { from: parsed.from, from_name: parsed.from_name };
+  }
+  const candidate = parsed.x_original_sender || parsed.reply_to;
+  const candidateDomain = candidate ? candidate.split("@")[1] || "" : "";
+  if (!candidate || candidateDomain === "prototipalo.com") {
+    return { from: parsed.from, from_name: parsed.from_name };
+  }
+  // Strip the " via <Group>" suffix and surrounding quotes from the display name
+  const cleanName = parsed.from_name
+    .replace(/\s+via\s+[^<"']+$/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+  return { from: candidate, from_name: cleanName || candidate.split("@")[0] };
 }
 
 // ── LEAD PROCESSING ─────────────────────────────────────────────

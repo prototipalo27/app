@@ -57,6 +57,8 @@ export interface ParsedEmail {
   body: string;
   message_id: string | null;
   in_reply_to: string | null;
+  reply_to: string | null;
+  x_original_sender: string | null;
   date: string;
 }
 
@@ -113,6 +115,14 @@ export function parseMessage(msg: gmail_v1.Schema$Message): ParsedEmail {
   const fromRaw = getHeader(headers, "From");
   const { email: fromEmail, name: fromName } = parseEmailAddress(fromRaw);
 
+  const replyToRaw = getHeader(headers, "Reply-To");
+  const replyToEmail = replyToRaw ? parseEmailAddress(replyToRaw).email : null;
+
+  const xOriginalSenderRaw = getHeader(headers, "X-Original-Sender");
+  const xOriginalSender = xOriginalSenderRaw
+    ? parseEmailAddress(xOriginalSenderRaw).email
+    : null;
+
   return {
     from: fromEmail,
     from_name: fromName,
@@ -122,6 +132,8 @@ export function parseMessage(msg: gmail_v1.Schema$Message): ParsedEmail {
     body: extractBody(msg.payload).slice(0, 50_000),
     message_id: getHeader(headers, "Message-ID") || null,
     in_reply_to: getHeader(headers, "In-Reply-To") || null,
+    reply_to: replyToEmail,
+    x_original_sender: xOriginalSender,
     date: getHeader(headers, "Date") || new Date().toISOString(),
   };
 }
