@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { getDocument, updateContact, updateProforma } from "@/lib/holded/api";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
+import { DISCOUNT_THRESHOLD_EUR, type PaymentCondition } from "./constants";
 
 interface BillingData {
   billing_name: string;
@@ -23,11 +24,6 @@ interface ShippingData {
   province: string;
   country: string;
 }
-
-export type PaymentCondition = "50-50" | "100-5" | "100-0";
-
-// Below this subtotal (base imponible, sin IVA) the client cannot choose — single payment only.
-export const DISCOUNT_THRESHOLD_EUR = 400;
 
 export async function acceptProforma(
   token: string,

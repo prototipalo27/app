@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { acceptProforma, DISCOUNT_THRESHOLD_EUR, type PaymentCondition } from "./actions";
+import { acceptProforma } from "./actions";
+import { DISCOUNT_THRESHOLD_EUR, type PaymentCondition } from "./constants";
 import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
 
 interface ProformaLine {
