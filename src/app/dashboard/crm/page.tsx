@@ -61,10 +61,20 @@ export default async function CrmPage() {
     last_activity_at: lastActivityMap[l.id] || null,
   }));
 
+  const activeLeadsCount = leads.filter((l) => l.status !== "lost").length;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
+          <span
+            className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+            title="Total de leads sin contar los perdidos"
+          >
+            {activeLeadsCount}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/crm/timeline" className="hidden sm:inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
