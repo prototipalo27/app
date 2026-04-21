@@ -7,7 +7,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { SwipeableLeadCard } from "./swipeable-lead-card";
-import { updateLeadStatus, dismissLead, getLeadEmails, bulkDismissLeads } from "./actions";
+import { updateLeadStatus, dismissLead, getLeadEmails, bulkDismissLeads, togglePreWon } from "./actions";
 import { ContactModal } from "./contact-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,10 +46,12 @@ function CrmColumn({
   column,
   leads,
   commissionRate,
+  onTogglePreWon,
 }: {
   column: (typeof LEAD_COLUMNS)[number];
   leads: LeadWithAssignee[];
   commissionRate?: number;
+  onTogglePreWon?: (leadId: string) => Promise<{ success: boolean; error?: string }>;
 }) {
   const { ref, isDropTarget } = useDroppable({ id: column.id });
 
@@ -95,7 +97,7 @@ function CrmColumn({
               <span className="ml-auto text-muted-foreground">{preWon.length}/3</span>
             </div>
             {preWon.map((lead) => (
-              <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} />
+              <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} onTogglePreWon={onTogglePreWon} />
             ))}
             {rest.length > 0 && (
               <div className="my-1 border-t border-dashed border-zinc-300 dark:border-zinc-700" />
@@ -103,7 +105,7 @@ function CrmColumn({
           </>
         )}
         {rest.map((lead) => (
-          <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} />
+          <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} onTogglePreWon={onTogglePreWon} />
         ))}
       </div>
     </div>
@@ -180,6 +182,29 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   useEffect(() => {
     setLeads(initialLeads);
   }, [initialLeads]);
+
+  const handleTogglePreWon = useCallback(
+    async (leadId: string) => {
+      const target = leads.find((l) => l.id === leadId);
+      if (!target) return { success: false, error: "Lead no encontrado" };
+      const willPin = !target.is_pre_won;
+      // Optimistic update
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, is_pre_won: willPin } : l)),
+      );
+      const result = await togglePreWon(leadId);
+      if (!result.success) {
+        // Revert on failure
+        setLeads((prev) =>
+          prev.map((l) => (l.id === leadId ? { ...l, is_pre_won: !willPin } : l)),
+        );
+      } else {
+        router.refresh();
+      }
+      return result;
+    },
+    [leads, router],
+  );
 
   // Pull-to-refresh (mobile)
   const [pullDistance, setPullDistance] = useState(0);
@@ -866,6 +891,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
               column={column}
               leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
               commissionRate={column.id !== "won" && column.id !== "paid" ? myCommission?.currentRate : undefined}
+              onTogglePreWon={handleTogglePreWon}
             />
           ))}
         </div>

@@ -6,7 +6,6 @@ import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
-import { togglePreWon } from "./actions";
 
 export { tagClasses };
 
@@ -19,6 +18,7 @@ export type LeadWithAssignee = Tables<"leads"> & {
 interface CrmCardProps {
   lead: LeadWithAssignee;
   commissionRate?: number;
+  onTogglePreWon?: (leadId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 function timeAgo(dateStr: string): string {
@@ -57,7 +57,7 @@ function maturationHint(status: string, lastInteractionDate: string): { text: st
   return null;
 }
 
-export function CrmCard({ lead, commissionRate }: CrmCardProps) {
+export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) {
   const router = useRouter();
   const { ref, isDragging } = useDraggable({
     id: lead.id,
@@ -70,14 +70,13 @@ export function CrmCard({ lead, commissionRate }: CrmCardProps) {
 
   const handleTogglePreWon = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!onTogglePreWon) return;
     setPinError(null);
     startTransition(async () => {
-      const result = await togglePreWon(lead.id);
+      const result = await onTogglePreWon(lead.id);
       if (!result.success) {
         setPinError(result.error ?? "Error");
         setTimeout(() => setPinError(null), 3000);
-      } else {
-        router.refresh();
       }
     });
   };
