@@ -47,8 +47,9 @@ export default async function TareasPage({
   const userId = profile.id;
   const isManager = hasRole(profile.role, "manager");
 
-  // Employees always see only their tasks
-  const showOnlyMine = !isManager || params.mine === "true";
+  // Managers toggle "all" vs "mine". Employees see tasks where they are involved
+  // (assigned to them OR created by them) so they can follow up on tasks they delegate.
+  const showOnlyMine = isManager ? params.mine === "true" : true;
 
   // Fetch projects where I'm the PM (managers only)
   const { data: myProjects } = isManager
@@ -74,9 +75,14 @@ export default async function TareasPage({
     query = query.neq("status", "done");
   }
 
-  // Employees only see their own tasks
   if (showOnlyMine) {
-    query = query.eq("assigned_to", userId);
+    if (isManager) {
+      // Manager toggled "Mis tareas" → only tasks assigned to them
+      query = query.eq("assigned_to", userId);
+    } else {
+      // Employees: tasks assigned to them OR created by them
+      query = query.or(`assigned_to.eq.${userId},created_by.eq.${userId}`);
+    }
   }
 
   const { data: tasks } = await query;
@@ -159,7 +165,7 @@ export default async function TareasPage({
                     {t.title}
                   </Link>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    {isManager && assigned && (
+                    {assigned && (
                       <span>{assigned.email.split("@")[0]}</span>
                     )}
                     {project && (

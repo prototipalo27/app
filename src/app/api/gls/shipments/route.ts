@@ -185,6 +185,8 @@ export async function POST(request: NextRequest) {
           carrier: "GLS",
           trackingNumber: result.barcode,
           trackingToken: proj.tracking_token,
+          projectId,
+          triggeredBy: userData.user.id,
         }).catch(() => {
           // Email failure should not break the shipment flow
         });

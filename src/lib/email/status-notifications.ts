@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/email";
+import { createServiceClient } from "@/lib/supabase/server";
 
 /** States that trigger a client email notification */
 const STATUS_EMAIL_MAP: Record<string, { subject: string; heading: string; message: string }> = {
@@ -35,16 +36,19 @@ export async function sendStatusNotification(
   projectName: string,
   newStatus: string,
   trackingToken: string,
+  projectId?: string | null,
+  triggeredBy?: string | null,
 ) {
   const config = STATUS_EMAIL_MAP[newStatus];
   if (!config) return;
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const trackingLink = `${baseUrl}/track/${trackingToken}`;
+  const subject = `${config.subject} — ${projectName}`;
 
   await sendEmail({
     to: clientEmail,
-    subject: `${config.subject} — ${projectName}`,
+    subject,
     signature: false,
     text: `${config.heading}\n\n${config.message}\n\nConsulta el estado de tu proyecto:\n${trackingLink}\n\n— Prototipalo`,
     html: `
@@ -63,4 +67,18 @@ export async function sendStatusNotification(
   </p>
 </div>`,
   });
+
+  // Log to sent_emails so it appears in /dashboard/emails
+  try {
+    const supabase = createServiceClient();
+    await supabase.from("sent_emails").insert({
+      user_id: triggeredBy ?? null,
+      to: clientEmail,
+      subject,
+      entity_type: projectId ? "project" : null,
+      entity_id: projectId ?? null,
+    });
+  } catch (err) {
+    console.error("[sendStatusNotification] Failed to log email:", err);
+  }
 }

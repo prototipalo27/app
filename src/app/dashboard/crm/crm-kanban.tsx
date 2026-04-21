@@ -7,7 +7,7 @@ import { useDroppable } from "@dnd-kit/react";
 import { LEAD_COLUMNS, type LeadStatus } from "@/lib/crm-config";
 import { CrmCard, agingClasses, tagClasses, type LeadWithAssignee } from "./crm-card";
 import { SwipeableLeadCard } from "./swipeable-lead-card";
-import { updateLeadStatus, dismissLead, getLeadEmails, bulkDismissLeads, togglePreWon } from "./actions";
+import { updateLeadStatus, dismissLead, getLeadEmails, bulkDismissLeads, togglePreWon, mergeLead } from "./actions";
 import { ContactModal } from "./contact-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -250,7 +255,23 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   const [spamSelected, setSpamSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const [filterManager, setFilterManager] = useState(() => localStorage.getItem("crm_filterManager") || "all");
+  // filterManager: array of manager ids + optional "unassigned". Empty array === todos.
+  const [filterManager, setFilterManager] = useState<string[]>(() => {
+    const stored = localStorage.getItem("crm_filterManager");
+    if (!stored) return [];
+    // New format: JSON array
+    if (stored.startsWith("[")) {
+      try {
+        const arr = JSON.parse(stored);
+        return Array.isArray(arr) ? arr.filter((v) => typeof v === "string") : [];
+      } catch {
+        return [];
+      }
+    }
+    // Legacy format: "all" | single id | "unassigned"
+    if (stored === "all") return [];
+    return [stored];
+  });
   const [filterOwner, setFilterOwner] = useState(() => {
     const stored = localStorage.getItem("crm_filterOwner");
     if (stored) return stored;
@@ -265,7 +286,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
   // Persist filters to localStorage
   useEffect(() => {
-    localStorage.setItem("crm_filterManager", filterManager);
+    localStorage.setItem("crm_filterManager", JSON.stringify(filterManager));
     localStorage.setItem("crm_filterOwner", filterOwner);
     localStorage.setItem("crm_filterType", filterType);
     localStorage.setItem("crm_sortBy", sortBy);
@@ -279,6 +300,12 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   } | null>(null);
   const [lostReason, setLostReason] = useState("");
 
+  const [mergeModal, setMergeModal] = useState<{
+    sourceId: string;
+    targetId: string;
+  } | null>(null);
+  const [merging, setMerging] = useState(false);
+
   const handleDragEnd = useCallback(
     (event: {
       operation: {
@@ -290,7 +317,17 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
       if (!source || !target) return;
 
       const leadId = String(source.id);
-      const newStatus = String(target.id) as LeadStatus;
+      const targetStr = String(target.id);
+
+      // Dropped onto another lead card → open merge confirmation
+      if (targetStr.startsWith("lead-")) {
+        const targetLeadId = targetStr.slice("lead-".length);
+        if (targetLeadId === leadId) return;
+        setMergeModal({ sourceId: leadId, targetId: targetLeadId });
+        return;
+      }
+
+      const newStatus = targetStr as LeadStatus;
 
       const lead = leads.find((l) => l.id === leadId);
       if (!lead || lead.status === newStatus) return;
@@ -353,6 +390,19 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     );
     setLostModal(null);
     setLostReason("");
+  };
+
+  const handleMergeConfirm = async () => {
+    if (!mergeModal) return;
+    setMerging(true);
+    const result = await mergeLead(mergeModal.sourceId, mergeModal.targetId);
+    if (result.success) {
+      setLeads((prev) => prev.filter((l) => l.id !== mergeModal.sourceId));
+      setMergeModal(null);
+    } else {
+      alert(result.error || "Error al fusionar los leads");
+    }
+    setMerging(false);
   };
 
   const [dismissingId, setDismissingId] = useState<string | null>(null);
@@ -440,9 +490,14 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
         .toLowerCase();
       if (!searchable.includes(q)) return false;
     }
-    if (filterManager !== "all") {
-      if (filterManager === "unassigned" && l.assigned_to) return false;
-      if (filterManager !== "unassigned" && l.assigned_to !== filterManager) return false;
+    if (filterManager.length > 0) {
+      const includesUnassigned = filterManager.includes("unassigned");
+      const isUnassigned = !l.assigned_to;
+      if (isUnassigned) {
+        if (!includesUnassigned) return false;
+      } else {
+        if (!l.assigned_to || !filterManager.includes(l.assigned_to)) return false;
+      }
     }
     if (filterOwner !== "all") {
       if (!l.owned_by || l.owned_by !== filterOwner) return false;
@@ -534,24 +589,11 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
           className="h-8 w-40 shrink-0 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring md:w-52"
         />
 
-        <Select value={filterManager} onValueChange={(v) => v && setFilterManager(v)}>
-          <SelectTrigger size="sm">
-            <SelectValue placeholder="Comercial">
-              {filterManager === "all"
-                ? "Todos los comerciales"
-                : filterManager === "unassigned"
-                  ? "Sin asignar"
-                  : managers.find((m) => m.id === filterManager)?.name ?? "Comercial"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los comerciales</SelectItem>
-            {managers.map((m) => (
-              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-            ))}
-            <SelectItem value="unassigned">Sin asignar</SelectItem>
-          </SelectContent>
-        </Select>
+        <ManagerMultiFilter
+          managers={managers}
+          value={filterManager}
+          onChange={setFilterManager}
+        />
 
         <Select value={filterOwner} onValueChange={(v) => v && setFilterOwner(v)}>
           <SelectTrigger size="sm" suppressHydrationWarning>
@@ -945,6 +987,145 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!mergeModal} onOpenChange={(open) => !open && !merging && setMergeModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fusionar leads</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                if (!mergeModal) return null;
+                const src = leads.find((l) => l.id === mergeModal.sourceId);
+                const tgt = leads.find((l) => l.id === mergeModal.targetId);
+                const tgtCol = LEAD_COLUMNS.find((c) => c.id === tgt?.status);
+                return (
+                  <>
+                    Vas a fusionar <strong>{src?.full_name ?? "lead"}</strong>{src?.company ? ` (${src.company})` : ""}
+                    {" "}dentro de <strong>{tgt?.full_name ?? "lead"}</strong>{tgt?.company ? ` (${tgt.company})` : ""}.
+                    <br /><br />
+                    El lead origen se eliminará y todo su historial (actividades, proformas, proyectos, mensajes) quedará asociado al destino.
+                    La tarjeta resultante se queda en la columna <strong>&quot;{tgtCol?.label ?? tgt?.status}&quot;</strong>.
+                  </>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergeModal(null)} disabled={merging}>
+              Cancelar
+            </Button>
+            <Button onClick={handleMergeConfirm} disabled={merging}>
+              {merging ? "Fusionando..." : "Fusionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+function ManagerMultiFilter({
+  managers,
+  value,
+  onChange,
+}: {
+  managers: { id: string; name: string }[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = (id: string) => {
+    if (value.includes(id)) {
+      onChange(value.filter((v) => v !== id));
+    } else {
+      onChange([...value, id]);
+    }
+  };
+
+  const selectedManagers = managers.filter((m) => value.includes(m.id));
+  const hasUnassigned = value.includes("unassigned");
+
+  let label: string;
+  if (value.length === 0) {
+    label = "Todos los comerciales";
+  } else if (value.length === 1) {
+    label = hasUnassigned ? "Sin asignar" : selectedManagers[0]?.name ?? "Comercial";
+  } else {
+    label = `${value.length} comerciales`;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+        suppressHydrationWarning
+      >
+        <span suppressHydrationWarning>{label}</span>
+        <svg className="h-3 w-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-1">
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <span className="flex h-4 w-4 items-center justify-center">
+            {value.length === 0 && (
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </span>
+          Todos los comerciales
+        </button>
+        <div className="my-1 border-t border-border" />
+        {managers.map((m) => {
+          const checked = value.includes(m.id);
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => toggle(m.id)}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
+            >
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                  checked ? "border-brand bg-brand text-white" : "border-input bg-background"
+                }`}
+              >
+                {checked && (
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </span>
+              <span className="capitalize">{m.name}</span>
+            </button>
+          );
+        })}
+        <div className="my-1 border-t border-border" />
+        <button
+          type="button"
+          onClick={() => toggle("unassigned")}
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
+        >
+          <span
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+              hasUnassigned ? "border-brand bg-brand text-white" : "border-input bg-background"
+            }`}
+          >
+            {hasUnassigned && (
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </span>
+          Sin asignar
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }

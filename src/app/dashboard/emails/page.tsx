@@ -83,19 +83,26 @@ async function SentEmailsTab() {
     .order("sent_at", { ascending: false })
     .limit(200);
 
-  // Get sender names
-  const senderIds = [...new Set((emails || []).map((e) => e.user_id))];
+  // Sender names (skip null user_id — system-triggered emails)
+  const senderIds = [...new Set((emails || []).map((e) => e.user_id).filter((id): id is string => !!id))];
   const { data: senders } = senderIds.length > 0
     ? await supabase.from("user_profiles").select("id, email, full_name").in("id", senderIds)
     : { data: [] };
   const senderMap = new Map(senders?.map((s) => [s.id, { email: s.email.split("@")[0], name: s.full_name }]) || []);
 
-  // Get lead names for linked emails
+  // Lead names
   const leadIds = [...new Set((emails || []).filter((e) => e.entity_type === "lead" && e.entity_id).map((e) => e.entity_id!))];
   const { data: leads } = leadIds.length > 0
     ? await supabase.from("leads").select("id, full_name, company").in("id", leadIds)
     : { data: [] };
   const leadMap = new Map(leads?.map((l) => [l.id, { name: l.full_name, company: l.company }]) || []);
+
+  // Project names (status-change and shipping emails)
+  const projectIds = [...new Set((emails || []).filter((e) => e.entity_type === "project" && e.entity_id).map((e) => e.entity_id!))];
+  const { data: projects } = projectIds.length > 0
+    ? await supabase.from("projects").select("id, name, client_name").in("id", projectIds)
+    : { data: [] };
+  const projectMap = new Map(projects?.map((p) => [p.id, { name: p.name, client: p.client_name }]) || []);
 
   if (!emails || emails.length === 0) {
     return (
@@ -118,14 +125,17 @@ async function SentEmailsTab() {
                 <th className="px-4 py-3">Enviado por</th>
                 <th className="px-4 py-3">Destinatario</th>
                 <th className="px-4 py-3">Asunto</th>
-                <th className="px-4 py-3">Lead</th>
+                <th className="px-4 py-3">Relacionado con</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {emails.map((email) => {
-                const sender = senderMap.get(email.user_id);
+                const sender = email.user_id ? senderMap.get(email.user_id) : null;
                 const lead = email.entity_type === "lead" && email.entity_id
                   ? leadMap.get(email.entity_id)
+                  : null;
+                const project = email.entity_type === "project" && email.entity_id
+                  ? projectMap.get(email.entity_id)
                   : null;
 
                 return (
@@ -140,7 +150,7 @@ async function SentEmailsTab() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <Badge variant="secondary" className="text-[10px]">
-                        {sender?.email || "—"}
+                        {sender?.email ?? (email.user_id ? "—" : "Sistema")}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-foreground">
@@ -165,6 +175,16 @@ async function SentEmailsTab() {
                           {lead.name}
                           {lead.company && (
                             <span className="text-muted-foreground"> · {lead.company}</span>
+                          )}
+                        </Link>
+                      ) : project && email.entity_id ? (
+                        <Link
+                          href={`/dashboard/projects/${email.entity_id}`}
+                          className="text-xs text-green-600 hover:underline dark:text-green-400"
+                        >
+                          {project.name}
+                          {project.client && (
+                            <span className="text-muted-foreground"> · {project.client}</span>
                           )}
                         </Link>
                       ) : (

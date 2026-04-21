@@ -163,6 +163,8 @@ async function recordStatusChange(
         project.name,
         newStatus,
         project.tracking_token,
+        projectId,
+        userId,
       );
       notificationSent = true;
     } catch (e) {

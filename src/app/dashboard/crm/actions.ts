@@ -3437,3 +3437,88 @@ export async function deleteFollowUp(
   revalidatePath("/dashboard/crm/timeline");
   return { success: true };
 }
+
+// ── Merge Leads ─────────────────────────────────────────
+
+export async function mergeLead(
+  sourceId: string,
+  targetId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  if (sourceId === targetId) {
+    return { success: false, error: "Lead origen y destino son el mismo" };
+  }
+
+  const { data: source } = await supabase
+    .from("leads")
+    .select("id, full_name, company, email, phone, message, attachments, instagram_username, created_at")
+    .eq("id", sourceId)
+    .single();
+
+  const { data: target } = await supabase
+    .from("leads")
+    .select("id, message")
+    .eq("id", targetId)
+    .single();
+
+  if (!source || !target) {
+    return { success: false, error: "Lead no encontrado" };
+  }
+
+  // Build merge note appended to target.message so nothing gets lost
+  const mergeDate = new Date().toLocaleDateString("es-ES");
+  const mergeLines: string[] = [
+    `\n\n— Unificado desde ${mergeDate} (lead #${source.id.slice(0, 8)}) —`,
+  ];
+  if (source.full_name) mergeLines.push(`Contacto: ${source.full_name}`);
+  if (source.company) mergeLines.push(`Empresa: ${source.company}`);
+  if (source.email) mergeLines.push(`Email: ${source.email}`);
+  if (source.phone) mergeLines.push(`Teléfono: ${source.phone}`);
+  if (source.instagram_username) mergeLines.push(`Instagram: ${source.instagram_username}`);
+  if (source.message) mergeLines.push(`Mensaje original:\n${source.message}`);
+  if (source.attachments) mergeLines.push(`Adjuntos originales: ${source.attachments}`);
+
+  const newMessage = (target.message ?? "") + mergeLines.join("\n");
+
+  // Reassign child rows from source → target (6 tables with FK → leads.id)
+  const reassignTables = [
+    "lead_activities",
+    "lead_follow_ups",
+    "lead_utm_data",
+    "nda_agreements",
+    "projects",
+    "quote_requests",
+  ] as const;
+
+  for (const table of reassignTables) {
+    const { error } = await supabase
+      .from(table)
+      .update({ lead_id: targetId })
+      .eq("lead_id", sourceId);
+    if (error) {
+      return { success: false, error: `Error reasignando ${table}: ${error.message}` };
+    }
+  }
+
+  // Update target message + delete source
+  await supabase.from("leads").update({ message: newMessage }).eq("id", targetId);
+
+  // Log the merge as an activity on target
+  await supabase.from("lead_activities").insert({
+    lead_id: targetId,
+    activity_type: "note",
+    content: `Lead unificado desde "${source.full_name}"${source.company ? ` (${source.company})` : ""}`,
+    created_by: profile.id,
+  });
+
+  const { error: delError } = await supabase.from("leads").delete().eq("id", sourceId);
+  if (delError) {
+    return { success: false, error: `Error eliminando lead origen: ${delError.message}` };
+  }
+
+  revalidatePath("/dashboard/crm");
+  revalidatePath(`/dashboard/crm/${targetId}`);
+  return { success: true };
+}

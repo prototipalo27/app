@@ -160,6 +160,8 @@ export async function POST(request: NextRequest) {
           carrier: "MRW",
           trackingNumber: result.albaran,
           trackingToken: proj.tracking_token,
+          projectId,
+          triggeredBy: userData.user.id,
         }).catch(() => {
           // Email failure should not break the shipment flow
         });

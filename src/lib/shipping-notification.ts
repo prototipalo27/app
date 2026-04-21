@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/email";
+import { createServiceClient } from "@/lib/supabase/server";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
@@ -10,6 +11,8 @@ interface ShippingNotificationParams {
   carrier: string;
   trackingNumber: string;
   trackingToken: string;
+  projectId?: string | null;
+  triggeredBy?: string | null;
 }
 
 export async function sendShippingNotification(
@@ -22,6 +25,8 @@ export async function sendShippingNotification(
     carrier,
     trackingNumber,
     trackingToken,
+    projectId,
+    triggeredBy,
   } = params;
 
   const trackingUrl = `${BASE_URL}/track/${trackingToken}`;
@@ -63,4 +68,18 @@ Puedes seguir el estado de tu envío aquí: ${trackingUrl}
     html,
     signature: false,
   });
+
+  // Log to sent_emails so it appears in /dashboard/emails
+  try {
+    const supabase = createServiceClient();
+    await supabase.from("sent_emails").insert({
+      user_id: triggeredBy ?? null,
+      to: clientEmail,
+      subject,
+      entity_type: projectId ? "project" : null,
+      entity_id: projectId ?? null,
+    });
+  } catch (err) {
+    console.error("[sendShippingNotification] Failed to log email:", err);
+  }
 }

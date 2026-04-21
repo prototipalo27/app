@@ -2392,7 +2392,7 @@ export type Database = {
           sent_at: string
           subject: string
           to: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           cc?: string | null
@@ -2404,7 +2404,7 @@ export type Database = {
           sent_at?: string
           subject: string
           to: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           cc?: string | null
@@ -2416,7 +2416,7 @@ export type Database = {
           sent_at?: string
           subject?: string
           to?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

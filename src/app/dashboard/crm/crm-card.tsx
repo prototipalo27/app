@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useDraggable } from "@dnd-kit/react";
+import { useDraggable, useDroppable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
@@ -59,10 +59,17 @@ function maturationHint(status: string, lastInteractionDate: string): { text: st
 
 export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) {
   const router = useRouter();
-  const { ref, isDragging } = useDraggable({
+  const { ref: dragRef, isDragging } = useDraggable({
     id: lead.id,
     data: { status: lead.status },
   });
+  const { ref: dropRef, isDropTarget } = useDroppable({
+    id: `lead-${lead.id}`,
+  });
+  const setRef = (el: HTMLDivElement | null) => {
+    dragRef(el);
+    dropRef(el);
+  };
   const [pinning, setPinning] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
 
@@ -90,13 +97,15 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
 
   return (
     <div
-      ref={ref}
+      ref={setRef}
       onClick={() => {
         if (!isDragging) router.push(`/dashboard/crm/${lead.id}`);
       }}
       className={`relative cursor-grab rounded-lg border bg-card p-3 shadow-sm transition select-none ${
         isDragging ? "z-50 cursor-grabbing scale-[1.02] opacity-75 shadow-lg" : ""
-      } ${lead.is_pre_won ? "border-amber-400 dark:border-amber-500/70" : ""}`}
+      } ${isDropTarget && !isDragging ? "ring-2 ring-brand ring-offset-1" : ""} ${
+        lead.is_pre_won ? "border-amber-400 dark:border-amber-500/70" : ""
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
