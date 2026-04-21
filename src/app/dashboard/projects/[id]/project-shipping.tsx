@@ -204,6 +204,28 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
             </button>
           </div>
 
+          {isCabify && shipment.tracking_number && (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Mapa en vivo</p>
+                <a
+                  href={shipment.tracking_number}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-medium text-cyan-600 hover:underline dark:text-cyan-400"
+                >
+                  Abrir en Cabify ↗
+                </a>
+              </div>
+              <iframe
+                src={shipment.tracking_number}
+                title="Cabify tracking"
+                className="h-72 w-full rounded-lg border border-zinc-200 dark:border-zinc-800"
+                allow="geolocation"
+              />
+            </div>
+          )}
+
           {tracking.length > 0 && (
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Tracking</p>

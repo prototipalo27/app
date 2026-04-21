@@ -302,11 +302,10 @@ async function SentEmailsSection({ leadId }: { leadId: string }) {
   if (!sentEmails || sentEmails.length === 0) return null;
 
   // Get sender names
-  const senderIds = [...new Set(sentEmails.map((e) => e.user_id))];
-  const { data: senders } = await supabase
-    .from("user_profiles")
-    .select("id, email")
-    .in("id", senderIds);
+  const senderIds = [...new Set(sentEmails.map((e) => e.user_id).filter((id): id is string => id !== null))];
+  const { data: senders } = senderIds.length > 0
+    ? await supabase.from("user_profiles").select("id, email").in("id", senderIds)
+    : { data: [] };
   const senderMap = new Map(senders?.map((s) => [s.id, s.email.split("@")[0]]) || []);
 
   return (
@@ -331,7 +330,7 @@ async function SentEmailsSection({ leadId }: { leadId: string }) {
                 </div>
                 <div className="shrink-0 text-right text-muted-foreground">
                   <p>{new Date(email.sent_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-                  <p className="text-[10px]">por {senderMap.get(email.user_id) || "—"}</p>
+                  <p className="text-[10px]">por {(email.user_id && senderMap.get(email.user_id)) || "—"}</p>
                 </div>
               </div>
             ))}

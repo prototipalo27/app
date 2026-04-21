@@ -164,6 +164,9 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode, trackingError }: {
     shipping.country,
   ].filter(Boolean);
 
+  const isCabify = shipping.carrier === "Cabify";
+  const cabifyTrackingUrl = isCabify && shipping.tracking_number?.startsWith("http") ? shipping.tracking_number : null;
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -179,7 +182,7 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode, trackingError }: {
             <span className="font-medium text-zinc-900 dark:text-white">{shipping.carrier}</span>
           </div>
         )}
-        {(shipping.tracking_number || glsBarcode) && (
+        {(glsBarcode || (shipping.tracking_number && !isCabify)) && (
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">N.º seguimiento</span>
             <span className="font-mono font-medium text-zinc-900 dark:text-white">{glsBarcode || shipping.tracking_number}</span>
@@ -217,7 +220,29 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode, trackingError }: {
         )}
       </div>
 
-      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      {cabifyTrackingUrl && (
+        <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Mapa en vivo</p>
+            <a
+              href={cabifyTrackingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-cyan-600 hover:underline dark:text-cyan-400"
+            >
+              Abrir en Cabify ↗
+            </a>
+          </div>
+          <iframe
+            src={cabifyTrackingUrl}
+            title="Cabify tracking"
+            className="h-80 w-full rounded-lg border border-zinc-200 dark:border-zinc-800"
+            allow="geolocation"
+          />
+        </div>
+      )}
+
+      {!cabifyTrackingUrl && <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
         <p className="mb-3 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Seguimiento</p>
         {trackingEvents.length > 0 ? (
           <div className="space-y-3">
@@ -242,7 +267,7 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode, trackingError }: {
         ) : (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">El transportista aún no ha registrado movimientos.</p>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
