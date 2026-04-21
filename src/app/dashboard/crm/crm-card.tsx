@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -63,22 +63,24 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
     id: lead.id,
     data: { status: lead.status },
   });
-  const [pending, startTransition] = useTransition();
+  const [pinning, setPinning] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
 
   const canPin = lead.status === "quoted" || lead.is_pre_won;
 
   const handleTogglePreWon = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!onTogglePreWon) return;
+    if (!onTogglePreWon || pinning) return;
     setPinError(null);
-    startTransition(async () => {
-      const result = await onTogglePreWon(lead.id);
-      if (!result.success) {
-        setPinError(result.error ?? "Error");
-        setTimeout(() => setPinError(null), 3000);
-      }
-    });
+    setPinning(true);
+    onTogglePreWon(lead.id)
+      .then((result) => {
+        if (!result.success) {
+          setPinError(result.error ?? "Error");
+          setTimeout(() => setPinError(null), 3000);
+        }
+      })
+      .finally(() => setPinning(false));
   };
 
   // Use last interaction date if available, otherwise fall back to created_at
@@ -103,7 +105,7 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
               type="button"
               onClick={handleTogglePreWon}
               onPointerDown={(e) => e.stopPropagation()}
-              disabled={pending}
+              disabled={pinning}
               className={`shrink-0 rounded p-0.5 transition ${
                 lead.is_pre_won
                   ? "text-amber-500 hover:text-amber-600"

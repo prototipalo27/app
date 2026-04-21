@@ -185,25 +185,22 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
 
   const handleTogglePreWon = useCallback(
     async (leadId: string) => {
-      const target = leads.find((l) => l.id === leadId);
-      if (!target) return { success: false, error: "Lead no encontrado" };
-      const willPin = !target.is_pre_won;
-      // Optimistic update
-      setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, is_pre_won: willPin } : l)),
-      );
+      let willPin = false;
+      setLeads((prev) => {
+        const target = prev.find((l) => l.id === leadId);
+        if (!target) return prev;
+        willPin = !target.is_pre_won;
+        return prev.map((l) => (l.id === leadId ? { ...l, is_pre_won: willPin } : l));
+      });
       const result = await togglePreWon(leadId);
       if (!result.success) {
-        // Revert on failure
         setLeads((prev) =>
           prev.map((l) => (l.id === leadId ? { ...l, is_pre_won: !willPin } : l)),
         );
-      } else {
-        router.refresh();
       }
       return result;
     },
-    [leads, router],
+    [],
   );
 
   // Pull-to-refresh (mobile)
