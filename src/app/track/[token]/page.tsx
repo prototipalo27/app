@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { getTracking } from "@/lib/packlink/api";
 import { getTracking as getGlsTracking } from "@/lib/gls/api";
 import { getTracking as getMrwTracking } from "@/lib/mrw/api";
+import { deriveMrwStatus } from "@/lib/mrw/status";
 import { getVerifiedClient } from "@/lib/client-auth";
 import ClientPortal from "./client-portal";
 
@@ -139,7 +140,23 @@ function Pipeline({ currentStatus }: { currentStatus: string }) {
   );
 }
 
-function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Pick<Tables<"shipping_info">, "carrier" | "tracking_number" | "shipment_status" | "address_line" | "postal_code" | "city" | "country" | "shipped_at" | "delivered_at">; trackingEvents: TrackingEvent[]; glsBarcode?: string | null }) {
+const SHIPMENT_STATUS_LABEL: Record<string, string> = {
+  pending: "Pendiente",
+  in_transit: "En tránsito",
+  delivered: "Entregado",
+  incident: "Incidencia",
+  created: "Creado",
+};
+
+const SHIPMENT_STATUS_BADGE: Record<string, string> = {
+  pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  in_transit: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  delivered: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  incident: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  created: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+};
+
+function ShippingCard({ shipping, trackingEvents, glsBarcode, trackingError }: { shipping: Pick<Tables<"shipping_info">, "carrier" | "tracking_number" | "shipment_status" | "address_line" | "postal_code" | "city" | "country" | "shipped_at" | "delivered_at">; trackingEvents: TrackingEvent[]; glsBarcode?: string | null; trackingError?: boolean }) {
   const addressParts = [
     shipping.address_line,
     shipping.postal_code,
@@ -171,8 +188,8 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Pick
         {shipping.shipment_status && (
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">Estado</span>
-            <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
-              {shipping.shipment_status}
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SHIPMENT_STATUS_BADGE[shipping.shipment_status] ?? SHIPMENT_STATUS_BADGE.pending}`}>
+              {SHIPMENT_STATUS_LABEL[shipping.shipment_status] ?? shipping.shipment_status}
             </span>
           </div>
         )}
@@ -200,9 +217,9 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Pick
         )}
       </div>
 
-      {trackingEvents.length > 0 && (
-        <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-          <p className="mb-3 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Seguimiento</p>
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <p className="mb-3 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Seguimiento</p>
+        {trackingEvents.length > 0 ? (
           <div className="space-y-3">
             {trackingEvents.map((event, i) => (
               <div key={i} className="flex gap-3">
@@ -220,8 +237,12 @@ function ShippingCard({ shipping, trackingEvents, glsBarcode }: { shipping: Pick
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : trackingError ? (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">No se pudo consultar el seguimiento del transportista. Inténtalo de nuevo en unos minutos.</p>
+        ) : (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">El transportista aún no ha registrado movimientos.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -256,7 +277,7 @@ async function TrackingContent({
     notFound();
   }
 
-  const [{ data: items }, { data: shipping }] = await Promise.all([
+  const [{ data: items }, { data: shippingFromDb }] = await Promise.all([
     supabase
       .from("project_items")
       .select("id, name, quantity, completed")
@@ -264,13 +285,16 @@ async function TrackingContent({
       .order("created_at", { ascending: true }),
     supabase
       .from("shipping_info")
-      .select("carrier, tracking_number, shipment_status, address_line, postal_code, city, country, shipped_at, delivered_at, packlink_shipment_ref, gls_barcode, mrw_albaran")
+      .select("id, carrier, tracking_number, shipment_status, address_line, postal_code, city, country, shipped_at, delivered_at, packlink_shipment_ref, gls_barcode, mrw_albaran")
       .eq("project_id", project.id)
       .single(),
   ]);
 
+  let shipping = shippingFromDb;
+
   // Fetch tracking events if a shipment exists
   let trackingEvents: TrackingEvent[] = [];
+  let trackingError = false;
   const shippingRow = shipping as Record<string, unknown> | null;
   const glsBarcode = shippingRow?.gls_barcode as string | null;
 
@@ -284,8 +308,18 @@ async function TrackingContent({
         date: e.date,
         city: e.city,
       }));
-    } catch {
-      // Tracking may not be available
+
+      const derived = deriveMrwStatus(events);
+      const updates: { shipment_status?: string; delivered_at?: string } = {};
+      if (derived.status !== shipping.shipment_status) updates.shipment_status = derived.status;
+      if (derived.deliveredAt && !shipping.delivered_at) updates.delivered_at = derived.deliveredAt;
+      if (Object.keys(updates).length > 0 && shipping.id) {
+        await supabase.from("shipping_info").update(updates).eq("id", shipping.id);
+        shipping = { ...shipping, ...updates };
+      }
+    } catch (err) {
+      trackingError = true;
+      console.error("MRW tracking fetch failed", { albaran: mrwAlbaran, err });
     }
   } else if (shipping?.carrier === "GLS" && glsBarcode) {
     try {
@@ -414,7 +448,7 @@ async function TrackingContent({
         )}
 
         {/* Shipping */}
-        {shipping && <div className="mb-6"><ShippingCard shipping={shipping} trackingEvents={trackingEvents} glsBarcode={glsBarcode} /></div>}
+        {shipping && <div className="mb-6"><ShippingCard shipping={shipping} trackingEvents={trackingEvents} glsBarcode={glsBarcode} trackingError={trackingError} /></div>}
       </main>
 
       <footer className="border-t border-zinc-200 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">

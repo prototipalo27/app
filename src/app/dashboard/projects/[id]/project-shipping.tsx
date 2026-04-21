@@ -53,6 +53,7 @@ const STATUS_BADGE: Record<string, string> = {
   delivered: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   DELIVERED: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   created: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  incident: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 // ─── Individual shipment card (collapsible) ─────────────────────────
@@ -60,6 +61,7 @@ const STATUS_BADGE: Record<string, string> = {
 function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   const [open, setOpen] = useState(false);
   const [tracking, setTracking] = useState<TrackingEvent[]>([]);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const isMrw = shipment.carrier === "MRW";
   const isGls = shipment.carrier === "GLS";
@@ -70,7 +72,11 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
     try {
       if (isMrw && shipment.mrw_albaran) {
         const res = await fetch(`/api/mrw/shipments/${shipment.mrw_albaran}/tracking`);
-        if (res.ok) setTracking((await res.json()).events ?? []);
+        if (res.ok) {
+          const json = await res.json();
+          setTracking(json.events ?? []);
+          if (json.status) setLiveStatus(json.status);
+        }
       } else if (isGls && shipment.gls_barcode) {
         const res = await fetch(`/api/gls/shipments/${shipment.gls_barcode}/tracking`);
         if (res.ok) setTracking((await res.json()).events ?? []);
@@ -108,7 +114,8 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
     }
   }
 
-  const statusClass = STATUS_BADGE[shipment.shipment_status ?? "pending"] ?? STATUS_BADGE.pending;
+  const effectiveStatus = liveStatus ?? shipment.shipment_status ?? "pending";
+  const statusClass = STATUS_BADGE[effectiveStatus] ?? STATUS_BADGE.pending;
   const dest = [shipment.address_line, shipment.postal_code, shipment.city].filter(Boolean).join(", ");
 
   return (
@@ -131,7 +138,7 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusClass}`}>
-            {shipment.shipment_status ?? "pending"}
+            {effectiveStatus}
           </span>
           <svg className={`h-4 w-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
