@@ -1,10 +1,12 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
+import { togglePreWon } from "./actions";
 
 export { tagClasses };
 
@@ -61,6 +63,24 @@ export function CrmCard({ lead, commissionRate }: CrmCardProps) {
     id: lead.id,
     data: { status: lead.status },
   });
+  const [pending, startTransition] = useTransition();
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  const canPin = lead.status === "quoted" || lead.is_pre_won;
+
+  const handleTogglePreWon = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinError(null);
+    startTransition(async () => {
+      const result = await togglePreWon(lead.id);
+      if (!result.success) {
+        setPinError(result.error ?? "Error");
+        setTimeout(() => setPinError(null), 3000);
+      } else {
+        router.refresh();
+      }
+    });
+  };
 
   // Use last interaction date if available, otherwise fall back to created_at
   const interactionDate = lead.last_activity_at || lead.created_at;
@@ -75,10 +95,40 @@ export function CrmCard({ lead, commissionRate }: CrmCardProps) {
       }}
       className={`relative cursor-grab rounded-lg border bg-card p-3 shadow-sm transition select-none ${
         isDragging ? "z-50 cursor-grabbing scale-[1.02] opacity-75 shadow-lg" : ""
-      }`}
+      } ${lead.is_pre_won ? "border-amber-400 dark:border-amber-500/70" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
+          {canPin && (
+            <button
+              type="button"
+              onClick={handleTogglePreWon}
+              onPointerDown={(e) => e.stopPropagation()}
+              disabled={pending}
+              className={`shrink-0 rounded p-0.5 transition ${
+                lead.is_pre_won
+                  ? "text-amber-500 hover:text-amber-600"
+                  : "text-muted-foreground/40 hover:text-amber-500"
+              }`}
+              title={
+                pinError
+                  ? pinError
+                  : lead.is_pre_won
+                    ? "Quitar de preganados"
+                    : "Marcar como preganado"
+              }
+            >
+              <svg
+                className="h-4 w-4"
+                fill={lead.is_pre_won ? "currentColor" : "none"}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.1 10.1c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.673z" />
+              </svg>
+            </button>
+          )}
           <h4 className="truncate text-sm font-semibold text-card-foreground">
             {lead.full_name}
           </h4>

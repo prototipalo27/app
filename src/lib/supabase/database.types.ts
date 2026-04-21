@@ -1097,6 +1097,7 @@ export type Database = {
           full_name: string
           id: string
           instagram_username: string | null
+          is_pre_won: boolean
           lead_number: number
           lost_reason: string | null
           message: string | null
@@ -1130,6 +1131,7 @@ export type Database = {
           full_name: string
           id?: string
           instagram_username?: string | null
+          is_pre_won?: boolean
           lead_number?: number
           lost_reason?: string | null
           message?: string | null
@@ -1163,6 +1165,7 @@ export type Database = {
           full_name?: string
           id?: string
           instagram_username?: string | null
+          is_pre_won?: boolean
           lead_number?: number
           lost_reason?: string | null
           message?: string | null

@@ -55,6 +55,9 @@ function CrmColumn({
 
   const totalValue = leads.reduce((sum, l) => sum + (l.estimated_value ?? 0), 0);
 
+  const preWon = column.id === "quoted" ? leads.filter((l) => l.is_pre_won) : [];
+  const rest = column.id === "quoted" ? leads.filter((l) => !l.is_pre_won) : leads;
+
   return (
     <div className="flex min-w-0 flex-col rounded-xl bg-muted">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
@@ -82,7 +85,24 @@ function CrmColumn({
             : ""
         }`}
       >
-        {leads.map((lead) => (
+        {preWon.length > 0 && (
+          <>
+            <div className="flex items-center gap-1.5 px-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.1 10.1c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.673z" />
+              </svg>
+              Preganados
+              <span className="ml-auto text-muted-foreground">{preWon.length}/3</span>
+            </div>
+            {preWon.map((lead) => (
+              <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} />
+            ))}
+            {rest.length > 0 && (
+              <div className="my-1 border-t border-dashed border-zinc-300 dark:border-zinc-700" />
+            )}
+          </>
+        )}
+        {rest.map((lead) => (
           <CrmCard key={lead.id} lead={lead} commissionRate={commissionRate} />
         ))}
       </div>

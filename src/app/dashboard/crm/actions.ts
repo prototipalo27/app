@@ -509,6 +509,10 @@ export async function updateLeadStatus(
   if (newStatus === "lost" && lostReason) {
     updates.lost_reason = lostReason;
   }
+  // Preganados only apply to "quoted"; unpin on any other status.
+  if (newStatus !== "quoted") {
+    updates.is_pre_won = false;
+  }
 
   const { error } = await supabase.from("leads").update(updates).eq("id", id);
 
@@ -565,6 +569,48 @@ export async function updateLeadOwner(
 
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
+// ── Toggle Preganado (pinned favorite in Presupuestados) ──
+
+const MAX_PRE_WON = 3;
+
+export async function togglePreWon(id: string): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: lead, error: loadError } = await supabase
+    .from("leads")
+    .select("is_pre_won, status")
+    .eq("id", id)
+    .single();
+
+  if (loadError || !lead) return { success: false, error: "Lead no encontrado" };
+
+  if (!lead.is_pre_won) {
+    if (lead.status !== "quoted") {
+      return { success: false, error: "Solo se pueden marcar como preganado leads presupuestados" };
+    }
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("is_pre_won", true);
+    if ((count ?? 0) >= MAX_PRE_WON) {
+      return { success: false, error: `Ya hay ${MAX_PRE_WON} preganados. Desmarca uno antes de añadir otro.` };
+    }
+  }
+
+  const { error } = await supabase
+    .from("leads")
+    .update({ is_pre_won: !lead.is_pre_won })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${id}`);
+  revalidatePath("/dashboard/crm");
+  updateTag("leads");
   return { success: true };
 }
 
