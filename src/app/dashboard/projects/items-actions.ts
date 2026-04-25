@@ -184,6 +184,45 @@ export async function updateItemQuantity(itemId: string, quantity: number) {
   revalidatePath("/dashboard");
 }
 
+export async function resyncProjectItemsFromHolded(
+  projectId: string,
+): Promise<{ success: boolean; inserted?: number; error?: string }> {
+  const supabase = await getAuthenticatedClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("holded_invoice_id, holded_proforma_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project) return { success: false, error: "Proyecto no encontrado" };
+
+  const docType: "invoice" | "proform" | null = project.holded_invoice_id
+    ? "invoice"
+    : project.holded_proforma_id
+      ? "proform"
+      : null;
+  const docId = project.holded_invoice_id ?? project.holded_proforma_id;
+
+  if (!docType || !docId) {
+    return { success: false, error: "Proyecto sin factura ni proforma vinculada" };
+  }
+
+  const { syncProjectItemsFromHolded } = await import("@/lib/holded/sync");
+  const { inserted, error } = await syncProjectItemsFromHolded(
+    supabase,
+    projectId,
+    docType,
+    docId,
+    { skipIfHasItems: true },
+  );
+
+  if (error) return { success: false, error };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { success: true, inserted };
+}
+
 export async function deleteItem(itemId: string) {
   const supabase = await getAuthenticatedClient();
 

@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { listDocuments, getContact } from "./api";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { listDocuments, getContact, getDocument } from "./api";
+import type { HoldedDocType } from "./types";
 import {
   getOrCreateClientFolder,
   createProjectFolder,
@@ -11,7 +13,55 @@ export interface SyncResult {
   newUpcoming: number;
   converted: number;
   newFromInvoice: number;
+  itemsBackfilled: number;
   errors: string[];
+}
+
+/**
+ * Fetch the full Holded document via the single-doc endpoint (which reliably
+ * includes line items, unlike the list endpoint) and insert its products as
+ * project_items. By default skips if the project already has items.
+ */
+export async function syncProjectItemsFromHolded(
+  supabase: SupabaseClient,
+  projectId: string,
+  docType: Extract<HoldedDocType, "invoice" | "proform">,
+  documentId: string,
+  opts: { skipIfHasItems?: boolean } = {},
+): Promise<{ inserted: number; error?: string }> {
+  const skipIfHasItems = opts.skipIfHasItems ?? true;
+
+  if (skipIfHasItems) {
+    const { count } = await supabase
+      .from("project_items")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId);
+    if ((count ?? 0) > 0) return { inserted: 0 };
+  }
+
+  let doc;
+  try {
+    doc = await getDocument(docType, documentId);
+  } catch (e) {
+    return {
+      inserted: 0,
+      error: e instanceof Error ? e.message : "Holded fetch failed",
+    };
+  }
+
+  const products = (doc.products ?? []).filter((p) => p.name?.trim());
+  if (products.length === 0) return { inserted: 0 };
+
+  const items = products.map((prod) => ({
+    project_id: projectId,
+    name: prod.name.trim(),
+    quantity: Math.max(1, Math.round(prod.units)),
+  }));
+
+  const { error } = await supabase.from("project_items").insert(items);
+  if (error) return { inserted: 0, error: error.message };
+
+  return { inserted: items.length };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,7 +101,7 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const result: SyncResult = { newUpcoming: 0, converted: 0, newFromInvoice: 0, errors: [] };
+  const result: SyncResult = { newUpcoming: 0, converted: 0, newFromInvoice: 0, itemsBackfilled: 0, errors: [] };
 
   // ── Load exclusions (deleted projects blocklist) ─────────
   const { data: exclusionRows } = await supabase
@@ -171,23 +221,18 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
       }
     }
 
-    // Create project_items from proforma products
-    const products = proforma.products?.filter((p) => p.name?.trim());
-    if (products?.length && project) {
-      const items = products.map((prod) => ({
-        project_id: project.id,
-        name: prod.name.trim(),
-        quantity: Math.max(1, Math.round(prod.units)),
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("project_items")
-        .insert(items);
-
+    // Create project_items from full proforma document (single-doc endpoint
+    // is the reliable source — list endpoint sometimes omits products)
+    if (project) {
+      const { error: itemsError } = await syncProjectItemsFromHolded(
+        supabase,
+        project.id,
+        "proform",
+        proforma.id,
+        { skipIfHasItems: false },
+      );
       if (itemsError) {
-        result.errors.push(
-          `Items for ${proforma.docNumber}: ${itemsError.message}`,
-        );
+        result.errors.push(`Items for ${proforma.docNumber}: ${itemsError}`);
       }
     }
 
@@ -273,6 +318,23 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
       );
     } else {
       result.converted++;
+
+      // Sync items from the new invoice (only if project has none — preserves
+      // any items that were created from the original proforma)
+      if (invoiceId) {
+        const { error: itemsError } = await syncProjectItemsFromHolded(
+          supabase,
+          project.id,
+          "invoice",
+          invoiceId,
+          { skipIfHasItems: true },
+        );
+        if (itemsError) {
+          result.errors.push(
+            `Items on conversion for ${invoiceDocNum ?? project.id}: ${itemsError}`,
+          );
+        }
+      }
     }
   }
 
@@ -376,23 +438,18 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
       }
     }
 
-    // Create project_items from invoice products
-    const products = invoice.products?.filter((p) => p.name?.trim());
-    if (products?.length && project) {
-      const items = products.map((prod) => ({
-        project_id: project.id,
-        name: prod.name.trim(),
-        quantity: Math.max(1, Math.round(prod.units)),
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("project_items")
-        .insert(items);
-
+    // Create project_items from full invoice document (single-doc endpoint
+    // is the reliable source — list endpoint sometimes omits products)
+    if (project) {
+      const { error: itemsError } = await syncProjectItemsFromHolded(
+        supabase,
+        project.id,
+        "invoice",
+        invoice.id,
+        { skipIfHasItems: false },
+      );
       if (itemsError) {
-        result.errors.push(
-          `Items for invoice ${invoice.docNumber}: ${itemsError.message}`,
-        );
+        result.errors.push(`Items for invoice ${invoice.docNumber}: ${itemsError}`);
       }
     }
 
@@ -457,6 +514,47 @@ export async function syncHoldedDocuments(): Promise<SyncResult> {
         .from("projects")
         .update(updates)
         .eq("id", proj.id);
+    }
+  }
+
+  // ── Phase E: Backfill missing items for existing projects ─
+  // Catches projects that were synced before the single-doc fetch fix landed,
+  // or where Holded's list endpoint returned an empty products array.
+
+  const { data: candidateProjects } = await supabase
+    .from("projects")
+    .select("id, holded_invoice_id, holded_proforma_id, invoice_doc_number")
+    .or("holded_invoice_id.not.is.null,holded_proforma_id.not.is.null");
+
+  for (const proj of candidateProjects ?? []) {
+    // Skip if project already has items
+    const { count } = await supabase
+      .from("project_items")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", proj.id);
+    if ((count ?? 0) > 0) continue;
+
+    const docType: "invoice" | "proform" | null = proj.holded_invoice_id
+      ? "invoice"
+      : proj.holded_proforma_id
+        ? "proform"
+        : null;
+    const docId = proj.holded_invoice_id ?? proj.holded_proforma_id;
+    if (!docType || !docId) continue;
+
+    const { inserted, error: itemsError } = await syncProjectItemsFromHolded(
+      supabase,
+      proj.id,
+      docType,
+      docId,
+      { skipIfHasItems: false },
+    );
+    if (itemsError) {
+      result.errors.push(
+        `Backfill items for ${proj.invoice_doc_number ?? proj.id}: ${itemsError}`,
+      );
+    } else if (inserted > 0) {
+      result.itemsBackfilled += inserted;
     }
   }
 

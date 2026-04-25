@@ -295,6 +295,8 @@ export default async function ProjectDetailPage({
           printerTypes={printerTypes ?? []}
           printJobs={printJobs}
           driveFiles={driveFiles}
+          holdedInvoiceId={project.holded_invoice_id}
+          holdedProformaId={project.holded_proforma_id}
         />
       </div>
 
@@ -427,7 +429,14 @@ export default async function ProjectDetailPage({
           <DetailRow label="Material" value={project.material} />
           <DetailRow label="Printer" value={project.assigned_printer} />
           <DetailRow label="Print time" value={project.print_time_minutes ? formatMinutes(project.print_time_minutes) : null} />
-          <DetailRow label="Price" value={project.price !== null ? `${Number(project.price).toFixed(2)} €` : null} />
+          <DetailRow
+            label="Vendido por"
+            value={(() => {
+              const total = holdedDoc?.total ?? (project.price !== null ? Number(project.price) : null);
+              if (total === null || total === undefined) return null;
+              return `${Number(total).toFixed(2)} €`;
+            })()}
+          />
           <DetailRow label="Created" value={new Date(project.created_at).toLocaleString()} />
           <DetailRow label="Updated" value={new Date(project.updated_at).toLocaleString()} />
           {project.notes && (

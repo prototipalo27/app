@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, updateItemName, updateItemQuantity, deleteItem } from "../items-actions";
+import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeyword, updateItemNotes, updateItemName, updateItemQuantity, deleteItem, resyncProjectItemsFromHolded } from "../items-actions";
 import { generateProjectQueue } from "../queue-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
@@ -14,6 +14,8 @@ interface ProjectItemsProps {
   printerTypes?: Tables<"printer_types">[];
   printJobs?: PrintJob[];
   driveFiles?: Array<{ id: string; name: string }>;
+  holdedInvoiceId?: string | null;
+  holdedProformaId?: string | null;
 }
 
 function ItemRow({
@@ -346,9 +348,28 @@ function ItemRow({
   );
 }
 
-export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [] }: ProjectItemsProps) {
+export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [], holdedInvoiceId = null, holdedProformaId = null }: ProjectItemsProps) {
   const [isPending, startTransition] = useTransition();
   const [queueFeedback, setQueueFeedback] = useState<string | null>(null);
+  const [resyncFeedback, setResyncFeedback] = useState<string | null>(null);
+  const hasHoldedDoc = Boolean(holdedInvoiceId || holdedProformaId);
+
+  function handleResyncItems() {
+    setResyncFeedback(null);
+    startTransition(async () => {
+      const res = await resyncProjectItemsFromHolded(projectId);
+      if (res.success) {
+        setResyncFeedback(
+          res.inserted && res.inserted > 0
+            ? `${res.inserted} items importados`
+            : "Sin items en Holded",
+        );
+      } else {
+        setResyncFeedback(res.error ?? "Error desconocido");
+      }
+      setTimeout(() => setResyncFeedback(null), 5000);
+    });
+  }
 
   function handleGenerateAll() {
     setQueueFeedback(null);
@@ -484,7 +505,24 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
 
       {/* Item list */}
       {items.length === 0 ? (
-        <p className="text-sm text-zinc-400 dark:text-zinc-500">No items yet.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">No items yet.</p>
+          {hasHoldedDoc && (
+            <>
+              <button
+                type="button"
+                onClick={handleResyncItems}
+                disabled={isPending}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+              >
+                {isPending ? "Importando..." : "Importar items de Holded"}
+              </button>
+              {resyncFeedback && (
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{resyncFeedback}</span>
+              )}
+            </>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
