@@ -210,6 +210,7 @@ export function NewOrderModal({
                         type="checkbox"
                         checked={prod.selected}
                         onChange={() => toggleProduct(idx)}
+                        onClick={(e) => e.stopPropagation()}
                         className="h-4 w-4 shrink-0 rounded border-gray-300 accent-brand"
                       />
                       <div className="min-w-0 flex-1">

@@ -310,28 +310,57 @@ export async function createRepeatOrder(
     }
   }
 
-  const { data: newLead, error } = await supabase
-    .from("leads")
-    .insert({
-      full_name: client.fullName,
-      company: client.company,
-      email: client.email,
-      phone: client.phone,
-      message: message || "Nuevo pedido (cliente recurrente)",
-      source: "recurring",
-      owned_by: ownedBy,
-      assigned_to: assignedTo,
-      status: "contacted",
-    })
-    .select("id")
-    .single();
+  // Reuse existing lead if one already exists with this email (leads_email_unique).
+  // A recurring order creates a new quote_request, not a duplicate lead.
+  let leadId: string | null = null;
+  if (client.email) {
+    const { data: existing } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("email", client.email)
+      .maybeSingle();
+    if (existing) {
+      leadId = existing.id;
+      await supabase
+        .from("leads")
+        .update({
+          full_name: client.fullName,
+          company: client.company,
+          phone: client.phone,
+          message: message || "Nuevo pedido (cliente recurrente)",
+          source: "recurring",
+          status: "contacted",
+          assigned_to: assignedTo,
+        })
+        .eq("id", existing.id);
+    }
+  }
 
-  if (error || !newLead) return { success: false, error: error?.message || "Error al crear lead" };
+  if (!leadId) {
+    const { data: newLead, error } = await supabase
+      .from("leads")
+      .insert({
+        full_name: client.fullName,
+        company: client.company,
+        email: client.email,
+        phone: client.phone,
+        message: message || "Nuevo pedido (cliente recurrente)",
+        source: "recurring",
+        owned_by: ownedBy,
+        assigned_to: assignedTo,
+        status: "contacted",
+      })
+      .select("id")
+      .single();
+
+    if (error || !newLead) return { success: false, error: error?.message || "Error al crear lead" };
+    leadId = newLead.id;
+  }
 
   // Create quote_request with selected products
   if (items.length > 0) {
     await supabase.from("quote_requests").insert({
-      lead_id: newLead.id,
+      lead_id: leadId,
       items: items as unknown as import("@/lib/supabase/database.types").Json,
       holded_contact_id: client.holdedContactId,
       status: "pending",
@@ -339,7 +368,7 @@ export async function createRepeatOrder(
   }
 
   revalidatePath("/dashboard/crm");
-  return { success: true, leadId: newLead.id };
+  return { success: true, leadId };
 }
 
 // ── Estimation helpers ───────────────────────────────────
