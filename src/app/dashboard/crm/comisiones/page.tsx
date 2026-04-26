@@ -94,6 +94,40 @@ export default async function ComisionesPage({
     if (!leadPaidAt.has(q.lead_id)) leadPaidAt.set(q.lead_id, q.paid_at);
   }
 
+  // Fallback: leads marked as paid in the period but without paid_at on their quote
+  // (e.g. status moved to paid manually without going through markAsPaid).
+  const { data: fallbackLeads } = await supabase
+    .from("leads")
+    .select("id, won_at")
+    .eq("status", "paid")
+    .gte("won_at", startDate)
+    .lt("won_at", endDate);
+
+  const missingLeadIds = (fallbackLeads || [])
+    .filter((l) => l.won_at && !quoteMap.has(l.id))
+    .map((l) => l.id);
+
+  if (missingLeadIds.length > 0) {
+    const { data: missingQuotes } = await supabase
+      .from("quote_requests")
+      .select("lead_id, items, created_at")
+      .in("lead_id", missingLeadIds)
+      .order("created_at", { ascending: false });
+
+    const seen = new Set<string>();
+    for (const q of missingQuotes || []) {
+      if (!q.lead_id || seen.has(q.lead_id)) continue;
+      seen.add(q.lead_id);
+      const items = (q.items || []) as unknown as ProformaLineItem[];
+      const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
+      if (total === 0) continue;
+      const fl = fallbackLeads!.find((l) => l.id === q.lead_id);
+      if (!fl?.won_at) continue;
+      quoteMap.set(q.lead_id, total);
+      leadPaidAt.set(q.lead_id, fl.won_at);
+    }
+  }
+
   const leadIds = [...quoteMap.keys()];
   const { data: leadsData } = leadIds.length > 0
     ? await supabase

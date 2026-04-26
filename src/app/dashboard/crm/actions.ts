@@ -3562,6 +3562,7 @@ export async function onPaymentConfirmed(
 
 export async function markAsPaid(
   leadId: string,
+  paidAt?: string,
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
@@ -3585,7 +3586,7 @@ export async function markAsPaid(
     .from("quote_requests")
     .update({
       payment_status: "paid",
-      paid_at: new Date().toISOString(),
+      paid_at: paidAt ?? new Date().toISOString(),
       paid_amount: total,
     })
     .eq("id", qr.id);

@@ -96,6 +96,7 @@ export default function LeadActions({
   const [docSent, setDocSent] = useState<string | null>(null);
   const [generatingPayLink, setGeneratingPayLink] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [paidDate, setPaidDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
   const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
   const [invoiceQuery, setInvoiceQuery] = useState("");
@@ -719,12 +720,22 @@ export default function LeadActions({
                     {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Link pago tarjeta"}
                   </Button>
 
+                  <input
+                    type="date"
+                    value={paidDate}
+                    onChange={(e) => setPaidDate(e.target.value)}
+                    disabled={markingPaid}
+                    className="h-9 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                    title="Fecha de pago"
+                  />
+
                   <Button
                     size="sm"
                     onClick={async () => {
                       setMarkingPaid(true);
                       setQuoteError(null);
-                      const result = await markAsPaid(leadId);
+                      const iso = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : undefined;
+                      const result = await markAsPaid(leadId, iso);
                       setMarkingPaid(false);
                       if (result.success) {
                         setDocSent("pago");
