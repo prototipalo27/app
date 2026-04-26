@@ -3064,7 +3064,7 @@ export async function getUserMonthlyCommission(
   const quoteMap = new Map<string, number>();
   const leadPaidAt = new Map<string, string>();
   for (const q of paidQuotes || []) {
-    if (!q.lead_id) continue;
+    if (!q.lead_id || !q.paid_at) continue;
     const items = (q.items || []) as unknown as ProformaLineItem[];
     const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
     quoteMap.set(q.lead_id, (quoteMap.get(q.lead_id) ?? 0) + total);
