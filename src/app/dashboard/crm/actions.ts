@@ -3,7 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, getUserProfile, hasRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
@@ -2648,25 +2648,33 @@ async function getCloserAccumulated(
   startDate: string,
   endDate: string
 ): Promise<number> {
+  const { data: paidQuotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, items")
+    .eq("payment_status", "paid")
+    .gte("paid_at", startDate)
+    .lt("paid_at", endDate);
+
+  if (!paidQuotes || paidQuotes.length === 0) return 0;
+
+  const allLeadIds = [...new Set(
+    paidQuotes.map((q: any) => q.lead_id).filter(Boolean),
+  )] as string[];
+  if (allLeadIds.length === 0) return 0;
+
   const { data: closerLeads } = await supabase
     .from("leads")
     .select("id")
-    .eq("status", "paid")
-    .eq("assigned_to", closerId)
-    .gte("updated_at", startDate)
-    .lt("updated_at", endDate);
+    .in("id", allLeadIds)
+    .eq("assigned_to", closerId);
 
-  if (!closerLeads || closerLeads.length === 0) return 0;
-
-  const { data: quotes } = await supabase
-    .from("quote_requests")
-    .select("lead_id, items")
-    .in("lead_id", closerLeads.map((l: any) => l.id));
+  const closerLeadIds = new Set((closerLeads || []).map((l: any) => l.id));
 
   let total = 0;
-  for (const q of quotes || []) {
+  for (const q of paidQuotes) {
+    if (!closerLeadIds.has(q.lead_id)) continue;
     const items = (q.items || []) as unknown as ProformaLineItem[];
-    total += items.reduce((s, i) => s + i.price * i.units, 0);
+    total += items.reduce((s: number, i: ProformaLineItem) => s + i.price * i.units, 0);
   }
   return total;
 }
@@ -3044,29 +3052,41 @@ export async function getUserMonthlyCommission(
   const startDate = new Date(year, month - 1, 1).toISOString();
   const endDate = new Date(year, month, 1).toISOString();
 
+  // Source of truth: paid quotes in the period (assigns each lead to its payment month)
+  const { data: paidQuotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, items, paid_at")
+    .eq("payment_status", "paid")
+    .gte("paid_at", startDate)
+    .lt("paid_at", endDate)
+    .order("paid_at", { ascending: true });
+
+  const quoteMap = new Map<string, number>();
+  const leadPaidAt = new Map<string, string>();
+  for (const q of paidQuotes || []) {
+    if (!q.lead_id) continue;
+    const items = (q.items || []) as unknown as ProformaLineItem[];
+    const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
+    quoteMap.set(q.lead_id, (quoteMap.get(q.lead_id) ?? 0) + total);
+    if (!leadPaidAt.has(q.lead_id)) leadPaidAt.set(q.lead_id, q.paid_at);
+  }
+
   const roleField = config.type === "tiered" ? "assigned_to" : "owned_by";
 
-  const { data: wonLeads } = await supabase
-    .from("leads")
-    .select("id, full_name, company, owned_by, assigned_to, email, created_at, payment_condition")
-    .eq("status", "paid")
-    .eq(roleField, userId)
-    .gte("updated_at", startDate)
-    .lt("updated_at", endDate)
-    .order("updated_at", { ascending: true });
+  const allPaidLeadIds = [...quoteMap.keys()];
+  const { data: wonLeadsRaw } = allPaidLeadIds.length > 0
+    ? await supabase
+        .from("leads")
+        .select("id, full_name, company, owned_by, assigned_to, email, created_at, payment_condition")
+        .in("id", allPaidLeadIds)
+        .eq(roleField, userId)
+    : { data: [] as any[] };
 
-  const leadIds = (wonLeads || []).map((l) => l.id);
-  const quoteMap = new Map<string, number>();
-  if (leadIds.length > 0) {
-    const { data: quotes } = await supabase
-      .from("quote_requests")
-      .select("lead_id, items")
-      .in("lead_id", leadIds);
-    for (const q of quotes || []) {
-      const items = (q.items || []) as unknown as ProformaLineItem[];
-      quoteMap.set(q.lead_id, items.reduce((sum, i) => sum + i.price * i.units, 0));
-    }
-  }
+  const wonLeads = [...(wonLeadsRaw || [])].sort((a, b) => {
+    const pa = leadPaidAt.get(a.id) || "";
+    const pb = leadPaidAt.get(b.id) || "";
+    return pa.localeCompare(pb);
+  });
 
   // For flat captadores: fetch closer configs to compute deduction.
   const closerConfigs = new Map<string, any>();

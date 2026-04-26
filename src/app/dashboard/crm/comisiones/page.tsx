@@ -74,29 +74,39 @@ export default async function ComisionesPage({
   const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString();
   const endDate = new Date(selectedYear, selectedMonth, 1).toISOString();
 
-  // Get ALL won leads in period (both owned_by and assigned_to matter)
-  const { data: wonLeads } = await supabase
-    .from("leads")
-    .select("id, full_name, company, email, owned_by, assigned_to, created_at, updated_at, payment_condition")
-    .eq("status", "paid")
-    .gte("updated_at", startDate)
-    .lt("updated_at", endDate)
-    .order("updated_at", { ascending: true });
+  // Source of truth: paid quotes in the period (assigns each lead to its payment month)
+  const { data: paidQuotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, items, paid_at")
+    .eq("payment_status", "paid")
+    .gte("paid_at", startDate)
+    .lt("paid_at", endDate)
+    .order("paid_at", { ascending: true });
 
-  const leadIds = (wonLeads || []).map((l) => l.id);
-  let quoteMap = new Map<string, number>();
-  if (leadIds.length > 0) {
-    const { data: quotes } = await supabase
-      .from("quote_requests")
-      .select("lead_id, items")
-      .in("lead_id", leadIds);
-
-    for (const q of quotes || []) {
-      const items = (q.items || []) as unknown as ProformaLineItem[];
-      const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
-      quoteMap.set(q.lead_id, total);
-    }
+  const quoteMap = new Map<string, number>();
+  const leadPaidAt = new Map<string, string>();
+  for (const q of paidQuotes || []) {
+    if (!q.lead_id) continue;
+    const items = (q.items || []) as unknown as ProformaLineItem[];
+    const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
+    quoteMap.set(q.lead_id, (quoteMap.get(q.lead_id) ?? 0) + total);
+    if (!leadPaidAt.has(q.lead_id)) leadPaidAt.set(q.lead_id, q.paid_at);
   }
+
+  const leadIds = [...quoteMap.keys()];
+  const { data: leadsData } = leadIds.length > 0
+    ? await supabase
+        .from("leads")
+        .select("id, full_name, company, email, owned_by, assigned_to, created_at, payment_condition")
+        .in("id", leadIds)
+    : { data: [] as any[] };
+
+  // Sort by paid_at to preserve correct tier accumulation order
+  const wonLeads = [...(leadsData || [])].sort((a, b) => {
+    const pa = leadPaidAt.get(a.id) || "";
+    const pb = leadPaidAt.get(b.id) || "";
+    return pa.localeCompare(pb);
+  });
 
   // All user IDs involved (owners + closers)
   const allUserIds = [...new Set(
@@ -127,82 +137,81 @@ export default async function ComisionesPage({
     name: m.email.split("@")[0],
   }));
 
-  type LeadCommission = {
+  type CommercialSlot = {
+    name: string;
+    userId: string;
+    rate: number;
+    commission: number;
+  };
+
+  type LeadRow = {
     id: string;
     fullName: string;
     company: string | null;
-    ownerName: string;
-    ownerId: string;
     quoteTotal: number;
+    paidAt: string | null;
     isReturning: boolean;
-    rate: number;
-    commission: number;
-    configType: "flat" | "tiered";
-    prepaidBonus: number;
-    role: "captador" | "closer";
+    captador: CommercialSlot | null;
+    closer: CommercialSlot | null;
   };
 
-  const leadCommissions: LeadCommission[] = [];
+  const leadRows: LeadRow[] = [];
+  const leadRowById = new Map<string, LeadRow>();
 
-  // Track accumulated billing per closer for tiered calculation
-  const closerAccumulated = new Map<string, number>();
-
-  // Helper: get base tier rate (minimum) from a tiered config
-  function getBaseTierRate(tiers: CommissionTier[]): number {
-    const sorted = [...tiers].sort((a, b) => a.min - b.min);
-    return sorted[0]?.rate ?? 0;
+  for (const lead of wonLeads) {
+    const quoteTotal = quoteMap.get(lead.id) ?? 0;
+    if (quoteTotal === 0) continue;
+    const row: LeadRow = {
+      id: lead.id,
+      fullName: lead.full_name,
+      company: lead.company,
+      quoteTotal,
+      paidAt: leadPaidAt.get(lead.id) ?? null,
+      isReturning: false,
+      captador: null,
+      closer: null,
+    };
+    leadRows.push(row);
+    leadRowById.set(lead.id, row);
   }
 
-  // First pass: calculate closer (tiered) commissions to know their rates
-  // We need this to deduct from captador rates
-  const closerRatePerLead = new Map<string, number>(); // leadId → closer effective rate
+  // First pass: closer (tiered). Order matters: drives tier accumulation.
+  const closerAccumulated = new Map<string, number>();
+  const closerRatePerLead = new Map<string, number>();
 
-  for (const lead of wonLeads || []) {
-    const quoteTotal = quoteMap.get(lead.id) ?? 0;
-    if (quoteTotal === 0 || !lead.assigned_to) continue;
+  for (const lead of wonLeads) {
+    const row = leadRowById.get(lead.id);
+    if (!row || !lead.assigned_to) continue;
 
     const closerConfig = configMap.get(lead.assigned_to);
     if (!closerConfig || closerConfig.type !== "tiered") continue;
 
     const accBefore = closerAccumulated.get(lead.assigned_to) ?? 0;
-    const result = calcTieredCommission(closerConfig.tiers, accBefore, quoteTotal);
-    closerAccumulated.set(lead.assigned_to, accBefore + quoteTotal);
-
+    const result = calcTieredCommission(closerConfig.tiers, accBefore, row.quoteTotal);
+    closerAccumulated.set(lead.assigned_to, accBefore + row.quoteTotal);
     closerRatePerLead.set(lead.id, result.effectiveRate);
 
     const isPrepaid = lead.payment_condition === "100-5";
     const bonusRate = isPrepaid ? closerConfig.prepaid_bonus : 0;
-    const prepaidBonus = quoteTotal * bonusRate;
+    const prepaidBonus = row.quoteTotal * bonusRate;
 
-    // Non-manager comerciales only see their own
     if (!isManager && lead.assigned_to !== profile.id) continue;
 
-    leadCommissions.push({
-      id: lead.id,
-      fullName: lead.full_name,
-      company: lead.company,
-      ownerName: userMap.get(lead.assigned_to) || "—",
-      ownerId: lead.assigned_to,
-      quoteTotal,
-      isReturning: false,
+    row.closer = {
+      name: userMap.get(lead.assigned_to) || "—",
+      userId: lead.assigned_to,
       rate: result.effectiveRate,
       commission: result.commission + prepaidBonus,
-      configType: "tiered",
-      prepaidBonus,
-      role: "closer",
-    });
+    };
   }
 
-  // Second pass: captador (flat) commissions, deducting closer excess
-  for (const lead of wonLeads || []) {
-    const quoteTotal = quoteMap.get(lead.id) ?? 0;
-    if (quoteTotal === 0 || !lead.owned_by) continue;
+  // Second pass: captador (flat) with closer-excess deduction.
+  for (const lead of wonLeads) {
+    const row = leadRowById.get(lead.id);
+    if (!row || !lead.owned_by) continue;
 
     const config = configMap.get(lead.owned_by);
     if (!config || config.type !== "flat") continue;
-
-    // Non-manager comerciales only see their own
-    if (!isManager && lead.owned_by !== profile.id) continue;
 
     let isReturning = false;
     if (lead.email) {
@@ -215,10 +224,10 @@ export default async function ComisionesPage({
         .lt("created_at", lead.created_at);
       isReturning = (count ?? 0) > 0;
     }
+    row.isReturning = isReturning;
 
     let rate = isReturning ? config.returning_rate : config.new_rate;
 
-    // Deduct closer's excess above base tier
     if (lead.assigned_to) {
       const closerConfig = configMap.get(lead.assigned_to);
       if (closerConfig?.type === "tiered") {
@@ -231,34 +240,70 @@ export default async function ComisionesPage({
 
     const isPrepaid = lead.payment_condition === "100-5";
     const bonusRate = isPrepaid ? config.prepaid_bonus : 0;
-    const prepaidBonus = quoteTotal * bonusRate;
+    const prepaidBonus = row.quoteTotal * bonusRate;
 
-    leadCommissions.push({
-      id: lead.id,
-      fullName: lead.full_name,
-      company: lead.company,
-      ownerName: userMap.get(lead.owned_by) || "—",
-      ownerId: lead.owned_by,
-      quoteTotal,
-      isReturning,
+    if (!isManager && lead.owned_by !== profile.id) continue;
+
+    row.captador = {
+      name: userMap.get(lead.owned_by) || "—",
+      userId: lead.owned_by,
       rate,
-      commission: quoteTotal * rate + prepaidBonus,
-      configType: "flat",
-      prepaidBonus,
-      role: "captador",
-    });
+      commission: row.quoteTotal * rate + prepaidBonus,
+    };
   }
 
-  const byOwner = new Map<string, { name: string; leads: LeadCommission[]; total: number; commission: number; configType: "flat" | "tiered"; role: string }>();
-  for (const lc of leadCommissions) {
-    const key = `${lc.ownerId}_${lc.role}`;
-    if (!byOwner.has(key)) {
-      byOwner.set(key, { name: `${lc.ownerName} (${lc.role === "closer" ? "closer" : "captador"})`, leads: [], total: 0, commission: 0, configType: lc.configType, role: lc.role });
+  // Drop rows with no commission visible to the current user
+  const visibleRows = leadRows.filter((r) => r.captador || r.closer);
+
+  type OwnerSummary = {
+    name: string;
+    leadsCount: number;
+    total: number;
+    commission: number;
+    configType: "flat" | "tiered";
+  };
+  const byOwner = new Map<string, OwnerSummary>();
+
+  for (const row of visibleRows) {
+    if (row.closer) {
+      const key = `${row.closer.userId}_closer`;
+      const e = byOwner.get(key) ?? {
+        name: `${row.closer.name} (closer)`,
+        leadsCount: 0,
+        total: 0,
+        commission: 0,
+        configType: "tiered" as const,
+      };
+      e.leadsCount += 1;
+      e.total += row.quoteTotal;
+      e.commission += row.closer.commission;
+      byOwner.set(key, e);
     }
-    const entry = byOwner.get(key)!;
-    entry.leads.push(lc);
-    entry.total += lc.quoteTotal;
-    entry.commission += lc.commission;
+    if (row.captador) {
+      const key = `${row.captador.userId}_captador`;
+      const e = byOwner.get(key) ?? {
+        name: `${row.captador.name} (captador)`,
+        leadsCount: 0,
+        total: 0,
+        commission: 0,
+        configType: "flat" as const,
+      };
+      e.leadsCount += 1;
+      e.total += row.quoteTotal;
+      e.commission += row.captador.commission;
+      byOwner.set(key, e);
+    }
+  }
+
+  const totalCommission = visibleRows.reduce(
+    (s, r) => s + (r.captador?.commission ?? 0) + (r.closer?.commission ?? 0),
+    0,
+  );
+  const totalBilled = visibleRows.reduce((s, r) => s + r.quoteTotal, 0);
+
+  function formatPaidDate(iso: string | null): string {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   }
 
   const MONTHS = [
@@ -346,7 +391,7 @@ export default async function ComisionesPage({
                           {owner.configType === "tiered" ? "Tramos" : "Plano"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.leads.length}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{owner.leadsCount}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{owner.total.toFixed(2)} &euro;</TableCell>
                       <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">{owner.commission.toFixed(2)} &euro;</TableCell>
                     </TableRow>
@@ -356,13 +401,13 @@ export default async function ComisionesPage({
                   <TableRow>
                     <TableCell className="font-semibold" colSpan={2}>Total</TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">
-                      {leadCommissions.length}
+                      {visibleRows.length}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-semibold">
-                      {leadCommissions.reduce((s, l) => s + l.quoteTotal, 0).toFixed(2)} &euro;
+                      {totalBilled.toFixed(2)} &euro;
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                      {leadCommissions.reduce((s, l) => s + l.commission, 0).toFixed(2)} &euro;
+                      {totalCommission.toFixed(2)} &euro;
                     </TableCell>
                   </TableRow>
                 </TableFooter>
@@ -380,54 +425,74 @@ export default async function ComisionesPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Lead</TableHead>
-                    <TableHead>Comercial</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead>Pagado</TableHead>
                     <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">%</TableHead>
-                    <TableHead className="text-right">Comision</TableHead>
+                    <TableHead>Captador</TableHead>
+                    <TableHead>Closer</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {leadCommissions.map((lc) => (
-                    <TableRow key={lc.id}>
+                  {visibleRows.map((row) => (
+                    <TableRow key={row.id}>
                       <TableCell>
                         <Link
-                          href={`/dashboard/crm/${lc.id}`}
+                          href={`/dashboard/crm/${row.id}`}
                           className="font-medium text-blue-600 hover:underline dark:text-blue-400"
                         >
-                          {lc.fullName}
+                          {row.fullName}
                         </Link>
-                        {lc.company && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">{lc.company}</span>
+                        {row.company && (
+                          <span className="ml-1.5 text-xs text-muted-foreground">{row.company}</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{lc.ownerName}</TableCell>
-                      <TableCell>
-                        {lc.configType === "tiered" ? (
-                          <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                            Tramos
-                          </Badge>
-                        ) : (
+                        {row.captador && (
                           <Badge
                             variant="secondary"
                             className={
-                              lc.isReturning
+                              "ml-1.5 " +
+                              (row.isReturning
                                 ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400")
                             }
                           >
-                            {lc.isReturning ? "Recurrente" : "Nuevo"}
+                            {row.isReturning ? "Recurrente" : "Nuevo"}
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {lc.quoteTotal.toFixed(2)} &euro;
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {formatPaidDate(row.paidAt)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {(lc.rate * 100).toFixed(1)}%
+                        {row.quoteTotal.toFixed(2)} &euro;
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold text-green-700 dark:text-green-400">
-                        {lc.commission.toFixed(2)} &euro;
+                      <TableCell>
+                        {row.captador ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm">{row.captador.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {(row.captador.rate * 100).toFixed(1)}% &middot;{" "}
+                              <span className="font-semibold text-green-700 dark:text-green-400">
+                                {row.captador.commission.toFixed(2)} &euro;
+                              </span>
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.closer ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm">{row.closer.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {(row.closer.rate * 100).toFixed(1)}% &middot;{" "}
+                              <span className="font-semibold text-green-700 dark:text-green-400">
+                                {row.closer.commission.toFixed(2)} &euro;
+                              </span>
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -137,7 +137,7 @@ export default async function EmployeeCommissions({ userId }: Props) {
                       )}
                       {deal.isPrepaid && (
                         <span className="rounded-full bg-amber-100 px-1.5 py-0 text-[10px] text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                          100%
+                          prepago
                         </span>
                       )}
                     </div>
