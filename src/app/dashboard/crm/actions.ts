@@ -2996,6 +2996,215 @@ export async function getMyCommissionData(estimatedValue?: number | null): Promi
   return { preview, estimate };
 }
 
+export type CommissionDeal = {
+  leadId: string;
+  clientName: string;
+  total: number;
+  rate: number;
+  commission: number;
+  role: "captador" | "closer";
+  isReturning: boolean;
+  isPrepaid: boolean;
+  prepaidBonus: number;
+};
+
+export type UserMonthlyCommission = {
+  preview: CommissionPreview;
+  deals: CommissionDeal[];
+  prepaidBonus: number;
+};
+
+/**
+ * Get a specific user's commission for a specific month.
+ * Generalises getMyCommissionPreview to any user/month and includes per-lead detail.
+ * Permission: managers can query anyone; non-managers can only query themselves.
+ */
+export async function getUserMonthlyCommission(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<UserMonthlyCommission | null> {
+  const profile = await getUserProfile();
+  if (!profile || !profile.is_active) throw new Error("Not authenticated");
+  const isManager = hasRole(profile.role, "manager");
+  if (!isManager && profile.id !== userId) {
+    throw new Error("No permission to view this user's commission");
+  }
+
+  const supabase = await createClient();
+
+  const { data: config } = await (supabase as any)
+    .from("commission_configs")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!config) return null;
+
+  const startDate = new Date(year, month - 1, 1).toISOString();
+  const endDate = new Date(year, month, 1).toISOString();
+
+  const roleField = config.type === "tiered" ? "assigned_to" : "owned_by";
+
+  const { data: wonLeads } = await supabase
+    .from("leads")
+    .select("id, full_name, company, owned_by, assigned_to, email, created_at, payment_condition")
+    .eq("status", "paid")
+    .eq(roleField, userId)
+    .gte("updated_at", startDate)
+    .lt("updated_at", endDate)
+    .order("updated_at", { ascending: true });
+
+  const leadIds = (wonLeads || []).map((l) => l.id);
+  const quoteMap = new Map<string, number>();
+  if (leadIds.length > 0) {
+    const { data: quotes } = await supabase
+      .from("quote_requests")
+      .select("lead_id, items")
+      .in("lead_id", leadIds);
+    for (const q of quotes || []) {
+      const items = (q.items || []) as unknown as ProformaLineItem[];
+      quoteMap.set(q.lead_id, items.reduce((sum, i) => sum + i.price * i.units, 0));
+    }
+  }
+
+  // For flat captadores: fetch closer configs to compute deduction.
+  const closerConfigs = new Map<string, any>();
+  const closerAccumulatedMap = new Map<string, number>();
+  if (config.type === "flat") {
+    const closerIds = [...new Set(
+      (wonLeads || []).map((l) => l.assigned_to).filter(Boolean),
+    )] as string[];
+    if (closerIds.length > 0) {
+      const { data: configs } = await (supabase as any)
+        .from("commission_configs")
+        .select("*")
+        .in("user_id", closerIds)
+        .eq("type", "tiered");
+      for (const c of configs || []) closerConfigs.set(c.user_id, c);
+
+      const closerAccResults = await Promise.all(
+        closerIds
+          .filter((cid) => closerConfigs.has(cid))
+          .map(async (cid) => ({ id: cid, acc: await getCloserAccumulated(supabase, cid, startDate, endDate) })),
+      );
+      for (const r of closerAccResults) closerAccumulatedMap.set(r.id, r.acc);
+    }
+  }
+
+  let monthlyBilled = 0;
+  let monthlyPrepaidBonus = 0;
+  for (const lead of wonLeads || []) {
+    const qt = quoteMap.get(lead.id) ?? 0;
+    if (qt === 0) continue;
+    monthlyBilled += qt;
+    if (lead.payment_condition === "100-5") {
+      monthlyPrepaidBonus += qt * Number(config.prepaid_bonus ?? 0.01);
+    }
+  }
+
+  const deals: CommissionDeal[] = [];
+  let monthlyCommission: number;
+  let currentRate: number;
+
+  if (config.type === "tiered") {
+    const tiers = (config.tiers || []) as CommissionTier[];
+    currentRate = getCurrentTierRate(tiers, monthlyBilled);
+    monthlyCommission = monthlyBilled * currentRate + monthlyPrepaidBonus;
+
+    for (const lead of wonLeads || []) {
+      const qt = quoteMap.get(lead.id) ?? 0;
+      if (qt === 0) continue;
+      const isPrepaid = lead.payment_condition === "100-5";
+      const prepaidBonus = isPrepaid ? qt * Number(config.prepaid_bonus ?? 0.01) : 0;
+      deals.push({
+        leadId: lead.id,
+        clientName: lead.company || lead.full_name,
+        total: qt,
+        rate: currentRate,
+        commission: qt * currentRate + prepaidBonus,
+        role: "closer",
+        isReturning: false,
+        isPrepaid,
+        prepaidBonus,
+      });
+    }
+  } else {
+    monthlyCommission = 0;
+    currentRate = Number(config.new_rate);
+
+    for (const lead of wonLeads || []) {
+      const qt = quoteMap.get(lead.id) ?? 0;
+      if (qt === 0) continue;
+
+      const isPrepaid = lead.payment_condition === "100-5";
+      const prepaidBonus = isPrepaid ? qt * Number(config.prepaid_bonus ?? 0.01) : 0;
+
+      let isReturning = false;
+      if (lead.email) {
+        const { count } = await supabase
+          .from("leads")
+          .select("id", { count: "exact", head: true })
+          .ilike("email", lead.email)
+          .eq("status", "paid")
+          .neq("id", lead.id)
+          .lt("created_at", lead.created_at);
+        isReturning = (count ?? 0) > 0;
+      }
+
+      let rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
+
+      const closerId = lead.assigned_to;
+      if (closerId) {
+        const closerConfig = closerConfigs.get(closerId);
+        if (closerConfig) {
+          const closerTiers = (closerConfig.tiers || []) as CommissionTier[];
+          const closerBaseRate = getBaseTierRate(closerTiers);
+          const closerAcc = closerAccumulatedMap.get(closerId) ?? 0;
+          const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+          rate = Math.max(0, rate - (closerCurrentRate - closerBaseRate));
+        }
+      }
+
+      const dealCommission = qt * rate + prepaidBonus;
+      monthlyCommission += dealCommission;
+      deals.push({
+        leadId: lead.id,
+        clientName: lead.company || lead.full_name,
+        total: qt,
+        rate,
+        commission: dealCommission,
+        role: "captador",
+        isReturning,
+        isPrepaid,
+        prepaidBonus,
+      });
+    }
+
+    if (closerConfigs.size > 0) {
+      const [firstCloserId, firstCloserConfig] = [...closerConfigs.entries()][0];
+      const closerTiers = (firstCloserConfig.tiers || []) as CommissionTier[];
+      const closerBaseRate = getBaseTierRate(closerTiers);
+      const closerAcc = closerAccumulatedMap.get(firstCloserId) ?? 0;
+      const closerCurrentRate = getCurrentTierRate(closerTiers, closerAcc);
+      currentRate = Math.max(0, currentRate - (closerCurrentRate - closerBaseRate));
+    }
+  }
+
+  return {
+    preview: {
+      ownerId: userId,
+      ownerName: profile.email.split("@")[0],
+      monthlyBilled,
+      monthlyCommission,
+      configType: config.type as "flat" | "tiered",
+      currentRate,
+    },
+    deals,
+    prepaidBonus: monthlyPrepaidBonus,
+  };
+}
+
 // ── Search & Link Holded Invoice ─────────────────────────
 
 export async function searchHoldedInvoices(
