@@ -3594,6 +3594,38 @@ export async function markAsPaid(
   return result;
 }
 
+// ── Update Paid Date on a Lead's Latest Paid Quote ────────
+
+export async function updateLeadPaidAt(
+  leadId: string,
+  paidAt: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .eq("payment_status", "paid")
+    .order("paid_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay quote pagado" };
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({ paid_at: paidAt })
+    .eq("id", qr.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/dashboard/crm/comisiones");
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
 // ── Update CC Emails on Quote Request ─────────────────────
 
 export async function updateQuoteCcEmails(

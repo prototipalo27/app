@@ -17,6 +17,7 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import { CommissionSettings } from "./commission-settings";
+import { BreakdownRow, type BreakdownRowData } from "./breakdown-row";
 
 function getCurrentTierRate(tiers: CommissionTier[], totalBilling: number): number {
   const sorted = [...tiers].sort((a, b) => a.min - b.min);
@@ -97,7 +98,7 @@ export default async function ComisionesPage({
   const { data: leadsData } = leadIds.length > 0
     ? await supabase
         .from("leads")
-        .select("id, full_name, company, email, owned_by, assigned_to, created_at, payment_condition")
+        .select("id, full_name, company, email, phone, owned_by, assigned_to, created_at, payment_condition")
         .in("id", leadIds)
     : { data: [] as any[] };
 
@@ -148,6 +149,10 @@ export default async function ComisionesPage({
     id: string;
     fullName: string;
     company: string | null;
+    email: string | null;
+    phone: string | null;
+    closerId: string | null;
+    ownerId: string | null;
     quoteTotal: number;
     paidAt: string | null;
     isReturning: boolean;
@@ -165,6 +170,10 @@ export default async function ComisionesPage({
       id: lead.id,
       fullName: lead.full_name,
       company: lead.company,
+      email: lead.email,
+      phone: lead.phone,
+      closerId: lead.assigned_to,
+      ownerId: lead.owned_by,
       quoteTotal,
       paidAt: leadPaidAt.get(lead.id) ?? null,
       isReturning: false,
@@ -280,9 +289,10 @@ export default async function ComisionesPage({
       byOwner.set(key, e);
     }
     if (row.captador) {
-      const key = `${row.captador.userId}_captador`;
+      const variant = row.isReturning ? "recurrente" : "nuevo";
+      const key = `${row.captador.userId}_captador_${variant}`;
       const e = byOwner.get(key) ?? {
-        name: `${row.captador.name} (captador)`,
+        name: `${row.captador.name} (captador, ${variant})`,
         leadsCount: 0,
         total: 0,
         commission: 0,
@@ -301,10 +311,22 @@ export default async function ComisionesPage({
   );
   const totalBilled = visibleRows.reduce((s, r) => s + r.quoteTotal, 0);
 
-  function formatPaidDate(iso: string | null): string {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-  }
+  const isSuperAdmin = profile.role === "super_admin";
+
+  const breakdownRows: BreakdownRowData[] = visibleRows.map((r) => ({
+    leadId: r.id,
+    fullName: r.fullName,
+    company: r.company,
+    email: r.email,
+    phone: r.phone,
+    closerId: r.closerId,
+    ownerId: r.ownerId,
+    closerRate: r.closer?.rate ?? null,
+    captadorRate: r.captador?.rate ?? null,
+    isReturning: r.isReturning,
+    quoteTotal: r.quoteTotal,
+    paidAt: r.paidAt,
+  }));
 
   const MONTHS = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -425,76 +447,21 @@ export default async function ComisionesPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Lead</TableHead>
-                    <TableHead>Pagado</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Comercial</TableHead>
                     <TableHead>Captador</TableHead>
-                    <TableHead>Closer</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">Precio</TableHead>
+                    <TableHead>Ganado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <Link
-                          href={`/dashboard/crm/${row.id}`}
-                          className="font-medium text-blue-600 hover:underline dark:text-blue-400"
-                        >
-                          {row.fullName}
-                        </Link>
-                        {row.company && (
-                          <span className="ml-1.5 text-xs text-muted-foreground">{row.company}</span>
-                        )}
-                        {row.captador && (
-                          <Badge
-                            variant="secondary"
-                            className={
-                              "ml-1.5 " +
-                              (row.isReturning
-                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400")
-                            }
-                          >
-                            {row.isReturning ? "Recurrente" : "Nuevo"}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {formatPaidDate(row.paidAt)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {row.quoteTotal.toFixed(2)} &euro;
-                      </TableCell>
-                      <TableCell>
-                        {row.captador ? (
-                          <div className="flex flex-col">
-                            <span className="text-sm">{row.captador.name}</span>
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                              {(row.captador.rate * 100).toFixed(1)}% &middot;{" "}
-                              <span className="font-semibold text-green-700 dark:text-green-400">
-                                {row.captador.commission.toFixed(2)} &euro;
-                              </span>
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {row.closer ? (
-                          <div className="flex flex-col">
-                            <span className="text-sm">{row.closer.name}</span>
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                              {(row.closer.rate * 100).toFixed(1)}% &middot;{" "}
-                              <span className="font-semibold text-green-700 dark:text-green-400">
-                                {row.closer.commission.toFixed(2)} &euro;
-                              </span>
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                  {breakdownRows.map((row) => (
+                    <BreakdownRow
+                      key={row.leadId}
+                      row={row}
+                      comerciales={managersForSettings}
+                      canEdit={isSuperAdmin}
+                    />
                   ))}
                 </TableBody>
               </Table>
