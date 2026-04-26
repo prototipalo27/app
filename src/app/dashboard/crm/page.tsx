@@ -12,6 +12,7 @@ import {
   getSharedBasePrices,
   getCachedLeadsWithActivity,
 } from "@/lib/supabase/cached-queries";
+import { createServiceClient } from "@/lib/supabase/server";
 
 export default async function CrmPage() {
   const profile = await getUserProfile();
@@ -52,6 +53,20 @@ export default async function CrmPage() {
       // Summaries are saved to DB by the function itself
       // They'll appear on next page load
     });
+  }
+
+  // Map of lead_id → most recent paid_at (for filtering Pagados column by month)
+  const supabase = createServiceClient();
+  const { data: paidQuotes } = await supabase
+    .from("quote_requests")
+    .select("lead_id, paid_at")
+    .eq("payment_status", "paid")
+    .not("paid_at", "is", null)
+    .order("paid_at", { ascending: false });
+  const paidAtMap: Record<string, string> = {};
+  for (const q of paidQuotes || []) {
+    if (!q.lead_id || !q.paid_at) continue;
+    if (!paidAtMap[q.lead_id]) paidAtMap[q.lead_id] = q.paid_at;
   }
 
   const leadsWithAssignee: LeadWithAssignee[] = leads.map((l) => ({
@@ -98,7 +113,7 @@ export default async function CrmPage() {
         </div>
       </div>
 
-      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} myCommission={null} />
+      <CrmKanban initialLeads={leadsWithAssignee} managers={managers} owners={owners} myCommission={null} paidAtMap={paidAtMap} />
 
       <PricingConfig basePrices={basePrices} />
     </div>

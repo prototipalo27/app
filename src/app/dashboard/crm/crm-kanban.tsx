@@ -39,6 +39,7 @@ interface CrmKanbanProps {
   managers: { id: string; name: string }[];
   owners: { id: string; name: string }[];
   myCommission?: CommissionPreview | null;
+  paidAtMap?: Record<string, string>;
 }
 
 function truncateWords(text: string, maxWords: number): string {
@@ -179,7 +180,7 @@ function LostSection({
 // Default owner for filter
 const DEFAULT_OWNER = "gonzalo";
 
-export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmKanbanProps) {
+export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAtMap = {} }: CrmKanbanProps) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
 
@@ -283,6 +284,12 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
   const [filterTime, setFilterTime] = useState(() => localStorage.getItem("crm_filterTime") || "all");
   const [customFrom, setCustomFrom] = useState(() => localStorage.getItem("crm_customFrom") || "");
   const [customTo, setCustomTo] = useState(() => localStorage.getItem("crm_customTo") || "");
+  const [closedMonth, setClosedMonth] = useState(() => {
+    const stored = localStorage.getItem("crm_closedMonth");
+    if (stored) return stored;
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // Persist filters to localStorage
   useEffect(() => {
@@ -293,7 +300,8 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     localStorage.setItem("crm_filterTime", filterTime);
     localStorage.setItem("crm_customFrom", customFrom);
     localStorage.setItem("crm_customTo", customTo);
-  }, [filterManager, filterOwner, filterType, sortBy, filterTime, customFrom, customTo]);
+    localStorage.setItem("crm_closedMonth", closedMonth);
+  }, [filterManager, filterOwner, filterType, sortBy, filterTime, customFrom, customTo, closedMonth]);
   const [lostModal, setLostModal] = useState<{
     leadId: string;
     previousStatus: string;
@@ -481,6 +489,19 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
     return null;
   }, [filterTime, customFrom, customTo]);
 
+  function isInClosedMonth(iso: string | null | undefined): boolean {
+    if (!iso) return false;
+    const d = new Date(iso);
+    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return m === closedMonth;
+  }
+
+  function passesClosedMonth(l: LeadWithAssignee): boolean {
+    if (l.status === "won") return isInClosedMonth(l.won_at);
+    if (l.status === "paid") return isInClosedMonth(paidAtMap[l.id] ?? l.won_at);
+    return true;
+  }
+
   const filteredLeads = leads.filter((l) => {
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -553,7 +574,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
         const phases = LEAD_COLUMNS
           .filter((col) => col.id !== "lost")
           .map((col) => {
-            const phaseLeads = filteredLeads.filter((l) => l.status === col.id);
+            const phaseLeads = filteredLeads.filter((l) => l.status === col.id && passesClosedMonth(l));
             const total = phaseLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
             return { ...col, count: phaseLeads.length, total };
           });
@@ -668,6 +689,18 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
             />
           </div>
         )}
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">Ganados/Pagados</span>
+          <input
+            type="month"
+            value={closedMonth}
+            onChange={(e) => setClosedMonth(e.target.value)}
+            suppressHydrationWarning
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs tabular-nums"
+            title="Mes mostrado en las columnas Ganados y Pagados"
+          />
+        </div>
       </div>
 
       {/* New leads strip */}
@@ -928,7 +961,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission }: CrmK
             <CrmColumn
               key={column.id}
               column={column}
-              leads={filteredLeads.filter((l) => l.status === column.id).sort(sortFn)}
+              leads={filteredLeads.filter((l) => l.status === column.id && passesClosedMonth(l)).sort(sortFn)}
               commissionRate={column.id !== "won" && column.id !== "paid" ? myCommission?.currentRate : undefined}
               onTogglePreWon={handleTogglePreWon}
             />
