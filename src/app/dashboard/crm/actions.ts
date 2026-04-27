@@ -2182,10 +2182,23 @@ export async function createLeadProforma(
       notes: qr.notes || undefined,
     });
 
-    // Save proforma ID to quote_request
+    // Fetch the human-readable docNumber Holded just assigned (e.g. PRO260075)
+    // so we can show it to the client as a transfer reference. Best-effort:
+    // a missed docNumber is filled in later by getOrFetchProformaDocNumber.
+    let docNumber: string | null = null;
+    try {
+      const doc = await getDocument("proform", proforma.id);
+      docNumber = doc.docNumber || null;
+    } catch (e) {
+      console.error("[createLeadProforma] failed to fetch docNumber:", e);
+    }
+
     await supabase
       .from("quote_requests")
-      .update({ holded_proforma_id: proforma.id })
+      .update({
+        holded_proforma_id: proforma.id,
+        holded_proforma_doc_number: docNumber,
+      })
       .eq("id", qr.id);
 
     revalidatePath(`/dashboard/crm/${leadId}`);
@@ -2196,6 +2209,37 @@ export async function createLeadProforma(
       error: e instanceof Error ? e.message : "Error al crear la proforma",
     };
   }
+}
+
+// ── Helper: get-or-fetch the proforma docNumber from Holded ──────────────
+
+export async function getOrFetchProformaDocNumber(
+  quoteRequestId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("holded_proforma_id, holded_proforma_doc_number")
+    .eq("id", quoteRequestId)
+    .maybeSingle();
+
+  if (!qr) return null;
+  if (qr.holded_proforma_doc_number) return qr.holded_proforma_doc_number;
+  if (!qr.holded_proforma_id) return null;
+
+  try {
+    const doc = await getDocument("proform", qr.holded_proforma_id);
+    if (doc.docNumber) {
+      await supabase
+        .from("quote_requests")
+        .update({ holded_proforma_doc_number: doc.docNumber })
+        .eq("id", quoteRequestId);
+      return doc.docNumber;
+    }
+  } catch (e) {
+    console.error("[getOrFetchProformaDocNumber] failed:", e);
+  }
+  return null;
 }
 
 // ── Send Proforma to Client ─────────────────────────────
@@ -2279,6 +2323,14 @@ export async function sendProformaToClient(
     return { success: false, error: "Error al descargar la proforma de Holded" };
   }
 
+  // Persist the docNumber so we can use it for bank reconciliation later.
+  if (proformaDocNumber) {
+    await supabase
+      .from("quote_requests")
+      .update({ holded_proforma_doc_number: proformaDocNumber })
+      .eq("id", qr.id);
+  }
+
   // Ensure the project exists (sync may not have run yet) so /proforma/[token] works
   let trackingToken: string | null = null;
   {
@@ -2316,7 +2368,11 @@ export async function sendProformaToClient(
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
   const proformaUrl = `${baseUrl}/proforma/${trackingToken}`;
   const formattedTotal = proformaTotal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const conceptoLine = `Prototipalo – Proyecto${proformaDocNumber ? ` – ${proformaDocNumber}` : ""}`;
+  // The concepto for the bank transfer leads with the docNumber so the
+  // automatic reconciliation can match it. Keep it short and predictable.
+  const conceptoLine = proformaDocNumber
+    ? `${proformaDocNumber} – Prototipalo`
+    : "Prototipalo – Proyecto";
 
   const emailSender = await getUserEmailSender(profile.id);
   if (!emailSender) {

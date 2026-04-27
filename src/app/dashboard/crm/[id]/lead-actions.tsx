@@ -604,6 +604,10 @@ export default function LeadActions({
                   Ver proforma en Holded
                 </a>
 
+                {quoteRequest.holded_proforma_doc_number && (
+                  <ProformaCodeBadge code={quoteRequest.holded_proforma_doc_number} />
+                )}
+
                 <div className="flex flex-wrap gap-1.5">
                   <PdfPreviewButton leadId={leadId} docType="proform" />
 
@@ -1079,6 +1083,27 @@ function CcEmailsEditor({
           {saving ? "Guardando..." : "Guardar"}
         </Button>
       )}
+    </div>
+  );
+}
+
+function ProformaCodeBadge({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900/40">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Concepto pago</span>
+      <code className="font-mono text-xs font-semibold text-zinc-900 dark:text-zinc-100">{code}</code>
+      <button
+        type="button"
+        onClick={async () => {
+          await navigator.clipboard.writeText(code);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="ml-auto text-xs text-blue-600 hover:underline dark:text-blue-400"
+      >
+        {copied ? "Copiado" : "Copiar"}
+      </button>
     </div>
   );
 }
