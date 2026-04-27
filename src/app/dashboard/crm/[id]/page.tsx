@@ -383,6 +383,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
             nextId={nextId}
             commission={commission}
             ndaStatus={ndaStatusResult.status}
+            ndaId={ndaStatusResult.id}
             ndaSignedAt={ndaStatusResult.signed_at}
             ndaSignerName={ndaStatusResult.signer_name}
           />

@@ -1738,12 +1738,12 @@ export async function sendNdaToClient(
 
 export async function getNdaStatus(
   leadId: string,
-): Promise<{ status: "none" | "pending" | "signed"; signed_at?: string; signer_name?: string }> {
+): Promise<{ status: "none" | "pending" | "signed"; id?: string; signed_at?: string; signer_name?: string }> {
   const supabase = await createClient();
 
   const { data: nda } = await supabase
     .from("nda_agreements")
-    .select("status, signed_at, signer_name")
+    .select("id, status, signed_at, signer_name")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -1752,6 +1752,7 @@ export async function getNdaStatus(
   if (!nda) return { status: "none" };
   return {
     status: nda.status as "pending" | "signed",
+    id: nda.id,
     signed_at: nda.signed_at || undefined,
     signer_name: nda.signer_name || undefined,
   };
