@@ -147,7 +147,7 @@ export default function NdaForm({ token }: NdaFormProps) {
           </h2>
           <div className="max-h-64 overflow-y-auto text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
             <p className="mb-3">
-              El presente acuerdo se celebra entre <strong>Prototipalo S.L.</strong> (CIF: B56592953),
+              El presente acuerdo se celebra entre <strong>Prototipalo S.L.</strong> (CIF: B72410665),
               con domicilio en Calle Viriato 27, 28010 Madrid, y la parte firmante.
             </p>
             <p className="mb-3">
