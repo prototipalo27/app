@@ -18,17 +18,20 @@ export async function GET(req: NextRequest) {
 
   if (error || !data) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (data.status !== "signed") return NextResponse.json({ error: "not signed" }, { status: 400 });
+  if (!data.signer_name || !data.signature_data || !data.signed_at) {
+    return NextResponse.json({ error: "missing signer data" }, { status: 400 });
+  }
 
   const buf = await generateNdaPdf({
     signerName: data.signer_name,
-    signerCompany: data.signer_company,
-    signerNif: data.signer_nif,
-    signerAddress: data.signer_address,
+    signerCompany: data.signer_company ?? "",
+    signerNif: data.signer_nif ?? "",
+    signerAddress: data.signer_address ?? "",
     signatureData: data.signature_data,
     signedAt: new Date(data.signed_at),
   });
 
-  return new NextResponse(buf, {
+  return new NextResponse(new Uint8Array(buf), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
