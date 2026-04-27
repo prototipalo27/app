@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  serverExternalPackages: ["googleapis", "google-auth-library"],
+  serverExternalPackages: ["googleapis", "google-auth-library", "pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/admin/regen-nda": ["./node_modules/pdfkit/js/data/**/*"],
+    "/nda/**": ["./node_modules/pdfkit/js/data/**/*"],
+  },
   images: {
     remotePatterns: [
       {
