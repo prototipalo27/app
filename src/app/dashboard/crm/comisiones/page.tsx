@@ -247,6 +247,34 @@ export default async function ComisionesPage({
   // closer-excess deduction.
   const DEFAULT_FLAT = { new_rate: 0.15, returning_rate: 0.075, prepaid_bonus: 0.01 };
 
+  // Pre-fetch returning status for all leads in one query (avoid N+1).
+  // A lead is "returning" if another paid lead with the same email exists with
+  // an earlier created_at.
+  const emailsToCheck = [...new Set(
+    wonLeads.map((l) => l.email).filter((e): e is string => !!e),
+  )];
+  const earliestPaidByEmail = new Map<string, string>();
+  const returningLeadIds = new Set<string>();
+  if (emailsToCheck.length > 0) {
+    const { data: priorPaid } = await supabase
+      .from("leads")
+      .select("id, email, created_at")
+      .in("email", emailsToCheck)
+      .eq("status", "paid")
+      .lt("created_at", endDate);
+    for (const l of priorPaid || []) {
+      if (!l.email || !l.created_at) continue;
+      const key = l.email.toLowerCase();
+      const cur = earliestPaidByEmail.get(key);
+      if (!cur || l.created_at < cur) earliestPaidByEmail.set(key, l.created_at);
+    }
+    for (const lead of wonLeads) {
+      if (!lead.email || !lead.created_at) continue;
+      const earliest = earliestPaidByEmail.get(lead.email.toLowerCase());
+      if (earliest && earliest < lead.created_at) returningLeadIds.add(lead.id);
+    }
+  }
+
   // Third pass: captador (flat) with closer-excess deduction (also flat by month).
   for (const lead of wonLeads) {
     const row = leadRowById.get(lead.id);
@@ -255,17 +283,7 @@ export default async function ComisionesPage({
     const personalConfig = configMap.get(lead.owned_by);
     const config = personalConfig?.type === "flat" ? personalConfig : DEFAULT_FLAT;
 
-    let isReturning = false;
-    if (lead.email) {
-      const { count } = await supabase
-        .from("leads")
-        .select("id", { count: "exact", head: true })
-        .ilike("email", lead.email)
-        .eq("status", "paid")
-        .neq("id", lead.id)
-        .lt("created_at", lead.created_at);
-      isReturning = (count ?? 0) > 0;
-    }
+    const isReturning = returningLeadIds.has(lead.id);
     row.isReturning = isReturning;
 
     let rate = isReturning ? config.returning_rate : config.new_rate;
