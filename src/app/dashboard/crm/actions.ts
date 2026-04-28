@@ -2836,6 +2836,34 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
     monthlyCommission = 0;
     currentRate = Number(config.new_rate);
 
+    // Pre-fetch returning status for all leads in one query (avoid N+1).
+    // A lead is "returning" if another paid lead with the same email exists
+    // with an earlier created_at.
+    const emailsToCheck = [...new Set(
+      (wonLeads || []).map((l) => l.email).filter((e): e is string => !!e),
+    )];
+    const earliestPaidByEmail = new Map<string, string>();
+    const returningLeadIds = new Set<string>();
+    if (emailsToCheck.length > 0) {
+      const { data: priorPaid } = await supabase
+        .from("leads")
+        .select("id, email, created_at")
+        .in("email", emailsToCheck)
+        .eq("status", "paid")
+        .lt("created_at", endDate);
+      for (const l of priorPaid || []) {
+        if (!l.email || !l.created_at) continue;
+        const key = l.email.toLowerCase();
+        const cur = earliestPaidByEmail.get(key);
+        if (!cur || l.created_at < cur) earliestPaidByEmail.set(key, l.created_at);
+      }
+      for (const lead of wonLeads || []) {
+        if (!lead.email || !lead.created_at) continue;
+        const earliest = earliestPaidByEmail.get(lead.email.toLowerCase());
+        if (earliest && earliest < lead.created_at) returningLeadIds.add(lead.id);
+      }
+    }
+
     for (const lead of wonLeads || []) {
       const qt = quoteMap.get(lead.id) ?? 0;
       if (qt === 0) continue;
@@ -2843,17 +2871,7 @@ export async function getMyCommissionPreview(): Promise<CommissionPreview | null
       const isPrepaid = lead.payment_condition === "100-5";
       const prepaidBonus = isPrepaid ? qt * Number(config.prepaid_bonus ?? 0.01) : 0;
 
-      let isReturning = false;
-      if (lead.email) {
-        const { count } = await supabase
-          .from("leads")
-          .select("id", { count: "exact", head: true })
-          .ilike("email", lead.email)
-          .eq("status", "paid")
-          .neq("id", lead.id)
-          .lt("created_at", lead.created_at);
-        isReturning = (count ?? 0) > 0;
-      }
+      const isReturning = returningLeadIds.has(lead.id);
 
       let rate = isReturning ? Number(config.returning_rate) : Number(config.new_rate);
 
