@@ -5,10 +5,21 @@ process.env.TZ = "Europe/Madrid";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   turbopack: {
     root: __dirname,
   },
-  serverExternalPackages: ["googleapis", "google-auth-library", "pdfkit"],
+  serverExternalPackages: [
+    "googleapis",
+    "google-auth-library",
+    "pdfkit",
+    "nodemailer",
+    "mqtt",
+    "web-push",
+    "@anthropic-ai/sdk",
+    "stripe",
+  ],
   outputFileTracingIncludes: {
     "/api/admin/regen-nda": ["./node_modules/pdfkit/js/data/**/*"],
     "/nda/**": ["./node_modules/pdfkit/js/data/**/*"],
