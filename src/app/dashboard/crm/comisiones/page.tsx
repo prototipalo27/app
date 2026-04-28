@@ -241,13 +241,19 @@ export default async function ComisionesPage({
     };
   }
 
+  // Default captador rates for users that own leads but don't have a personal
+  // flat config (e.g. Angel, who only has the tiered closer config). Company
+  // policy: every captador earns 15% nuevo / 7,5% recurrente, with the standard
+  // closer-excess deduction.
+  const DEFAULT_FLAT = { new_rate: 0.15, returning_rate: 0.075, prepaid_bonus: 0.01 };
+
   // Third pass: captador (flat) with closer-excess deduction (also flat by month).
   for (const lead of wonLeads) {
     const row = leadRowById.get(lead.id);
     if (!row || !lead.owned_by) continue;
 
-    const config = configMap.get(lead.owned_by);
-    if (!config || config.type !== "flat") continue;
+    const personalConfig = configMap.get(lead.owned_by);
+    const config = personalConfig?.type === "flat" ? personalConfig : DEFAULT_FLAT;
 
     let isReturning = false;
     if (lead.email) {
