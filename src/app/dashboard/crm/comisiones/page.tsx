@@ -34,26 +34,6 @@ function getBaseTierRate(tiers: CommissionTier[]): number {
   return sorted[0]?.rate ?? 0;
 }
 
-/**
- * Retroactive step-based: when you cross a tier, the new rate applies
- * to the ENTIRE month billing. Returns incremental commission for this lead.
- */
-function calcTieredCommission(
-  tiers: CommissionTier[],
-  accumulatedBefore: number,
-  quoteTotal: number
-): { commission: number; effectiveRate: number } {
-  const newTotal = accumulatedBefore + quoteTotal;
-  const newRate = getCurrentTierRate(tiers, newTotal);
-  const prevRate = getCurrentTierRate(tiers, accumulatedBefore);
-
-  const newMonthTotal = newTotal * newRate;
-  const prevMonthTotal = accumulatedBefore * prevRate;
-  const commission = newMonthTotal - prevMonthTotal;
-
-  return { commission, effectiveRate: newRate };
-}
-
 export default async function ComisionesPage({
   searchParams,
 }: {
@@ -218,10 +198,27 @@ export default async function ComisionesPage({
     leadRowById.set(lead.id, row);
   }
 
-  // First pass: closer (tiered). Order matters: drives tier accumulation.
-  const closerAccumulated = new Map<string, number>();
-  const closerRatePerLead = new Map<string, number>();
+  // First pass: total monthly billing per tiered closer to know the FINAL tier rate.
+  // Tiered commissions are flat-retroactive: the rate at month-end applies to every
+  // deal in the month, not the running rate at the moment each deal was paid.
+  const closerMonthlyTotal = new Map<string, number>();
+  for (const lead of wonLeads) {
+    if (!lead.assigned_to) continue;
+    const closerConfig = configMap.get(lead.assigned_to);
+    if (!closerConfig || closerConfig.type !== "tiered") continue;
+    const qt = quoteMap.get(lead.id) ?? 0;
+    closerMonthlyTotal.set(
+      lead.assigned_to,
+      (closerMonthlyTotal.get(lead.assigned_to) ?? 0) + qt,
+    );
+  }
+  const closerFinalRate = new Map<string, number>();
+  for (const [closerId, total] of closerMonthlyTotal) {
+    const cfg = configMap.get(closerId)!;
+    closerFinalRate.set(closerId, getCurrentTierRate(cfg.tiers, total));
+  }
 
+  // Second pass: assign per-lead closer slot using the closer's final rate.
   for (const lead of wonLeads) {
     const row = leadRowById.get(lead.id);
     if (!row || !lead.assigned_to) continue;
@@ -229,11 +226,7 @@ export default async function ComisionesPage({
     const closerConfig = configMap.get(lead.assigned_to);
     if (!closerConfig || closerConfig.type !== "tiered") continue;
 
-    const accBefore = closerAccumulated.get(lead.assigned_to) ?? 0;
-    const result = calcTieredCommission(closerConfig.tiers, accBefore, row.quoteTotal);
-    closerAccumulated.set(lead.assigned_to, accBefore + row.quoteTotal);
-    closerRatePerLead.set(lead.id, result.effectiveRate);
-
+    const finalRate = closerFinalRate.get(lead.assigned_to) ?? 0;
     const isPrepaid = lead.payment_condition === "100-5";
     const bonusRate = isPrepaid ? closerConfig.prepaid_bonus : 0;
     const prepaidBonus = row.quoteTotal * bonusRate;
@@ -243,12 +236,12 @@ export default async function ComisionesPage({
     row.closer = {
       name: userMap.get(lead.assigned_to) || "—",
       userId: lead.assigned_to,
-      rate: result.effectiveRate,
-      commission: result.commission + prepaidBonus,
+      rate: finalRate,
+      commission: row.quoteTotal * finalRate + prepaidBonus,
     };
   }
 
-  // Second pass: captador (flat) with closer-excess deduction.
+  // Third pass: captador (flat) with closer-excess deduction (also flat by month).
   for (const lead of wonLeads) {
     const row = leadRowById.get(lead.id);
     if (!row || !lead.owned_by) continue;
@@ -275,7 +268,7 @@ export default async function ComisionesPage({
       const closerConfig = configMap.get(lead.assigned_to);
       if (closerConfig?.type === "tiered") {
         const baseRate = getBaseTierRate(closerConfig.tiers);
-        const closerRate = closerRatePerLead.get(lead.id) ?? baseRate;
+        const closerRate = closerFinalRate.get(lead.assigned_to) ?? baseRate;
         const excess = closerRate - baseRate;
         rate = Math.max(0, rate - excess);
       }
