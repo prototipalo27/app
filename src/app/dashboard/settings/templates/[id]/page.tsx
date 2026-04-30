@@ -111,10 +111,16 @@ export default async function EditTemplatePage({
                     className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                       item.item_type === "name_list"
                         ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                        : item.item_type === "photo_qc"
+                          ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400"
+                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                     }`}
                   >
-                    {item.item_type === "name_list" ? "Lista nombres" : "Checkbox"}
+                    {item.item_type === "name_list"
+                      ? "Lista nombres"
+                      : item.item_type === "photo_qc"
+                        ? "Foto QC"
+                        : "Checkbox"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -208,6 +214,7 @@ export default async function EditTemplatePage({
           >
             <option value="checkbox">Checkbox</option>
             <option value="name_list">Lista de nombres</option>
+            <option value="photo_qc">Foto QC (móvil)</option>
           </select>
           <button
             type="submit"

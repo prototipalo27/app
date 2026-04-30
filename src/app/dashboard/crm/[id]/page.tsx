@@ -21,7 +21,7 @@ import {
   type ActivityType,
 } from "@/lib/crm-config";
 import { classifyTrafficSource, SOURCE_COLORS } from "@/lib/utm-utils";
-import { getBasePrices, getCommissionSummary, getNdaStatus } from "../actions";
+import { getBasePrices, getCommissionSummary, getNdaStatus, getSampleRequestStatus } from "../actions";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -351,6 +351,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
     { data: followUps },
     commission,
     ndaStatusResult,
+    sampleRequest,
   ] = await Promise.all([
     supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
     supabase.from("quote_requests").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -358,6 +359,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
     supabase.from("lead_follow_ups").select("id, scheduled_date, note, action_type, completed_at, created_at").eq("lead_id", leadId).order("scheduled_date"),
     getCommissionSummary(leadId),
     getNdaStatus(leadId),
+    getSampleRequestStatus(leadId),
   ]);
 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
@@ -386,6 +388,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
             ndaId={ndaStatusResult.id}
             ndaSignedAt={ndaStatusResult.signed_at}
             ndaSignerName={ndaStatusResult.signer_name}
+            sampleRequest={sampleRequest}
           />
         </CardContent>
       </Card>

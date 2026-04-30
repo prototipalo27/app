@@ -1785,6 +1785,8 @@ export type Database = {
       projects: {
         Row: {
           assigned_printer: string | null
+          client_confirmed_at: string | null
+          client_confirmed_by: string | null
           client_email: string | null
           client_name: string | null
           created_at: string
@@ -1820,6 +1822,8 @@ export type Database = {
         }
         Insert: {
           assigned_printer?: string | null
+          client_confirmed_at?: string | null
+          client_confirmed_by?: string | null
           client_email?: string | null
           client_name?: string | null
           created_at?: string
@@ -1855,6 +1859,8 @@ export type Database = {
         }
         Update: {
           assigned_printer?: string | null
+          client_confirmed_at?: string | null
+          client_confirmed_by?: string | null
           client_email?: string | null
           client_name?: string | null
           created_at?: string
@@ -2422,6 +2428,91 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      sample_address_requests: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          id: string
+          lead_id: string
+          notes: string | null
+          postal_code: string | null
+          province: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          sent_by: string | null
+          shipping_info_id: string | null
+          status: string
+          street: string | null
+          submitted_at: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          lead_id: string
+          notes?: string | null
+          postal_code?: string | null
+          province?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sent_by?: string | null
+          shipping_info_id?: string | null
+          status?: string
+          street?: string | null
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          lead_id?: string
+          notes?: string | null
+          postal_code?: string | null
+          province?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sent_by?: string | null
+          shipping_info_id?: string | null
+          status?: string
+          street?: string | null
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_address_requests_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_address_requests_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_address_requests_shipping_info_id_fkey"
+            columns: ["shipping_info_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_info"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shipping_info: {
         Row: {

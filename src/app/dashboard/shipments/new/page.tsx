@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { PacklinkService } from "@/lib/packlink/types";
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
@@ -43,6 +43,7 @@ interface HoldedContactResult {
 
 export default function NewShipmentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<"form" | "selecting" | "creating" | "created">("form");
   const [services, setServices] = useState<PacklinkService[]>([]);
   const [selectedService, setSelectedService] = useState<PacklinkService | null>(null);
@@ -98,6 +99,33 @@ export default function NewShipmentPage() {
 
   // Packages
   const [packages, setPackages] = useState<PackageItem[]>([createEmptyPackage()]);
+
+  // Prefill from query params (e.g. when arriving from a lead's "Crear envío" button)
+  useEffect(() => {
+    const fullName = searchParams.get("recipientName");
+    if (fullName) {
+      const parts = fullName.split(" ");
+      setRecipientName(parts[0] || "");
+      setRecipientSurname(parts.slice(1).join(" ") || "");
+    }
+    const email = searchParams.get("recipientEmail");
+    if (email) setRecipientEmail(email);
+    const phone = searchParams.get("recipientPhone");
+    if (phone) setRecipientPhone(phone);
+
+    const streetParam = searchParams.get("street");
+    if (streetParam) setStreet(streetParam);
+    const cityParam = searchParams.get("city");
+    if (cityParam) setCity(cityParam);
+    const postalParam = searchParams.get("postalCode");
+    if (postalParam) setPostalCode(postalParam);
+    const countryParam = searchParams.get("country");
+    if (countryParam) setCountry(countryParam.toUpperCase());
+
+    const titleParam = searchParams.get("title");
+    if (titleParam) setTitle(titleParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Estimate Cabify price when relevant fields change
   useEffect(() => {

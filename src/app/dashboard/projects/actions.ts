@@ -329,6 +329,67 @@ export async function sendProjectEmail(
   revalidatePath(`/dashboard/crm/${leadId}`);
 }
 
+export async function applyTemplateToProject(
+  projectId: string,
+  templateId: string,
+): Promise<{ success: boolean; error?: string; added?: number; skipped?: number }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const [{ data: templateItems }, { data: existingItems }] = await Promise.all([
+    supabase
+      .from("template_checklist_items")
+      .select("name, item_type, position")
+      .eq("template_id", templateId)
+      .order("position"),
+    supabase
+      .from("project_checklist_items")
+      .select("name, position")
+      .eq("project_id", projectId),
+  ]);
+
+  if (!templateItems) return { success: false, error: "Plantilla no encontrada" };
+
+  const existingNames = new Set(
+    (existingItems ?? []).map((i) => i.name.trim().toLowerCase()),
+  );
+  const maxPosition = (existingItems ?? []).reduce(
+    (max, i) => Math.max(max, i.position),
+    -1,
+  );
+
+  const toInsert = templateItems
+    .filter((t) => !existingNames.has(t.name.trim().toLowerCase()))
+    .map((t, idx) => ({
+      project_id: projectId,
+      name: t.name,
+      item_type: t.item_type,
+      position: maxPosition + 1 + idx,
+    }));
+
+  const skipped = templateItems.length - toInsert.length;
+
+  if (toInsert.length > 0) {
+    const { error: insertError } = await supabase
+      .from("project_checklist_items")
+      .insert(toInsert);
+    if (insertError) return { success: false, error: insertError.message };
+  }
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({ template_id: templateId })
+    .eq("id", projectId);
+  if (updateError) return { success: false, error: updateError.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { success: true, added: toInsert.length, skipped };
+}
+
 export async function discardProject(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();

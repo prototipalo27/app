@@ -17,6 +17,7 @@ import ProjectEmails from "./project-emails";
 import LinkLead from "./link-lead";
 import { listFolderFiles } from "@/lib/google-drive/client";
 import ProjectChecklist from "./project-checklist";
+import ApplyTemplate from "./apply-template";
 import PmSelector from "./pm-selector";
 import { NegotiationBriefing } from "./negotiation-briefing";
 
@@ -85,6 +86,7 @@ export default async function ProjectDetailPage({
     { data: shipments },
     { data: checklistItems },
     { data: activeUsers },
+    { data: activeTemplates },
   ] = await Promise.all([
     supabase
       .from("project_items")
@@ -109,6 +111,11 @@ export default async function ProjectDetailPage({
       .from("user_profiles")
       .select("id, full_name, nickname, email")
       .eq("is_active", true),
+    supabase
+      .from("project_templates")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name"),
   ]);
 
   // Phase 2: Parallel fetches that depend on project fields
@@ -307,23 +314,78 @@ export default async function ProjectDetailPage({
         </div>
       )}
 
-      {/* Checklist */}
-      {checklistItems && checklistItems.length > 0 && (
-        <div className="mb-6">
+      {/* Banner confirmación cliente */}
+      {(() => {
+        const hasReviewItems = (checklistItems ?? []).some(
+          (i) =>
+            i.item_type === "name_list" ||
+            (i.item_type === "photo_qc" && (i.data as { photo_path?: string } | null)?.photo_path),
+        );
+        if (!hasReviewItems && !project.client_confirmed_at) return null;
+        return (
+          <div className="mb-6">
+            {project.client_confirmed_at ? (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/10">
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                  ✓ Cliente confirmó el envío el{" "}
+                  {new Date(project.client_confirmed_at).toLocaleString("es-ES")}
+                  {project.client_confirmed_by ? ` (${project.client_confirmed_by})` : ""}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  ⚠ Pendiente de confirmación del cliente
+                </p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  Comparte el link de revisión para que valide nombres y fotos QC antes del envío.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Checklist + plantilla */}
+      <div className="mb-6 space-y-3">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              Plantilla de proyecto
+            </h2>
+            {templateName && (
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                {templateName}
+              </span>
+            )}
+          </div>
+          <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+            Elige el tipo (maqueta, trofeo…) para añadir su checklist al proyecto. No se borran items existentes.
+          </p>
+          <ApplyTemplate
+            projectId={project.id}
+            currentTemplateId={project.template_id}
+            templates={activeTemplates ?? []}
+            hasItems={!!checklistItems && checklistItems.length > 0}
+          />
+        </div>
+
+        {checklistItems && checklistItems.length > 0 && (
           <ProjectChecklist
+            projectId={project.id}
             items={checklistItems.map((i) => ({
               id: i.id,
               name: i.name,
               item_type: i.item_type,
               position: i.position,
               completed: i.completed,
-              data: i.data as { entries?: { line1: string; line2?: string; checked: boolean }[] } | null,
+              data: i.data as { entries?: { line1: string; line2?: string; checked: boolean }[]; photo_path?: string; photo_uploaded_at?: string } | null,
             }))}
             templateName={templateName}
             trackingToken={project.tracking_token}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Portal toggles */}
       <div className="mb-6">

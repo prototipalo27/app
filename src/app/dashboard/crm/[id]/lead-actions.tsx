@@ -22,6 +22,9 @@ import {
   sendQuoteToClient,
   sendNdaToClient,
   updateQuoteCcEmails,
+  requestSampleShipment,
+  cancelSampleRequest,
+  type SampleRequestStatus,
 } from "../actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import {
@@ -63,6 +66,7 @@ interface LeadActionsProps {
   ndaId?: string;
   ndaSignedAt?: string;
   ndaSignerName?: string;
+  sampleRequest: SampleRequestStatus;
 }
 
 export default function LeadActions({
@@ -84,6 +88,7 @@ export default function LeadActions({
   ndaId,
   ndaSignedAt,
   ndaSignerName,
+  sampleRequest,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -112,6 +117,8 @@ export default function LeadActions({
     setEditedValue(estimatedValue?.toString() ?? "");
   }, [estimatedValue]);
   const [ndaError, setNdaError] = useState<string | null>(null);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [sampleLinkCopied, setSampleLinkCopied] = useState(false);
 
   const selectClass =
     "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
@@ -294,6 +301,131 @@ export default function LeadActions({
         )}
         {ndaError && (
           <p className="mt-1 text-xs text-destructive">{ndaError}</p>
+        )}
+      </div>
+
+      {/* Envío de muestra */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
+          Envío de muestra
+        </h3>
+        {sampleRequest.status === "none" ? (
+          <div className="space-y-2">
+            {leadEmail ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSampleError(null);
+                  startTransition(async () => {
+                    const result = await requestSampleShipment(leadId);
+                    if (!result.success) {
+                      setSampleError(result.error || "Error al pedir la dirección");
+                    }
+                    router.refresh();
+                  });
+                }}
+                disabled={isPending}
+                className="block bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                {isPending ? "Enviando..." : "Pedir dirección al cliente"}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                El lead necesita un email para enviar la petición.
+              </p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Le enviaremos un enlace para que rellene su dirección de envío.
+            </p>
+          </div>
+        ) : sampleRequest.status === "pending" ? (
+          <div className="space-y-2">
+            <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+              Esperando datos del cliente
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              Petición enviada el {new Date(sampleRequest.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const baseUrl = window.location.origin;
+                  navigator.clipboard.writeText(`${baseUrl}/sample/${sampleRequest.token}`);
+                  setSampleLinkCopied(true);
+                  setTimeout(() => setSampleLinkCopied(false), 2000);
+                }}
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {sampleLinkCopied ? "Copiado!" : "Copiar enlace"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSampleError(null);
+                  startTransition(async () => {
+                    const result = await cancelSampleRequest(leadId, sampleRequest.id);
+                    if (!result.success) {
+                      setSampleError(result.error || "Error al cancelar");
+                    }
+                    router.refresh();
+                  });
+                }}
+                disabled={isPending}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Badge variant="secondary" className={
+              sampleRequest.status === "shipped"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+            }>
+              {sampleRequest.status === "shipped" ? "Muestra enviada" : "Datos recibidos"}
+            </Badge>
+            {(sampleRequest.street || sampleRequest.city) && (
+              <div className="rounded-md border bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+                {sampleRequest.recipient_name && <p className="font-medium text-foreground">{sampleRequest.recipient_name}</p>}
+                {sampleRequest.street && <p>{sampleRequest.street}</p>}
+                <p>
+                  {[sampleRequest.postal_code, sampleRequest.city, sampleRequest.province].filter(Boolean).join(", ")}
+                </p>
+                {sampleRequest.country && <p>{sampleRequest.country}</p>}
+                {sampleRequest.recipient_phone && <p className="mt-1">Tel: {sampleRequest.recipient_phone}</p>}
+              </div>
+            )}
+            {sampleRequest.status === "submitted" && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    leadId,
+                    sampleRequestId: sampleRequest.id,
+                    title: `Muestra para ${sampleRequest.recipient_name || ""}`.trim(),
+                    recipientName: sampleRequest.recipient_name || "",
+                    recipientEmail: sampleRequest.recipient_email || "",
+                    recipientPhone: sampleRequest.recipient_phone || "",
+                    street: sampleRequest.street || "",
+                    city: sampleRequest.city || "",
+                    postalCode: sampleRequest.postal_code || "",
+                    country: sampleRequest.country === "España" || sampleRequest.country === "Spain" ? "ES" : (sampleRequest.country || "ES"),
+                  });
+                  router.push(`/dashboard/shipments/new?${params.toString()}`);
+                }}
+                disabled={isPending}
+                className="block bg-cyan-600 text-white hover:bg-cyan-700"
+              >
+                Crear envío
+              </Button>
+            )}
+          </div>
+        )}
+        {sampleError && (
+          <p className="mt-1 text-xs text-destructive">{sampleError}</p>
         )}
       </div>
 

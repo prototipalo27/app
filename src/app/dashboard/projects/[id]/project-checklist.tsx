@@ -5,8 +5,15 @@ import {
   toggleChecklistItem,
   uploadNameList,
   toggleNameEntry,
+  uploadQcPhoto,
   type NameEntry,
 } from "../checklist-actions";
+
+type ChecklistItemData = {
+  entries?: NameEntry[];
+  photo_path?: string;
+  photo_uploaded_at?: string;
+};
 
 type ChecklistItem = {
   id: string;
@@ -14,21 +21,27 @@ type ChecklistItem = {
   item_type: string;
   position: number;
   completed: boolean;
-  data: { entries?: NameEntry[] } | null;
+  data: ChecklistItemData | null;
 };
 
 export default function ProjectChecklist({
+  projectId,
   items,
   templateName,
   trackingToken,
 }: {
+  projectId: string;
   items: ChecklistItem[];
   templateName: string | null;
   trackingToken?: string;
 }) {
   const [localItems, setLocalItems] = useState(items);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [photoUploadingItemId, setPhotoUploadingItemId] = useState<string | null>(null);
+  const [photoBusyItemId, setPhotoBusyItemId] = useState<string | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [csvPreview, setCsvPreview] = useState<{
     itemId: string;
@@ -37,7 +50,11 @@ export default function ProjectChecklist({
 
   const [linkCopied, setLinkCopied] = useState(false);
   const completedCount = localItems.filter((i) => i.completed).length;
-  const hasNameListItems = localItems.some((i) => i.item_type === "name_list");
+  const hasClientReviewItems = localItems.some(
+    (i) =>
+      i.item_type === "name_list" ||
+      (i.item_type === "photo_qc" && i.data?.photo_path),
+  );
 
   async function handleToggle(itemId: string, completed: boolean) {
     setLocalItems((prev) =>
@@ -120,13 +137,52 @@ export default function ProjectChecklist({
       setLocalItems((prev) =>
         prev.map((i) =>
           i.id === csvPreview.itemId
-            ? { ...i, data: { entries: csvPreview.entries } }
+            ? { ...i, data: { ...(i.data ?? {}), entries: csvPreview.entries } }
             : i
         )
       );
     }
     setCsvPreview(null);
     setUploadingItemId(null);
+  }
+
+  function handlePhotoSelect(itemId: string) {
+    setPhotoUploadingItemId(itemId);
+    photoInputRef.current?.click();
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const itemId = photoUploadingItemId;
+    e.target.value = "";
+    if (!file || !itemId) {
+      setPhotoUploadingItemId(null);
+      return;
+    }
+    setPhotoBusyItemId(itemId);
+    const fd = new FormData();
+    fd.append("photo", file);
+    const result = await uploadQcPhoto(itemId, projectId, fd);
+    if (result.success && result.photo_path) {
+      setLocalItems((prev) =>
+        prev.map((i) =>
+          i.id === itemId
+            ? {
+                ...i,
+                data: {
+                  ...(i.data ?? {}),
+                  photo_path: result.photo_path,
+                  photo_uploaded_at: new Date().toISOString(),
+                },
+              }
+            : i,
+        ),
+      );
+    } else if (!result.success) {
+      alert(result.error ?? "Error al subir la foto");
+    }
+    setPhotoBusyItemId(null);
+    setPhotoUploadingItemId(null);
   }
 
   return (
@@ -152,17 +208,17 @@ export default function ProjectChecklist({
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          {hasNameListItems && trackingToken && (
+          {hasClientReviewItems && trackingToken && (
             <button
               onClick={() => {
-                const url = `${window.location.origin}/track/${trackingToken}/names`;
+                const url = `${window.location.origin}/track/${trackingToken}/confirm`;
                 navigator.clipboard.writeText(url);
                 setLinkCopied(true);
                 setTimeout(() => setLinkCopied(false), 2000);
               }}
               className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              {linkCopied ? "Copiado!" : "Link nombres"}
+              {linkCopied ? "Copiado!" : "Link revisión cliente"}
             </button>
           )}
           <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -215,6 +271,37 @@ export default function ProjectChecklist({
                 >
                   {item.name}
                 </span>
+
+                {/* QC photo controls */}
+                {item.item_type === "photo_qc" && (
+                  <div className="flex items-center gap-2">
+                    {item.data?.photo_path && (
+                      <button
+                        onClick={() => setPhotoLightbox(item.id)}
+                        className="h-8 w-8 overflow-hidden rounded-md border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
+                        title="Ver foto"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/qc-photos/${item.id}`}
+                          alt="QC"
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handlePhotoSelect(item.id)}
+                      disabled={photoBusyItemId === item.id}
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    >
+                      {photoBusyItemId === item.id
+                        ? "Subiendo…"
+                        : item.data?.photo_path
+                          ? "Reemplazar"
+                          : "Hacer foto"}
+                    </button>
+                  </div>
+                )}
 
                 {/* Name list controls */}
                 {item.item_type === "name_list" && (
@@ -311,6 +398,40 @@ export default function ProjectChecklist({
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {/* Hidden photo input — capture="environment" opens rear camera on mobile */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoChange}
+      />
+
+      {/* Photo lightbox */}
+      {photoLightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPhotoLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/qc-photos/${photoLightbox}`}
+            alt="QC"
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setPhotoLightbox(null)}
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* CSV confirmation modal */}
       {csvPreview && (

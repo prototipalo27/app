@@ -3888,3 +3888,181 @@ export async function mergeLead(
   revalidatePath(`/dashboard/crm/${targetId}`);
   return { success: true };
 }
+
+// ── Sample address requests ─────────────────────────────────────
+
+export type SampleRequestStatus =
+  | { status: "none" }
+  | {
+      status: "pending" | "submitted" | "shipped";
+      id: string;
+      token: string;
+      created_at: string;
+      submitted_at: string | null;
+      recipient_name: string | null;
+      recipient_phone: string | null;
+      recipient_email: string | null;
+      street: string | null;
+      city: string | null;
+      postal_code: string | null;
+      province: string | null;
+      country: string | null;
+      notes: string | null;
+      shipping_info_id: string | null;
+    };
+
+export async function getSampleRequestStatus(
+  leadId: string,
+): Promise<SampleRequestStatus> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("sample_address_requests")
+    .select("id, token, status, created_at, submitted_at, recipient_name, recipient_phone, recipient_email, street, city, postal_code, province, country, notes, shipping_info_id")
+    .eq("lead_id", leadId)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return { status: "none" };
+  return {
+    status: data.status as "pending" | "submitted" | "shipped",
+    id: data.id,
+    token: data.token,
+    created_at: data.created_at,
+    submitted_at: data.submitted_at,
+    recipient_name: data.recipient_name,
+    recipient_phone: data.recipient_phone,
+    recipient_email: data.recipient_email,
+    street: data.street,
+    city: data.city,
+    postal_code: data.postal_code,
+    province: data.province,
+    country: data.country,
+    notes: data.notes,
+    shipping_info_id: data.shipping_info_id,
+  };
+}
+
+export async function requestSampleShipment(
+  leadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name, phone")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead?.email) {
+    return { success: false, error: "El lead no tiene email" };
+  }
+
+  const { data: existing } = await supabase
+    .from("sample_address_requests")
+    .select("id, status")
+    .eq("lead_id", leadId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existing) {
+    return { success: false, error: "Ya hay una petición pendiente para este lead" };
+  }
+
+  const { data: req, error: insertError } = await supabase
+    .from("sample_address_requests")
+    .insert({
+      lead_id: leadId,
+      sent_by: profile.id,
+      recipient_name: lead.full_name,
+      recipient_email: lead.email,
+      recipient_phone: lead.phone,
+    })
+    .select("token")
+    .single();
+
+  if (insertError || !req) {
+    return { success: false, error: "Error al crear la petición" };
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+  const sampleUrl = `${baseUrl}/sample/${req.token}`;
+
+  const emailSender = await getUserEmailSender(profile.id);
+  if (!emailSender) {
+    await supabase.from("sample_address_requests").delete().eq("token", req.token);
+    return { success: false, error: "No tienes método de envío configurado. Ve a Ajustes → Email para conectar tu cuenta de Google." };
+  }
+
+  try {
+    await sendEmailOrSchedule({
+      to: lead.email,
+      subject: "Datos para envío de muestra — Prototipalo",
+      text: `Hola ${lead.full_name},\n\nNos encantaría enviarte una muestra impresa para que veas el acabado en persona.\n\nPara prepararla, necesitamos que nos confirmes la dirección de envío. Solo te llevará un momento:\n${sampleUrl}\n\nUna vez recibamos los datos, preparamos el envío y te avisamos con el tracking.\n\nGracias,\nEl equipo de Prototipalo`,
+      html: `
+        <p>Hola ${lead.full_name},</p>
+        <p>Nos encantaría enviarte una <strong>muestra impresa</strong> para que veas el acabado en persona.</p>
+        <p>Para prepararla, necesitamos que nos confirmes la dirección de envío. Solo te llevará un momento:</p>
+        <p>
+          <a href="${sampleUrl}" style="display:inline-block;padding:12px 24px;background:#18181b;color:white;border-radius:8px;text-decoration:none;font-weight:500;">
+            Confirmar dirección de envío
+          </a>
+        </p>
+        <p style="font-size:13px;color:#71717a;margin-top:16px;">Una vez recibamos los datos, preparamos el envío y te avisamos con el tracking.</p>
+      `,
+      emailSender,
+      entityType: "lead",
+      entityId: leadId,
+    }, { createdBy: profile.id, leadId });
+  } catch {
+    await supabase.from("sample_address_requests").delete().eq("token", req.token);
+    return { success: false, error: "Error al enviar el email" };
+  }
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: "Petición de dirección para envío de muestra enviada al cliente",
+    metadata: {
+      email_to: lead.email,
+      email_subject: "Datos para envío de muestra — Prototipalo",
+      type: "sample_request_sent",
+      sample_token: req.token,
+    },
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+export async function cancelSampleRequest(
+  leadId: string,
+  requestId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("sample_address_requests")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("lead_id", leadId);
+
+  if (error) {
+    return { success: false, error: "Error al cancelar la petición" };
+  }
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "note",
+    content: "Petición de dirección de muestra cancelada",
+    created_by: profile.id,
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
