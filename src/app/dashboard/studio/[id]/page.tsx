@@ -20,6 +20,14 @@ import {
   updateStudioMeeting,
   deleteStudioMeeting,
 } from "../meeting-actions";
+import {
+  addStudioExpense,
+  updateStudioExpense,
+  deleteStudioExpense,
+  addStudioTimeEntry,
+  updateStudioTimeEntry,
+  deleteStudioTimeEntry,
+} from "../cost-actions";
 import { CopyPortalLink } from "./copy-portal-link";
 import { ProjectDocuments } from "../../projects/[id]/project-documents";
 import { formatDateTime, toMadridDateTimeInput } from "@/lib/dates";
@@ -56,7 +64,9 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
-type Tab = "brief" | "pagos" | "documentos" | "reuniones" | "accesos";
+type Tab = "brief" | "pagos" | "documentos" | "reuniones" | "accesos" | "costes";
+
+const HOURLY_RATE_EUR = 20;
 
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -81,7 +91,9 @@ export default async function StudioProjectDetailPage({
           ? "reuniones"
           : tabParam === "accesos"
             ? "accesos"
-            : "brief";
+            : tabParam === "costes"
+              ? "costes"
+              : "brief";
 
   const profile = await getUserProfile();
   if (!profile) redirect("/login");
@@ -99,24 +111,43 @@ export default async function StudioProjectDetailPage({
 
   if (!project) notFound();
 
-  const [{ data: payments }, { data: collaborators }, { data: meetings }] =
-    await Promise.all([
-      supabase
-        .from("studio_payments")
-        .select("*")
-        .eq("studio_project_id", id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("studio_project_collaborators")
-        .select("*")
-        .eq("studio_project_id", id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("studio_meetings")
-        .select("*")
-        .eq("studio_project_id", id)
-        .order("meeting_date", { ascending: false }),
-    ]);
+  const [
+    { data: payments },
+    { data: collaborators },
+    { data: meetings },
+    { data: expenses },
+    { data: timeEntries },
+  ] = await Promise.all([
+    supabase
+      .from("studio_payments")
+      .select("*")
+      .eq("studio_project_id", id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("studio_project_collaborators")
+      .select("*")
+      .eq("studio_project_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("studio_meetings")
+      .select("*")
+      .eq("studio_project_id", id)
+      .order("meeting_date", { ascending: false }),
+    canDelete
+      ? supabase
+          .from("studio_expenses")
+          .select("*")
+          .eq("studio_project_id", id)
+          .order("expense_date", { ascending: false })
+      : Promise.resolve({ data: null }),
+    canDelete
+      ? supabase
+          .from("studio_time_entries")
+          .select("*")
+          .eq("studio_project_id", id)
+          .order("work_date", { ascending: false })
+      : Promise.resolve({ data: null }),
+  ]);
 
   const total = Number(project.total_price ?? 0);
   const cobrado = (payments ?? [])
@@ -178,26 +209,6 @@ export default async function StudioProjectDetailPage({
         </form>
       </div>
 
-      {/* KPIs pagos */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total</p>
-          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(total)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Planificado</p>
-          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(planificado)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Facturado</p>
-          <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">{formatEur(facturado)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
-          <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
-        </div>
-      </div>
-
       {/* Tabs */}
       <div className="mb-4 border-b border-zinc-200 dark:border-zinc-800">
         <nav className="flex gap-1">
@@ -210,6 +221,9 @@ export default async function StudioProjectDetailPage({
             current={tab}
             label={`Reuniones${meetings && meetings.length > 0 ? ` (${meetings.length})` : ""}`}
           />
+          {canDelete && (
+            <TabLink id={project.id} tab="costes" current={tab} label="Costes" />
+          )}
           <TabLink
             id={project.id}
             tab="accesos"
@@ -232,6 +246,9 @@ export default async function StudioProjectDetailPage({
           projectId={project.id}
           payments={payments ?? []}
           total={total}
+          planificado={planificado}
+          facturado={facturado}
+          cobrado={cobrado}
         />
       )}
 
@@ -247,6 +264,18 @@ export default async function StudioProjectDetailPage({
         <ReunionesTab
           projectId={project.id}
           meetings={meetings ?? []}
+          team={activeUsers ?? []}
+          collaborators={collaborators ?? []}
+        />
+      )}
+
+      {tab === "costes" && canDelete && (
+        <CostesTab
+          projectId={project.id}
+          expenses={expenses ?? []}
+          timeEntries={timeEntries ?? []}
+          team={activeUsers ?? []}
+          cobrado={cobrado}
         />
       )}
 
@@ -500,18 +529,40 @@ function PagosTab({
   projectId,
   payments,
   total,
+  planificado,
+  facturado,
+  cobrado,
 }: {
   projectId: string;
   payments: Payment[];
   total: number;
+  planificado: number;
+  facturado: number;
+  cobrado: number;
 }) {
-  const planificado = payments
-    .filter((p) => p.status !== "cancelado")
-    .reduce((acc, p) => acc + Number(p.amount), 0);
   const sinPlanificar = total > 0 ? total - planificado : 0;
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total</p>
+          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(total)}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Planificado</p>
+          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(planificado)}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Facturado</p>
+          <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">{formatEur(facturado)}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
+          <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
+        </div>
+      </div>
+
       {total > 0 && Math.abs(sinPlanificar) > 0.01 && (
         <div
           className={`rounded-lg border p-3 text-sm ${
@@ -818,12 +869,120 @@ type Meeting = {
   created_at: string;
 };
 
+function teamLabel(u: { full_name: string | null; nickname: string | null; email: string }): string {
+  return u.nickname || u.full_name || u.email.split("@")[0];
+}
+
+function collaboratorLabel(c: { name: string | null; email: string }): string {
+  return c.name || c.email;
+}
+
+function AttendeesPicker({
+  team,
+  collaborators,
+  defaultAttendees = [],
+}: {
+  team: { id: string; full_name: string | null; nickname: string | null; email: string }[];
+  collaborators: Collaborator[];
+  defaultAttendees?: string[];
+}) {
+  const teamLabels = team.map(teamLabel);
+  const collabLabels = collaborators.map(collaboratorLabel);
+  const known = new Set([...teamLabels, ...collabLabels]);
+
+  const selected = new Set<string>();
+  const extras: string[] = [];
+  for (const a of defaultAttendees) {
+    if (known.has(a)) selected.add(a);
+    else extras.push(a);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Equipo
+        </p>
+        {team.length === 0 ? (
+          <p className="text-xs text-zinc-400">No hay miembros activos.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {team.map((u) => {
+              const label = teamLabel(u);
+              return (
+                <label
+                  key={u.id}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 has-[:checked]:border-brand has-[:checked]:bg-brand/10 has-[:checked]:text-brand-dark dark:border-zinc-700 dark:text-zinc-300 dark:has-[:checked]:bg-brand/20 dark:has-[:checked]:text-white"
+                >
+                  <input
+                    type="checkbox"
+                    name="attendees"
+                    value={label}
+                    defaultChecked={selected.has(label)}
+                    className="h-3.5 w-3.5 rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {collaborators.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Cliente / colaboradores
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {collaborators.map((c) => {
+              const label = collaboratorLabel(c);
+              return (
+                <label
+                  key={c.id}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 has-[:checked]:border-brand has-[:checked]:bg-brand/10 has-[:checked]:text-brand-dark dark:border-zinc-700 dark:text-zinc-300 dark:has-[:checked]:bg-brand/20 dark:has-[:checked]:text-white"
+                >
+                  <input
+                    type="checkbox"
+                    name="attendees"
+                    value={label}
+                    defaultChecked={selected.has(label)}
+                    className="h-3.5 w-3.5 rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-600 dark:bg-zinc-800"
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Otros (separados por coma)
+        </label>
+        <input
+          type="text"
+          name="attendees_extra"
+          defaultValue={extras.join(", ")}
+          placeholder="Consultor externo, abogado invitado…"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+        />
+      </div>
+    </div>
+  );
+}
+
 function ReunionesTab({
   projectId,
   meetings,
+  team,
+  collaborators,
 }: {
   projectId: string;
   meetings: Meeting[];
+  team: { id: string; full_name: string | null; nickname: string | null; email: string }[];
+  collaborators: Collaborator[];
 }) {
   const inputClass =
     "block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500";
@@ -872,29 +1031,24 @@ function ReunionesTab({
                     <input type="hidden" name="id" value={m.id} />
                     <input type="hidden" name="studio_project_id" value={projectId} />
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora</label>
-                        <input
-                          type="datetime-local"
-                          name="meeting_date"
-                          defaultValue={toMadridDateTimeInput(m.meeting_date)}
-                          required
-                          className={`mt-1 ${inputClass}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                          Asistentes (separados por coma)
-                        </label>
-                        <input
-                          type="text"
-                          name="attendees"
-                          defaultValue={m.attendees.join(", ")}
-                          placeholder="Manu, Isabella, cliente"
-                          className={`mt-1 ${inputClass}`}
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora</label>
+                      <input
+                        type="datetime-local"
+                        name="meeting_date"
+                        defaultValue={toMadridDateTimeInput(m.meeting_date)}
+                        required
+                        className={`mt-1 ${inputClass} sm:max-w-xs`}
+                      />
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">Asistentes</p>
+                      <AttendeesPicker
+                        team={team}
+                        collaborators={collaborators}
+                        defaultAttendees={m.attendees}
+                      />
                     </div>
 
                     <div>
@@ -969,27 +1123,19 @@ function ReunionesTab({
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Añadir reunión</h3>
         <input type="hidden" name="studio_project_id" value={projectId} />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora *</label>
-            <input
-              type="datetime-local"
-              name="meeting_date"
-              required
-              className={`mt-1 ${inputClass}`}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Asistentes (separados por coma)
-            </label>
-            <input
-              type="text"
-              name="attendees"
-              placeholder="Manu, Isabella, cliente"
-              className={`mt-1 ${inputClass}`}
-            />
-          </div>
+        <div>
+          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora *</label>
+          <input
+            type="datetime-local"
+            name="meeting_date"
+            required
+            className={`mt-1 ${inputClass} sm:max-w-xs`}
+          />
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">Asistentes</p>
+          <AttendeesPicker team={team} collaborators={collaborators} />
         </div>
 
         <div>
@@ -1030,6 +1176,337 @@ function ReunionesTab({
             className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
           >
             Añadir reunión
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+type Expense = {
+  id: string;
+  studio_project_id: string;
+  concept: string;
+  amount: number;
+  expense_date: string;
+  category: string | null;
+  supplier: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+type TimeEntry = {
+  id: string;
+  studio_project_id: string;
+  user_id: string | null;
+  user_label: string | null;
+  work_date: string;
+  hours: number;
+  description: string | null;
+  created_at: string;
+};
+
+function CostesTab({
+  projectId,
+  expenses,
+  timeEntries,
+  team,
+  cobrado,
+}: {
+  projectId: string;
+  expenses: Expense[];
+  timeEntries: TimeEntry[];
+  team: { id: string; full_name: string | null; nickname: string | null; email: string }[];
+  cobrado: number;
+}) {
+  const inputClass =
+    "block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500";
+
+  const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+  const totalHours = timeEntries.reduce((acc, t) => acc + Number(t.hours), 0);
+  const horasCoste = totalHours * HOURLY_RATE_EUR;
+  const margen = cobrado - totalExpenses - horasCoste;
+  const margenPct = cobrado > 0 ? Math.round((margen / cobrado) * 100) : null;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="space-y-6">
+      {/* Resumen interno */}
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
+          <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Gastos</p>
+          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(totalExpenses)}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Horas ({HOURLY_RATE_EUR}€/h)
+          </p>
+          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">
+            {totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h
+            <span className="ml-2 text-xs font-normal text-zinc-500">{formatEur(horasCoste)}</span>
+          </p>
+        </div>
+        <div
+          className={`rounded-xl border p-3 ${
+            margen >= 0
+              ? "border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-900/10"
+              : "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-900/10"
+          }`}
+        >
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Margen</p>
+          <p className={`mt-1 text-lg font-bold ${margen >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
+            {formatEur(margen)}
+            {margenPct !== null && (
+              <span className="ml-2 text-xs font-normal opacity-80">{margenPct}%</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Gastos */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Gastos directos{expenses.length > 0 ? ` (${expenses.length})` : ""}
+          </h3>
+        </div>
+        {expenses.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay gastos imputados.
+          </p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {expenses.map((e) => (
+              <li key={e.id} className="px-5 py-3">
+                <form action={updateStudioExpense} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="studio_project_id" value={projectId} />
+                  <input
+                    type="date"
+                    name="expense_date"
+                    defaultValue={e.expense_date}
+                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  />
+                  <input
+                    type="text"
+                    name="concept"
+                    defaultValue={e.concept}
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  />
+                  <input
+                    type="text"
+                    name="supplier"
+                    defaultValue={e.supplier ?? ""}
+                    placeholder="Proveedor"
+                    className="w-32 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  />
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="amount"
+                      step="0.01"
+                      min="0"
+                      defaultValue={e.amount}
+                      className="block w-24 rounded-lg border border-zinc-300 bg-white py-1 pr-2 pl-6 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                    />
+                    <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-zinc-400">&euro;</span>
+                  </div>
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Guardar
+                  </button>
+                </form>
+                <form action={deleteStudioExpense} className="mt-1">
+                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="studio_project_id" value={projectId} />
+                  <button
+                    type="submit"
+                    className="text-xs text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                  >
+                    Eliminar
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <form
+        action={addStudioExpense}
+        className="space-y-3 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Añadir gasto</h3>
+        <input type="hidden" name="studio_project_id" value={projectId} />
+        <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto_auto_auto]">
+          <input
+            type="date"
+            name="expense_date"
+            defaultValue={todayIso}
+            className={inputClass}
+          />
+          <input
+            type="text"
+            name="concept"
+            required
+            placeholder="Concepto (Patente, materiales, abogado...)"
+            className={inputClass}
+          />
+          <input
+            type="text"
+            name="supplier"
+            placeholder="Proveedor"
+            className={`${inputClass} sm:w-40`}
+          />
+          <div className="relative">
+            <input
+              type="number"
+              name="amount"
+              step="0.01"
+              min="0"
+              required
+              placeholder="0.00"
+              className={`block w-32 rounded-lg border border-zinc-300 bg-white py-2 pr-3 pl-7 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white`}
+            />
+            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-zinc-400">&euro;</span>
+          </div>
+          <button
+            type="submit"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
+          >
+            Añadir
+          </button>
+        </div>
+      </form>
+
+      {/* Horas imputadas */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Horas imputadas{timeEntries.length > 0 ? ` (${totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h)` : ""}
+          </h3>
+        </div>
+        {timeEntries.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay horas imputadas.
+          </p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {timeEntries.map((t) => (
+              <li key={t.id} className="px-5 py-3">
+                <form action={updateStudioTimeEntry} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="studio_project_id" value={projectId} />
+                  <input
+                    type="date"
+                    name="work_date"
+                    defaultValue={t.work_date}
+                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  />
+                  <select
+                    name="user_id"
+                    defaultValue={t.user_id ?? ""}
+                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  >
+                    <option value="">{t.user_label ?? "Sin asignar"}</option>
+                    {team.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nickname || u.full_name || u.email.split("@")[0]}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    name="hours"
+                    step="0.25"
+                    min="0.25"
+                    defaultValue={t.hours}
+                    className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  />
+                  <span className="text-xs text-zinc-400">h</span>
+                  <input
+                    type="text"
+                    name="description"
+                    defaultValue={t.description ?? ""}
+                    placeholder="¿Qué hiciste?"
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Guardar
+                  </button>
+                </form>
+                <form action={deleteStudioTimeEntry} className="mt-1">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="studio_project_id" value={projectId} />
+                  <button
+                    type="submit"
+                    className="text-xs text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                  >
+                    Eliminar
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <form
+        action={addStudioTimeEntry}
+        className="space-y-3 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Imputar horas</h3>
+        <input type="hidden" name="studio_project_id" value={projectId} />
+        <div className="grid gap-3 sm:grid-cols-[auto_auto_auto_1fr_auto]">
+          <input
+            type="date"
+            name="work_date"
+            defaultValue={todayIso}
+            className={inputClass}
+          />
+          <select
+            name="user_id"
+            required
+            defaultValue=""
+            className={`${inputClass} sm:w-40`}
+          >
+            <option value="" disabled>Quién</option>
+            {team.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.nickname || u.full_name || u.email.split("@")[0]}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            name="hours"
+            step="0.25"
+            min="0.25"
+            required
+            placeholder="2.5"
+            className={`${inputClass} sm:w-24`}
+          />
+          <input
+            type="text"
+            name="description"
+            placeholder="¿Qué hiciste? (opcional)"
+            className={inputClass}
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
+          >
+            Imputar
           </button>
         </div>
       </form>

@@ -117,13 +117,20 @@ async function StudioPortalContent({
     return <NamePrompt token={token} />;
   }
 
-  const { data: payments } = collaborator.can_see_payments
+  const { data: paymentsAll } = collaborator.can_see_payments
     ? await supabase
         .from("studio_payments")
         .select("*")
         .eq("studio_project_id", project.id)
         .order("position", { ascending: true })
     : { data: null };
+
+  // Solo mostramos al cliente los hitos en los que aún tiene "trabajo"
+  // pendiente (algo por pagar o ya facturado a la espera). Cuando todo
+  // está cobrado, la sección desaparece — el dinero deja de aparecer.
+  const pendingPayments = (paymentsAll ?? []).filter(
+    (p) => p.status === "pendiente" || p.status === "facturado",
+  );
 
   const { data: meetings } = collaborator.can_see_meetings
     ? await supabase
@@ -132,11 +139,6 @@ async function StudioPortalContent({
         .eq("studio_project_id", project.id)
         .order("meeting_date", { ascending: false })
     : { data: null };
-
-  const total = Number(project.total_price ?? 0);
-  const cobrado = (payments ?? [])
-    .filter((p) => p.status === "cobrado")
-    .reduce((acc, p) => acc + Number(p.amount), 0);
 
   const statusLabel = STATUS_LABELS[project.status] ?? project.status;
   const statusColor = STATUS_COLORS[project.status] ?? STATUS_COLORS.brief;
@@ -189,45 +191,35 @@ async function StudioPortalContent({
           </Section>
         )}
 
-        {/* Pagos */}
-        {collaborator.can_see_payments && (
-          <Section title="Hitos de pago">
-            {total > 0 && (
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
-                <Stat label="Total" value={formatEur(total)} />
-                <Stat label="Cobrado" value={formatEur(cobrado)} accent="green" />
-              </div>
-            )}
-            {payments && payments.length > 0 ? (
-              <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
-                {payments.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-zinc-900">{p.label}</p>
-                      {p.due_date && (
-                        <p className="text-xs text-zinc-500">
-                          Vence {formatDate(p.due_date)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900">
-                        {formatEur(Number(p.amount))}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          PAYMENT_STATUS_COLORS[p.status] ?? PAYMENT_STATUS_COLORS.pendiente
-                        }`}
-                      >
-                        {PAYMENT_STATUS_LABELS[p.status] ?? p.status}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-zinc-500">Aún no hay hitos de pago publicados.</p>
-            )}
+        {/* Pagos pendientes — solo aparece si el cliente tiene algo abierto */}
+        {collaborator.can_see_payments && pendingPayments.length > 0 && (
+          <Section title="Pagos pendientes">
+            <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
+              {pendingPayments.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-900">{p.label}</p>
+                    {p.due_date && (
+                      <p className="text-xs text-zinc-500">
+                        Vence {formatDate(p.due_date)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-zinc-900">
+                      {formatEur(Number(p.amount))}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        PAYMENT_STATUS_COLORS[p.status] ?? PAYMENT_STATUS_COLORS.pendiente
+                      }`}
+                    >
+                      {PAYMENT_STATUS_LABELS[p.status] ?? p.status}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </Section>
         )}
 
@@ -310,17 +302,6 @@ function Paragraph({ label, value }: { label: string; value: string }) {
     <div className="mb-4 last:mb-0">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
       <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{value}</p>
-    </div>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: "green" }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 p-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${accent === "green" ? "text-green-600" : "text-zinc-900"}`}>
-        {value}
-      </p>
     </div>
   );
 }
