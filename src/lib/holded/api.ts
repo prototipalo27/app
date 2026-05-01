@@ -503,11 +503,61 @@ export async function listTreasuryAccounts(): Promise<HoldedTreasuryAccount[]> {
   return (await res.json()) as HoldedTreasuryAccount[];
 }
 
-/** Get total pending receivables (unpaid/partially paid invoices) */
-export async function getPendingReceivables(): Promise<number> {
+export interface PendingInvoice {
+  id: string;
+  contactName: string;
+  docNumber: string | null;
+  total: number;
+  pending: number;
+  paid: number;
+  date: number;
+  dueDate: number;
+  status: number;
+  isDraft: boolean;
+  isOverdue: boolean;
+}
+
+export interface PendingReceivables {
+  total: number;
+  invoices: PendingInvoice[];
+}
+
+/**
+ * Pending receivables: unpaid + partially-paid invoices.
+ * Includes drafts (cash-paying clients per business rule).
+ * Sums Holded's "Pendiente" field, not the full invoice total.
+ */
+export async function getPendingReceivables(): Promise<PendingReceivables> {
   const invoices = await listDocuments("invoice");
-  // status: 0=not paid, 2=partially paid
-  return invoices
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  const pending: PendingInvoice[] = invoices
     .filter((inv) => inv.status === 0 || inv.status === 2)
-    .reduce((sum, inv) => sum + (inv.total || 0), 0);
+    .map((inv) => {
+      const pendingAmount =
+        typeof inv.paymentsPending === "number"
+          ? inv.paymentsPending
+          : (inv.total || 0) - (inv.paymentsTotal || 0);
+      return {
+        id: inv.id,
+        contactName: inv.contactName,
+        docNumber: inv.docNumber,
+        total: inv.total || 0,
+        pending: pendingAmount,
+        paid: inv.paymentsTotal || 0,
+        date: inv.date,
+        dueDate: inv.dueDate,
+        status: inv.status,
+        isDraft: inv.draft === true,
+        isOverdue: inv.dueDate > 0 && inv.dueDate < nowSec,
+      };
+    })
+    .filter((inv) => inv.pending > 0)
+    .sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return a.dueDate - b.dueDate;
+    });
+
+  const total = pending.reduce((sum, inv) => sum + inv.pending, 0);
+  return { total, invoices: pending };
 }

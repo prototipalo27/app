@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getFixedExpenses, getTaxPayments, getPendingInvoices, getFinancings, getCashFlowPipeline, getDebts } from "./actions";
+import { getFixedExpenses, getTaxPayments, getFinancings, getCashFlowPipeline, getDebts } from "./actions";
+import { getPendingReceivables } from "@/lib/holded/api";
 import { getNextTaxDeadline, getModelName } from "@/lib/finance/tax-calendar";
 import FixedExpensesSection from "./fixed-expenses-section";
 import FinancingsSection from "./financings-section";
@@ -54,7 +55,7 @@ export default async function FinanzasPage() {
   const [
     fixedExpenses,
     taxPayments,
-    pendingInvoices,
+    receivables,
     financings,
     cashFlowData,
     debts,
@@ -66,7 +67,7 @@ export default async function FinanzasPage() {
   ] = await Promise.all([
     getFixedExpenses(),
     getTaxPayments(),
-    getPendingInvoices(),
+    getPendingReceivables().catch(() => ({ total: 0, invoices: [] })),
     getFinancings(),
     getCashFlowPipeline(),
     getDebts(),
@@ -159,7 +160,8 @@ export default async function FinanzasPage() {
 
   const balanceThisMonth = invoicedThisMonth - monthlyFixedExpenses - variableExpensesThisMonth - monthlyFinancingPayments;
 
-  const pendingTotal = pendingInvoices.reduce((s, inv) => s + inv.total, 0);
+  const pendingInvoices = receivables.invoices;
+  const pendingTotal = receivables.total;
 
   // ── 6-month evolution ──
   const now = new Date();
@@ -441,6 +443,7 @@ export default async function FinanzasPage() {
                   <tr className="border-b border-zinc-200 dark:border-zinc-800">
                     <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">Cliente</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-zinc-500">N Factura</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Pendiente</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Total</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-zinc-500">Vencimiento</th>
                   </tr>
@@ -448,14 +451,21 @@ export default async function FinanzasPage() {
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {pendingInvoices.map((inv) => {
                     const dueDate = inv.dueDate ? new Date(inv.dueDate * 1000) : null;
-                    const isOverdue = dueDate && dueDate < new Date();
                     return (
                       <tr key={inv.id}>
                         <td className="px-3 py-2 text-zinc-900 dark:text-white">{inv.contactName}</td>
-                        <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{inv.docNumber}</td>
-                        <td className="px-3 py-2 text-right font-medium text-zinc-900 dark:text-white">{formatEur(inv.total)}</td>
-                        <td className={`px-3 py-2 text-right ${isOverdue ? "text-red-500 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
+                          {inv.docNumber || (
+                            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                              Borrador
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-amber-700 dark:text-amber-400">{formatEur(inv.pending)}</td>
+                        <td className="px-3 py-2 text-right text-zinc-500 dark:text-zinc-400">{formatEur(inv.total)}</td>
+                        <td className={`px-3 py-2 text-right ${inv.isOverdue ? "text-red-500 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
                           {dueDate ? dueDate.toLocaleDateString("es-ES") : "—"}
+                          {inv.isOverdue && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Vencida</span>}
                         </td>
                       </tr>
                     );

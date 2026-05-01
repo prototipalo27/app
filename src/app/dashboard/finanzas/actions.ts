@@ -310,55 +310,6 @@ export async function ensureTaxCalendar(year: number) {
   return { success: true, error: null };
 }
 
-// ── Holded — Pending Invoices ──
-
-export async function getPendingInvoices() {
-  await requireRole("manager");
-
-  try {
-    const invoices = await listDocuments("invoice");
-    // Holded status: 0=not paid, 1=paid, 2=partially paid
-    const pending = invoices.filter((inv) => inv.status === 0 || inv.status === 2);
-    return pending.map((inv) => ({
-      id: inv.id,
-      contactName: inv.contactName,
-      docNumber: inv.docNumber,
-      total: inv.total,
-      dueDate: inv.dueDate,
-      date: inv.date,
-      status: inv.status,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-/** Debug: get all invoice statuses to diagnose filtering issues */
-export async function debugInvoiceStatuses() {
-  await requireRole("manager");
-
-  try {
-    const invoices = await listDocuments("invoice");
-    const statusCounts: Record<number, number> = {};
-    for (const inv of invoices) {
-      statusCounts[inv.status] = (statusCounts[inv.status] || 0) + 1;
-    }
-    // Return summary + last 10 invoices for inspection
-    return {
-      total: invoices.length,
-      statusCounts,
-      sample: invoices.slice(0, 15).map((inv) => ({
-        docNumber: inv.docNumber,
-        contactName: inv.contactName,
-        total: inv.total,
-        status: inv.status,
-      })),
-    };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Error" };
-  }
-}
-
 // ── Data fetchers for the page ──
 
 export async function getFixedExpenses() {

@@ -13,16 +13,23 @@ export interface HoldedDocumentProduct {
   productId: string;
 }
 
+export interface HoldedPayment {
+  id: string;
+  amount: number;
+  date: number;
+  bankId?: string;
+}
+
 export interface HoldedDocument {
   id: string;
   contact: string;       // contactId
   contactName: string;
   desc: string;
-  docNumber: string;
+  docNumber: string | null;
   date: number;           // unix timestamp
   dueDate: number;
-  notes: string;
-  status: number;
+  notes: string | null;
+  status: number;         // 0 = unpaid, 1 = paid, 2 = partially paid
   currency: string;
   subtotal: number;
   tax: number;
@@ -30,6 +37,14 @@ export interface HoldedDocument {
   total: number;
   products: HoldedDocumentProduct[];
   customFields: unknown[];
+  /** true when the document is a draft (not yet approved/sent) */
+  draft?: boolean | null;
+  /** Total amount already collected */
+  paymentsTotal?: number;
+  /** Outstanding amount to collect — the value Holded shows in its "Pendiente" column */
+  paymentsPending?: number;
+  paymentsRefunds?: number;
+  paymentsDetail?: HoldedPayment[];
 }
 
 export type HoldedDocType =

@@ -1,5 +1,6 @@
 import { listTreasuryAccounts, getPendingReceivables } from "@/lib/holded/api";
 import { createClient } from "@/lib/supabase/server";
+import ReceivablesCard from "./receivables-card";
 
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -24,18 +25,16 @@ export async function CashflowKpis() {
 
   const [accounts, receivables, { data: debts }] = await Promise.all([
     listTreasuryAccounts().catch(() => []),
-    getPendingReceivables().catch(() => 0),
+    getPendingReceivables().catch(() => ({ total: 0, invoices: [] })),
     supabase
       .from("debts")
       .select("total_amount, paid_amount")
       .eq("is_paid", false),
   ]);
 
-  // BBVA only
   const bbva = accounts.find((a) => a.name === "BBVA");
   const totalBank = bbva?.balance ?? 0;
 
-  // Total debt
   const totalDebt = (debts || []).reduce(
     (sum, d) => sum + (d.total_amount - d.paid_amount),
     0,
@@ -45,7 +44,6 @@ export async function CashflowKpis() {
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">Cashflow</h2>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {/* BBVA */}
         <div>
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">BBVA</p>
           <p className="mt-1 text-2xl font-bold">
@@ -54,16 +52,8 @@ export async function CashflowKpis() {
           <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Saldo actual</p>
         </div>
 
-        {/* Receivables */}
-        <div>
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Nos deben</p>
-          <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {formatEur(receivables)}
-          </p>
-          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Facturas pendientes cobro</p>
-        </div>
+        <ReceivablesCard total={receivables.total} invoices={receivables.invoices} />
 
-        {/* Debts */}
         <div>
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Debemos</p>
           <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">
@@ -74,12 +64,11 @@ export async function CashflowKpis() {
           </p>
         </div>
 
-        {/* Net position */}
         <div>
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Posicion neta</p>
           <p className="mt-1 text-2xl font-bold">
-            <BalanceColor amount={totalBank + receivables - totalDebt}>
-              {formatEur(totalBank + receivables - totalDebt)}
+            <BalanceColor amount={totalBank + receivables.total - totalDebt}>
+              {formatEur(totalBank + receivables.total - totalDebt)}
             </BalanceColor>
           </p>
           <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Banco + cobros - deudas</p>
