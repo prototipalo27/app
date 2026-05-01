@@ -3985,7 +3985,8 @@ export async function requestSampleShipment(
     .single();
 
   if (insertError || !req) {
-    return { success: false, error: "Error al crear la petición" };
+    console.error("[requestSampleShipment] insert error:", insertError);
+    return { success: false, error: insertError?.message || "Error al crear la petición" };
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";

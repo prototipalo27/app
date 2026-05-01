@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDroppable } from "@dnd-kit/react";
 import { KanbanCard } from "./kanban-card";
 import type { ProjectWithItems } from "./kanban-card";
@@ -23,9 +24,19 @@ export function KanbanColumn({ column, projects, className, responsibles, invoic
       <div className="shrink-0 px-3 pt-3 pb-2">
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            {column.label}
-          </h3>
+          {column.id === "shipping" ? (
+            <Link
+              href="/dashboard/shipments"
+              prefetch={false}
+              className="text-sm font-semibold text-zinc-700 hover:text-cyan-600 hover:underline dark:text-zinc-300 dark:hover:text-cyan-400"
+            >
+              {column.label}
+            </Link>
+          ) : (
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              {column.label}
+            </h3>
+          )}
           {responsibles && responsibles.length > 0 && responsibles.map((name) => (
             <span
               key={name}

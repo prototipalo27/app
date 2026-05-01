@@ -228,21 +228,6 @@ export default function MobileSidebar({
               </svg>
             </Link>
           </div>
-          <Link
-            href="/dashboard/shipments"
-            prefetch={false}
-            onClick={handleNavClick}
-            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-              pathname?.startsWith("/dashboard/shipments")
-                ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
-                : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
-            }`}
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-            </svg>
-            Envíos
-          </Link>
 
           {/* ── EQUIPO ── */}
           <p className="mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">

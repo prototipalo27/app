@@ -124,6 +124,15 @@ export default function DesktopNav({ isManager, isSuperAdmin, pendingTaskCount =
         }
       />
       <NavLink
+        href="/dashboard/studio"
+        label="Studio"
+        icon={
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        }
+      />
+      <NavLink
         href="/dashboard/printers"
         label="Impresoras"
         icon={
@@ -136,15 +145,6 @@ export default function DesktopNav({ isManager, isSuperAdmin, pendingTaskCount =
         actionIcon={
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-          </svg>
-        }
-      />
-      <NavLink
-        href="/dashboard/shipments"
-        label="Envíos"
-        icon={
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
           </svg>
         }
       />
