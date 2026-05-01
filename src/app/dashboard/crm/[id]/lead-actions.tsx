@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewButton } from "./pdf-viewer";
+import { formatDate, formatDateMedium } from "@/lib/dates";
 
 interface LeadActionsProps {
   leadId: string;
@@ -243,11 +244,7 @@ export default function LeadActions({
             </Badge>
             <p className="text-xs text-muted-foreground">
               {ndaSignerName && <>{ndaSignerName} — </>}
-              {ndaSignedAt && new Date(ndaSignedAt).toLocaleDateString("es-ES", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+              {ndaSignedAt && formatDateMedium(ndaSignedAt)}
             </p>
             {ndaId && (
               <a
@@ -344,7 +341,7 @@ export default function LeadActions({
               Esperando datos del cliente
             </Badge>
             <p className="text-xs text-muted-foreground">
-              Petición enviada el {new Date(sampleRequest.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+              Petición enviada el {formatDateMedium(sampleRequest.created_at)}
             </p>
             <div className="flex flex-wrap gap-1.5">
               <button
@@ -834,7 +831,7 @@ export default function LeadActions({
                   Pagado
                   {quoteRequest.paid_at && (
                     <span className="ml-1 font-normal">
-                      {new Date(quoteRequest.paid_at).toLocaleDateString("es-ES")}
+                      {formatDate(quoteRequest.paid_at)}
                     </span>
                   )}
                 </Badge>
@@ -1009,7 +1006,7 @@ export default function LeadActions({
                     <div className="text-right">
                       <p className="text-xs font-semibold tabular-nums">{inv.total.toFixed(2)} €</p>
                       <p className="text-[10px] text-muted-foreground">
-                        {new Date(inv.date * 1000).toLocaleDateString("es-ES")}
+                        {formatDate(new Date(inv.date * 1000))}
                       </p>
                     </div>
                   </button>

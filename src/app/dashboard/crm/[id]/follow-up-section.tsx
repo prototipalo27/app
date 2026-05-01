@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { es } from "react-day-picker/locale";
+import { formatDayMonth } from "@/lib/dates";
 
 const ACTION_TYPES = [
   { value: "call", label: "Llamada", icon: "phone" },
@@ -115,7 +116,7 @@ export function FollowUpSection({
 
   const selectedDateLabel = date
     ? QUICK_DATES.find((q) => q.value === date)?.label ||
-      new Date(date + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+      formatDayMonth(date + "T12:00:00")
     : null;
 
   return (
@@ -163,6 +164,7 @@ export function FollowUpSection({
                     day: "numeric",
                     month: "long",
                     year: "numeric",
+                    timeZone: "Europe/Madrid",
                   })
                 : "Sin fecha"}
             </span>
@@ -262,10 +264,7 @@ export function FollowUpSection({
                   <div className="flex items-center gap-1.5">
                     <span className="text-muted-foreground">{ACTION_ICONS[f.action_type] || ACTION_ICONS.other}</span>
                     <span className="font-medium">
-                      {new Date(f.scheduled_date + "T12:00:00").toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {formatDayMonth(f.scheduled_date + "T12:00:00")}
                     </span>
                     {isOverdue && (
                       <Badge variant="secondary" className="bg-red-100 text-red-700 text-[9px] dark:bg-red-900/30 dark:text-red-400">
@@ -308,10 +307,7 @@ export function FollowUpSection({
               <div key={f.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground line-through">
                 {ACTION_ICONS[f.action_type] || ACTION_ICONS.other}
                 <span>
-                  {new Date(f.scheduled_date + "T12:00:00").toLocaleDateString("es-ES", {
-                    day: "numeric",
-                    month: "short",
-                  })}
+                  {formatDayMonth(f.scheduled_date + "T12:00:00")}
                 </span>
                 {f.note && <span className="truncate">— {f.note}</span>}
               </div>

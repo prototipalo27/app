@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { setCollaboratorName } from "./actions";
 import { listFolderFiles } from "@/lib/google-drive/client";
+import { formatDate, formatDateLong, formatTime } from "@/lib/dates";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
@@ -124,6 +125,14 @@ async function StudioPortalContent({
         .order("position", { ascending: true })
     : { data: null };
 
+  const { data: meetings } = collaborator.can_see_meetings
+    ? await supabase
+        .from("studio_meetings")
+        .select("*")
+        .eq("studio_project_id", project.id)
+        .order("meeting_date", { ascending: false })
+    : { data: null };
+
   const total = Number(project.total_price ?? 0);
   const cobrado = (payments ?? [])
     .filter((p) => p.status === "cobrado")
@@ -147,7 +156,7 @@ async function StudioPortalContent({
             </span>
             {project.expected_end_date && (
               <span className="text-xs text-zinc-500">
-                · Entrega prevista {new Date(project.expected_end_date).toLocaleDateString("es-ES")}
+                · Entrega prevista {formatDate(project.expected_end_date)}
               </span>
             )}
           </div>
@@ -197,7 +206,7 @@ async function StudioPortalContent({
                       <p className="truncate text-sm font-medium text-zinc-900">{p.label}</p>
                       {p.due_date && (
                         <p className="text-xs text-zinc-500">
-                          Vence {new Date(p.due_date).toLocaleDateString("es-ES")}
+                          Vence {formatDate(p.due_date)}
                         </p>
                       )}
                     </div>
@@ -222,10 +231,10 @@ async function StudioPortalContent({
           </Section>
         )}
 
-        {/* Reuniones — placeholder hasta Fase 3 */}
+        {/* Reuniones */}
         {collaborator.can_see_meetings && (
           <Section title="Reuniones">
-            <p className="text-sm text-zinc-500">Las reuniones aparecerán aquí cuando el equipo las publique.</p>
+            <MeetingsList meetings={meetings ?? []} />
           </Section>
         )}
 
@@ -398,7 +407,7 @@ function FileGroup({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-zinc-900">{f.name}</p>
               <p className="text-xs text-zinc-500">
-                {[formatBytes(f.size), f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString("es-ES") : null]
+                {[formatBytes(f.size), f.modifiedTime ? formatDate(f.modifiedTime) : null]
                   .filter(Boolean)
                   .join(" · ")}
               </p>
@@ -415,5 +424,73 @@ function FileGroup({
         ))}
       </ul>
     </div>
+  );
+}
+
+type PortalMeeting = {
+  id: string;
+  meeting_date: string;
+  attendees: string[];
+  summary: string | null;
+  action_items: string | null;
+  recording_url: string | null;
+};
+
+function MeetingsList({ meetings }: { meetings: PortalMeeting[] }) {
+  if (meetings.length === 0) {
+    return <p className="text-sm text-zinc-500">Aún no hay reuniones publicadas.</p>;
+  }
+
+  return (
+    <ul className="space-y-4">
+      {meetings.map((m) => {
+        const dateLabel = formatDateLong(m.meeting_date);
+        const timeLabel = formatTime(m.meeting_date);
+        return (
+          <li
+            key={m.id}
+            className="rounded-lg border border-zinc-200 bg-white p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-zinc-900">
+                  {dateLabel}{" "}
+                  <span className="font-normal text-zinc-500">· {timeLabel}</span>
+                </p>
+                {m.attendees.length > 0 && (
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {m.attendees.join(", ")}
+                  </p>
+                )}
+              </div>
+              {m.recording_url && (
+                <a
+                  href={m.recording_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  Ver grabación
+                </a>
+              )}
+            </div>
+
+            {m.summary && (
+              <div className="mt-3">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Resumen</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{m.summary}</p>
+              </div>
+            )}
+
+            {m.action_items && (
+              <div className="mt-3">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Próximos pasos</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{m.action_items}</p>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

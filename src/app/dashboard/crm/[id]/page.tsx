@@ -25,6 +25,7 @@ import { getBasePrices, getCommissionSummary, getNdaStatus, getSampleRequestStat
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDateTime, formatDayMonthTime } from "@/lib/dates";
 
 // ── Skeleton loaders ────────────────────────────────────────
 
@@ -88,8 +89,8 @@ async function UtmSection({ leadId, leadSource }: { leadId: string; leadSource: 
     { label: "Referrer", value: utm.referrer },
     { label: "gclid", value: utm.gclid },
     { label: "fbclid", value: utm.fbclid },
-    { label: "Primer toque", value: utm.first_touch_timestamp ? new Date(utm.first_touch_timestamp).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null },
-    { label: "Último toque", value: utm.last_touch_timestamp ? new Date(utm.last_touch_timestamp).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : null },
+    { label: "Primer toque", value: utm.first_touch_timestamp ? formatDateTime(utm.first_touch_timestamp) : null },
+    { label: "Último toque", value: utm.last_touch_timestamp ? formatDateTime(utm.last_touch_timestamp) : null },
   ].filter((f) => f.value);
 
   return (
@@ -255,7 +256,7 @@ async function ActivitySection({ leadId }: { leadId: string }) {
                         <span className="text-xs text-muted-foreground">por {userMap.get(activity.created_by) || "—"}</span>
                       )}
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {new Date(activity.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        {formatDayMonthTime(activity.created_at)}
                       </span>
                     </div>
                     {actType === "email_sent" && metadata && (
@@ -329,7 +330,7 @@ async function SentEmailsSection({ leadId }: { leadId: string }) {
                   </p>
                 </div>
                 <div className="shrink-0 text-right text-muted-foreground">
-                  <p>{new Date(email.sent_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                  <p>{formatDayMonthTime(email.sent_at)}</p>
                   <p className="text-[10px]">por {(email.user_id && senderMap.get(email.user_id)) || "—"}</p>
                 </div>
               </div>
@@ -456,7 +457,7 @@ export default async function LeadDetailPage({
                   <Badge variant="secondary" className={tagClasses(lead.project_type_tag)}>{lead.project_type_tag}</Badge>
                 )}
                 <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                  {new Date(lead.created_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {formatDateTime(lead.created_at)}
                   {(() => {
                     const days = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / 86400000);
                     return (

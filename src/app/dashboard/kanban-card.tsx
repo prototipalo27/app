@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDraggable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
+import { formatDayMonth } from "@/lib/dates";
 
 export type ProjectItem = Pick<Tables<"project_items">, "id" | "name" | "quantity" | "completed">;
 
@@ -25,7 +26,7 @@ function getDeadlineInfo(deadline: string | null): { label: string; days: number
   const target = new Date(deadline + "T00:00:00");
   const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  const label = target.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const label = formatDayMonth(target);
 
   if (diff < 0) return { label, days: diff, colorClass: "bg-red-500/20 text-red-400 border-red-500/30" };
   if (diff < 2) return { label, days: diff, colorClass: "bg-red-500/20 text-red-400 border-red-500/30" };

@@ -20,6 +20,7 @@ import ProjectChecklist from "./project-checklist";
 import ApplyTemplate from "./apply-template";
 import PmSelector from "./pm-selector";
 import { NegotiationBriefing } from "./negotiation-briefing";
+import { formatDateTime } from "@/lib/dates";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -328,7 +329,7 @@ export default async function ProjectDetailPage({
               <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/10">
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">
                   ✓ Cliente confirmó el envío el{" "}
-                  {new Date(project.client_confirmed_at).toLocaleString("es-ES")}
+                  {formatDateTime(project.client_confirmed_at)}
                   {project.client_confirmed_by ? ` (${project.client_confirmed_by})` : ""}
                 </p>
               </div>
@@ -499,8 +500,8 @@ export default async function ProjectDetailPage({
               return `${Number(total).toFixed(2)} €`;
             })()}
           />
-          <DetailRow label="Created" value={new Date(project.created_at).toLocaleString()} />
-          <DetailRow label="Updated" value={new Date(project.updated_at).toLocaleString()} />
+          <DetailRow label="Created" value={formatDateTime(project.created_at)} />
+          <DetailRow label="Updated" value={formatDateTime(project.updated_at)} />
           {project.notes && (
             <div className="mt-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
               <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Notes</p>

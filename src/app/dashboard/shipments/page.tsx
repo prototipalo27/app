@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { formatDayMonth } from "@/lib/dates";
 
 function StatusBadge({ status }: { status: string | null }) {
   const s = status?.toLowerCase() ?? "unknown";
@@ -93,15 +94,9 @@ export default async function ShipmentsPage() {
                     </td>
                     <td className="hidden px-4 py-3 text-zinc-500 dark:text-zinc-400 sm:table-cell">
                       {s.created_at
-                        ? new Date(s.created_at).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                          })
+                        ? formatDayMonth(s.created_at)
                         : s.shipped_at
-                          ? new Date(s.shipped_at).toLocaleDateString("es-ES", {
-                              day: "2-digit",
-                              month: "short",
-                            })
+                          ? formatDayMonth(s.shipped_at)
                           : "—"}
                     </td>
                   </tr>

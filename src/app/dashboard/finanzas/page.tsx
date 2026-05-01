@@ -11,6 +11,7 @@ import PaymentCalendarSection from "./payment-calendar-section";
 import ReportDownloadButton from "./report-download-button";
 import DebtsSection from "./debts-section";
 import { CATEGORY_LABELS } from "@/lib/finance/categories";
+import { formatDate, formatMonthYearShort } from "@/lib/dates";
 
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -169,7 +170,7 @@ export default async function FinanzasPage() {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
+    const label = formatMonthYearShort(d);
     months6.push({ key, label });
   }
 
@@ -302,7 +303,7 @@ export default async function FinanzasPage() {
             Proximo impuesto: {nextTax.name}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Vence el {new Date(nextTax.dueDate).toLocaleDateString("es-ES")} ({nextTax.daysLeft} dias)
+            Vence el {formatDate(nextTax.dueDate)} ({nextTax.daysLeft} dias)
           </p>
         </div>
       )}
@@ -464,7 +465,7 @@ export default async function FinanzasPage() {
                         <td className="px-3 py-2 text-right font-medium text-amber-700 dark:text-amber-400">{formatEur(inv.pending)}</td>
                         <td className="px-3 py-2 text-right text-zinc-500 dark:text-zinc-400">{formatEur(inv.total)}</td>
                         <td className={`px-3 py-2 text-right ${inv.isOverdue ? "text-red-500 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
-                          {dueDate ? dueDate.toLocaleDateString("es-ES") : "—"}
+                          {dueDate ? formatDate(dueDate) : "—"}
                           {inv.isOverdue && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Vencida</span>}
                         </td>
                       </tr>

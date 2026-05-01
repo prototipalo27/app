@@ -15,8 +15,14 @@ import {
   updateStudioCollaboratorAccess,
   deleteStudioCollaborator,
 } from "../collaborator-actions";
+import {
+  addStudioMeeting,
+  updateStudioMeeting,
+  deleteStudioMeeting,
+} from "../meeting-actions";
 import { CopyPortalLink } from "./copy-portal-link";
 import { ProjectDocuments } from "../../projects/[id]/project-documents";
+import { formatDateTime, toMadridDateTimeInput } from "@/lib/dates";
 
 const STATUSES = [
   { value: "brief", label: "Brief" },
@@ -50,7 +56,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
-type Tab = "brief" | "pagos" | "documentos" | "accesos";
+type Tab = "brief" | "pagos" | "documentos" | "reuniones" | "accesos";
 
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -71,9 +77,11 @@ export default async function StudioProjectDetailPage({
       ? "pagos"
       : tabParam === "documentos"
         ? "documentos"
-        : tabParam === "accesos"
-          ? "accesos"
-          : "brief";
+        : tabParam === "reuniones"
+          ? "reuniones"
+          : tabParam === "accesos"
+            ? "accesos"
+            : "brief";
 
   const profile = await getUserProfile();
   if (!profile) redirect("/login");
@@ -91,18 +99,24 @@ export default async function StudioProjectDetailPage({
 
   if (!project) notFound();
 
-  const [{ data: payments }, { data: collaborators }] = await Promise.all([
-    supabase
-      .from("studio_payments")
-      .select("*")
-      .eq("studio_project_id", id)
-      .order("position", { ascending: true }),
-    supabase
-      .from("studio_project_collaborators")
-      .select("*")
-      .eq("studio_project_id", id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: payments }, { data: collaborators }, { data: meetings }] =
+    await Promise.all([
+      supabase
+        .from("studio_payments")
+        .select("*")
+        .eq("studio_project_id", id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("studio_project_collaborators")
+        .select("*")
+        .eq("studio_project_id", id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("studio_meetings")
+        .select("*")
+        .eq("studio_project_id", id)
+        .order("meeting_date", { ascending: false }),
+    ]);
 
   const total = Number(project.total_price ?? 0);
   const cobrado = (payments ?? [])
@@ -192,6 +206,12 @@ export default async function StudioProjectDetailPage({
           <TabLink id={project.id} tab="documentos" current={tab} label="Documentos" />
           <TabLink
             id={project.id}
+            tab="reuniones"
+            current={tab}
+            label={`Reuniones${meetings && meetings.length > 0 ? ` (${meetings.length})` : ""}`}
+          />
+          <TabLink
+            id={project.id}
             tab="accesos"
             current={tab}
             label={`Accesos${collaborators && collaborators.length > 0 ? ` (${collaborators.length})` : ""}`}
@@ -220,6 +240,13 @@ export default async function StudioProjectDetailPage({
           projectId={project.id}
           folderId={project.google_drive_folder_id}
           kind="studio"
+        />
+      )}
+
+      {tab === "reuniones" && (
+        <ReunionesTab
+          projectId={project.id}
+          meetings={meetings ?? []}
         />
       )}
 
@@ -777,5 +804,235 @@ function Toggle({ name, label, defaultChecked }: { name: string; label: string; 
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+type Meeting = {
+  id: string;
+  studio_project_id: string;
+  meeting_date: string;
+  attendees: string[];
+  summary: string | null;
+  action_items: string | null;
+  recording_url: string | null;
+  created_at: string;
+};
+
+function ReunionesTab({
+  projectId,
+  meetings,
+}: {
+  projectId: string;
+  meetings: Meeting[];
+}) {
+  const inputClass =
+    "block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500";
+
+  return (
+    <div className="space-y-6">
+      {/* Lista */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Reuniones{meetings.length > 0 ? ` (${meetings.length})` : ""}
+          </h3>
+        </div>
+        {meetings.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay reuniones registradas. Apunta la primera abajo.
+          </p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {meetings.map((m) => (
+              <li key={m.id} className="px-5 py-4">
+                <details className="group">
+                  <summary className="flex cursor-pointer items-center justify-between gap-3 list-none">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                        {formatDateTime(m.meeting_date)}
+                      </p>
+                      {m.attendees.length > 0 && (
+                        <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                          {m.attendees.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <svg
+                      className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+
+                  <form action={updateStudioMeeting} className="mt-4 space-y-3">
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="studio_project_id" value={projectId} />
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora</label>
+                        <input
+                          type="datetime-local"
+                          name="meeting_date"
+                          defaultValue={toMadridDateTimeInput(m.meeting_date)}
+                          required
+                          className={`mt-1 ${inputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                          Asistentes (separados por coma)
+                        </label>
+                        <input
+                          type="text"
+                          name="attendees"
+                          defaultValue={m.attendees.join(", ")}
+                          placeholder="Manu, Isabella, cliente"
+                          className={`mt-1 ${inputClass}`}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Resumen</label>
+                      <textarea
+                        name="summary"
+                        rows={3}
+                        defaultValue={m.summary ?? ""}
+                        placeholder="Qué se habló, decisiones tomadas..."
+                        className={`mt-1 ${inputClass}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                        Próximos pasos / acciones
+                      </label>
+                      <textarea
+                        name="action_items"
+                        rows={3}
+                        defaultValue={m.action_items ?? ""}
+                        placeholder="Quién hace qué, fechas..."
+                        className={`mt-1 ${inputClass}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                        Link de la grabación
+                      </label>
+                      <input
+                        type="url"
+                        name="recording_url"
+                        defaultValue={m.recording_url ?? ""}
+                        placeholder="https://..."
+                        className={`mt-1 ${inputClass}`}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="submit"
+                        className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        Guardar cambios
+                      </button>
+                    </div>
+                  </form>
+
+                  <form action={deleteStudioMeeting} className="mt-2">
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="studio_project_id" value={projectId} />
+                    <button
+                      type="submit"
+                      className="text-xs text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                    >
+                      Eliminar reunión
+                    </button>
+                  </form>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Añadir */}
+      <form
+        action={addStudioMeeting}
+        className="space-y-3 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Añadir reunión</h3>
+        <input type="hidden" name="studio_project_id" value={projectId} />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha y hora *</label>
+            <input
+              type="datetime-local"
+              name="meeting_date"
+              required
+              className={`mt-1 ${inputClass}`}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Asistentes (separados por coma)
+            </label>
+            <input
+              type="text"
+              name="attendees"
+              placeholder="Manu, Isabella, cliente"
+              className={`mt-1 ${inputClass}`}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Resumen</label>
+          <textarea
+            name="summary"
+            rows={3}
+            placeholder="Qué se habló, decisiones tomadas..."
+            className={`mt-1 ${inputClass}`}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            Próximos pasos / acciones
+          </label>
+          <textarea
+            name="action_items"
+            rows={3}
+            placeholder="Quién hace qué, fechas..."
+            className={`mt-1 ${inputClass}`}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Link de la grabación</label>
+          <input
+            type="url"
+            name="recording_url"
+            placeholder="https://..."
+            className={`mt-1 ${inputClass}`}
+          />
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button
+            type="submit"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
+          >
+            Añadir reunión
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
