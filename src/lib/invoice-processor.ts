@@ -1,5 +1,9 @@
 import { getOrCreateSubfolder, uploadFile } from "@/lib/google-drive/client";
-import { extractInvoiceData, extractInvoiceDataFromPdf } from "@/lib/invoice-ocr";
+import {
+  extractInvoiceData,
+  extractInvoiceDataFromPdf,
+  slugifyCompany,
+} from "@/lib/invoice-ocr";
 import type { gmail_v1 } from "googleapis";
 
 const INVOICES_DRIVE_PARENT = "1bzQ0UaPk3VDltG3hyX--cHTRqJYJRczV";
@@ -69,9 +73,7 @@ export async function processInvoiceEmail(
     const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
 
     // Build filename
-    const companySlug = ocrResult.company
-      ? ocrResult.company.replace(/\s+/g, "-").toLowerCase()
-      : null;
+    const companySlug = ocrResult.company ? slugifyCompany(ocrResult.company) : null;
     const totalSlug = ocrResult.total ? `_${ocrResult.total}eur` : "";
     const dateSlug = `${invoiceYear}-${String(invoiceMonth).padStart(2, "0")}`;
     const ext = att.filename.split(".").pop() || (att.mimeType === "application/pdf" ? "pdf" : "jpg");

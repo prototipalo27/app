@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { slugifyCompany } from "@/lib/invoice-slug";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -102,9 +103,7 @@ export default function InvoiceScanner({
 
         const timestamp = Date.now();
         const ext = file.name.split(".").pop() || "jpg";
-        const companySlug = company
-          ? company.replace(/\s+/g, "-").toLowerCase()
-          : null;
+        const companySlug = company ? slugifyCompany(company) : null;
         const totalSlug = total ? `_${total}eur` : "";
         const fileName = companySlug
           ? `${companySlug}${totalSlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`
