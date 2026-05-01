@@ -3,10 +3,8 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getVerifiedSession } from "@/lib/client-auth";
 import ClientNamesForm from "../names/client-names-form";
 import ConfirmShippingButton from "./confirm-button";
-import InlineVerify from "../inline-verify";
 
 export async function generateMetadata({
   params,
@@ -68,32 +66,6 @@ async function ConfirmContent({
     .single();
 
   if (!project) notFound();
-
-  const session = await getVerifiedSession();
-  if (!session || session.projectId !== project.id) {
-    return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-        <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
-            <span className="text-lg font-bold text-zinc-900 dark:text-white">Prototipalo</span>
-            <Link
-              href={`/track/${token}`}
-              className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-            >
-              ← Volver
-            </Link>
-          </div>
-        </header>
-        <main className="mx-auto max-w-2xl px-4 py-12">
-          <InlineVerify
-            token={token}
-            title="Verifica tu email para confirmar el envío"
-            subtitle="Necesitamos confirmar que eres tú antes de revisar y aprobar el envío."
-          />
-        </main>
-      </div>
-    );
-  }
 
   const { data: items } = await supabase
     .from("project_checklist_items")
@@ -234,7 +206,7 @@ async function ConfirmContent({
               {photoItems.map((item) => (
                 <a
                   key={item.id}
-                  href={`/api/track/qc-photos/${item.id}`}
+                  href={`/api/track/qc-photos/${item.id}?token=${token}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group block overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
@@ -242,7 +214,7 @@ async function ConfirmContent({
                   <div className="aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`/api/track/qc-photos/${item.id}`}
+                      src={`/api/track/qc-photos/${item.id}?token=${token}`}
                       alt={item.name}
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                       loading="lazy"

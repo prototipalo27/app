@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> },
 ) {
   const { itemId } = await params;
 
-  const session = await getVerifiedSession();
-  if (!session) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const token = request.nextUrl.searchParams.get("token");
+  if (!token) {
+    return NextResponse.json({ error: "Token requerido" }, { status: 401 });
   }
 
   const supabase = createServiceClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("tracking_token", token)
+    .single();
+
+  if (!project) {
+    return NextResponse.json({ error: "Token inválido" }, { status: 404 });
+  }
 
   const { data: item } = await supabase
     .from("project_checklist_items")
@@ -21,7 +30,7 @@ export async function GET(
     .eq("id", itemId)
     .single();
 
-  if (!item || item.project_id !== session.projectId) {
+  if (!item || item.project_id !== project.id) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
 

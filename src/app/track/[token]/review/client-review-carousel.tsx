@@ -204,7 +204,7 @@ export default function ClientReviewCarousel({
               <div className="flex w-full flex-1 items-center justify-center overflow-hidden rounded-xl bg-black">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`/api/track/qc-photos/${entry.itemId}/entry/${entry.entryIndex}`}
+                  src={`/api/track/qc-photos/${entry.itemId}/entry/${entry.entryIndex}?token=${token}`}
                   alt={entry.line1}
                   className="max-h-full max-w-full object-contain"
                 />

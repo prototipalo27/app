@@ -88,11 +88,6 @@ export async function submitEntryReview(
 
   if (!project) return { success: false, error: "Proyecto no encontrado" };
 
-  const session = await getVerifiedSession();
-  if (!session || session.projectId !== project.id) {
-    return { success: false, error: "Sesión no verificada" };
-  }
-
   const { data: item } = await supabase
     .from("project_checklist_items")
     .select("id, project_id, data")
@@ -144,22 +139,17 @@ export async function confirmForShipping(
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id")
+    .select("id, client_email")
     .eq("tracking_token", token)
     .single();
 
   if (!project) return { success: false, error: "Proyecto no encontrado" };
 
-  const session = await getVerifiedSession();
-  if (!session || session.projectId !== project.id) {
-    return { success: false, error: "Sesión no verificada" };
-  }
-
   const { error } = await supabase
     .from("projects")
     .update({
       client_confirmed_at: new Date().toISOString(),
-      client_confirmed_by: session.email,
+      client_confirmed_by: project.client_email ?? "client-link",
     })
     .eq("id", project.id);
 
