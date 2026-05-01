@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -58,6 +59,18 @@ export async function generateMetadata({
 }
 
 export default async function StudioPortalPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-50" />}>
+      <StudioPortalContent params={params} />
+    </Suspense>
+  );
+}
+
+async function StudioPortalContent({
   params,
 }: {
   params: Promise<{ token: string }>;
