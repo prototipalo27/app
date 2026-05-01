@@ -16,6 +16,7 @@ import {
   deleteStudioCollaborator,
 } from "../collaborator-actions";
 import { CopyPortalLink } from "./copy-portal-link";
+import { ProjectDocuments } from "../../projects/[id]/project-documents";
 
 const STATUSES = [
   { value: "brief", label: "Brief" },
@@ -49,7 +50,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
-type Tab = "brief" | "pagos" | "accesos";
+type Tab = "brief" | "pagos" | "documentos" | "accesos";
 
 function formatEur(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -66,7 +67,13 @@ export default async function StudioProjectDetailPage({
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
   const tab: Tab =
-    tabParam === "pagos" ? "pagos" : tabParam === "accesos" ? "accesos" : "brief";
+    tabParam === "pagos"
+      ? "pagos"
+      : tabParam === "documentos"
+        ? "documentos"
+        : tabParam === "accesos"
+          ? "accesos"
+          : "brief";
 
   const profile = await getUserProfile();
   if (!profile) redirect("/login");
@@ -182,6 +189,7 @@ export default async function StudioProjectDetailPage({
         <nav className="flex gap-1">
           <TabLink id={project.id} tab="brief" current={tab} label="Brief" />
           <TabLink id={project.id} tab="pagos" current={tab} label="Pagos" />
+          <TabLink id={project.id} tab="documentos" current={tab} label="Documentos" />
           <TabLink
             id={project.id}
             tab="accesos"
@@ -204,6 +212,14 @@ export default async function StudioProjectDetailPage({
           projectId={project.id}
           payments={payments ?? []}
           total={total}
+        />
+      )}
+
+      {tab === "documentos" && (
+        <ProjectDocuments
+          projectId={project.id}
+          folderId={project.google_drive_folder_id}
+          kind="studio"
         />
       )}
 
@@ -248,6 +264,7 @@ type StudioProject = {
   brief_references: string | null;
   notes: string | null;
   project_manager_id: string | null;
+  google_drive_folder_id: string | null;
   created_at: string;
   updated_at: string;
 };

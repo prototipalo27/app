@@ -3,6 +3,17 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { setCollaboratorName } from "./actions";
+import { listFolderFiles } from "@/lib/google-drive/client";
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+function formatBytes(bytes: string | null): string {
+  if (!bytes) return "";
+  const n = parseInt(bytes, 10);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const STATUS_LABELS: Record<string, string> = {
   brief: "Brief",
@@ -218,10 +229,15 @@ async function StudioPortalContent({
           </Section>
         )}
 
-        {/* Documentos — placeholder hasta Fase 3 */}
+        {/* Documentos */}
         {collaborator.can_see_documents && (
           <Section title="Documentos">
-            <p className="text-sm text-zinc-500">Los documentos del proyecto aparecerán aquí.</p>
+            <Suspense fallback={<p className="text-sm text-zinc-500">Cargando documentos…</p>}>
+              <DocumentsList
+                token={token}
+                folderId={project.google_drive_folder_id ?? null}
+              />
+            </Suspense>
           </Section>
         )}
 
@@ -296,6 +312,108 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
       <p className={`mt-1 text-lg font-bold ${accent === "green" ? "text-green-600" : "text-zinc-900"}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+async function DocumentsList({
+  token,
+  folderId,
+}: {
+  token: string;
+  folderId: string | null;
+}) {
+  if (!folderId) {
+    return <p className="text-sm text-zinc-500">El equipo aún no ha creado la carpeta de documentos.</p>;
+  }
+
+  let rootFiles: Awaited<ReturnType<typeof listFolderFiles>> = [];
+  try {
+    rootFiles = await listFolderFiles(folderId);
+  } catch (err) {
+    console.error("[studio-portal] Error listing root files:", err);
+    return <p className="text-sm text-red-600">No se han podido cargar los documentos.</p>;
+  }
+
+  const subfolders = rootFiles.filter((f) => f.mimeType === FOLDER_MIME);
+  const rootFilesOnly = rootFiles.filter((f) => f.mimeType !== FOLDER_MIME);
+
+  // Carga el contenido de cada subcarpeta en paralelo.
+  const subfolderContents = await Promise.all(
+    subfolders.map(async (folder) => {
+      try {
+        const items = await listFolderFiles(folder.id);
+        return {
+          folder,
+          files: items.filter((f) => f.mimeType !== FOLDER_MIME),
+        };
+      } catch {
+        return { folder, files: [] };
+      }
+    }),
+  );
+
+  const totalFiles =
+    rootFilesOnly.length +
+    subfolderContents.reduce((acc, s) => acc + s.files.length, 0);
+
+  if (totalFiles === 0) {
+    return <p className="text-sm text-zinc-500">Aún no hay documentos publicados.</p>;
+  }
+
+  return (
+    <div className="space-y-5">
+      {rootFilesOnly.length > 0 && (
+        <FileGroup token={token} title="General" files={rootFilesOnly} />
+      )}
+      {subfolderContents
+        .filter((s) => s.files.length > 0)
+        .map((s) => (
+          <FileGroup
+            key={s.folder.id}
+            token={token}
+            title={s.folder.name}
+            files={s.files}
+          />
+        ))}
+    </div>
+  );
+}
+
+function FileGroup({
+  token,
+  title,
+  files,
+}: {
+  token: string;
+  title: string;
+  files: { id: string; name: string; mimeType: string; size: string | null; modifiedTime: string | null }[];
+}) {
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
+      <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+        {files.map((f) => (
+          <li key={f.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-zinc-900">{f.name}</p>
+              <p className="text-xs text-zinc-500">
+                {[formatBytes(f.size), f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString("es-ES") : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <a
+              href={`/api/studio-portal/${token}/files/${f.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Abrir
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

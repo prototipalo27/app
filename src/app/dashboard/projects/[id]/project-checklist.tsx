@@ -6,8 +6,12 @@ import {
   uploadNameList,
   toggleNameEntry,
   uploadQcPhoto,
+  uploadEntryPhoto,
+  removeEntryPhoto,
   type NameEntry,
 } from "../checklist-actions";
+import EntryCameraMode from "./entry-camera-mode";
+import { parseNameListFile } from "@/lib/name-list-parser";
 
 type ChecklistItemData = {
   entries?: NameEntry[];
@@ -38,6 +42,7 @@ export default function ProjectChecklist({
   const [localItems, setLocalItems] = useState(items);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const entryPhotoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [photoUploadingItemId, setPhotoUploadingItemId] = useState<string | null>(null);
   const [photoBusyItemId, setPhotoBusyItemId] = useState<string | null>(null);
@@ -47,6 +52,20 @@ export default function ProjectChecklist({
     itemId: string;
     entries: NameEntry[];
   } | null>(null);
+
+  // Foto por entry (cámara nativa por OS, fallback rápido del modo secuencial)
+  const [pendingEntryPhoto, setPendingEntryPhoto] = useState<{
+    itemId: string;
+    entryIndex: number;
+  } | null>(null);
+  const [entryPhotoBusy, setEntryPhotoBusy] = useState<string | null>(null);
+  const [entryLightbox, setEntryLightbox] = useState<{
+    itemId: string;
+    entryIndex: number;
+  } | null>(null);
+
+  // Modo cámara secuencial (estilo escáner facturas)
+  const [cameraModeItemId, setCameraModeItemId] = useState<string | null>(null);
 
   const [linkCopied, setLinkCopied] = useState(false);
   const completedCount = localItems.filter((i) => i.completed).length;
@@ -100,34 +119,24 @@ export default function ProjectChecklist({
     fileInputRef.current?.click();
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !uploadingItemId) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const entries: NameEntry[] = text
-        .split("\n")
-        .map((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return null;
-          if (trimmed.includes(",")) {
-            const parts = trimmed.split(",");
-            return {
-              line1: parts[0].trim(),
-              line2: parts[1]?.trim() || undefined,
-              checked: false,
-            };
-          }
-          return { line1: trimmed, checked: false };
-        })
-        .filter((e): e is NameEntry => e !== null);
-
-      setCsvPreview({ itemId: uploadingItemId, entries });
-    };
-    reader.readAsText(file);
+    const itemId = uploadingItemId;
     e.target.value = "";
+    if (!file || !itemId) return;
+
+    try {
+      const parsed = await parseNameListFile(file);
+      if (parsed.length === 0) {
+        alert("No se ha detectado ningún nombre en el archivo");
+        setUploadingItemId(null);
+        return;
+      }
+      setCsvPreview({ itemId, entries: parsed });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo leer el archivo");
+      setUploadingItemId(null);
+    }
   }
 
   async function confirmUpload() {
@@ -184,6 +193,96 @@ export default function ProjectChecklist({
     setPhotoBusyItemId(null);
     setPhotoUploadingItemId(null);
   }
+
+  function handleEntryPhotoSelect(itemId: string, entryIndex: number) {
+    setPendingEntryPhoto({ itemId, entryIndex });
+    entryPhotoInputRef.current?.click();
+  }
+
+  async function handleEntryPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const target = pendingEntryPhoto;
+    e.target.value = "";
+    if (!file || !target) {
+      setPendingEntryPhoto(null);
+      return;
+    }
+    const busyKey = `${target.itemId}-${target.entryIndex}`;
+    setEntryPhotoBusy(busyKey);
+    const fd = new FormData();
+    fd.append("photo", file);
+    const result = await uploadEntryPhoto(target.itemId, target.entryIndex, projectId, fd);
+    if (result.success && result.photo_path) {
+      applyEntryUpdate(target.itemId, target.entryIndex, (entry) => ({
+        ...entry,
+        photo_path: result.photo_path,
+        photo_uploaded_at: new Date().toISOString(),
+        client_status: "pending",
+        client_comment: undefined,
+        client_reviewed_at: undefined,
+      }));
+    } else if (!result.success) {
+      alert(result.error ?? "Error al subir la foto");
+    }
+    setEntryPhotoBusy(null);
+    setPendingEntryPhoto(null);
+  }
+
+  async function handleEntryPhotoRemove(itemId: string, entryIndex: number) {
+    if (!window.confirm("¿Quitar la foto de este trofeo?")) return;
+    const busyKey = `${itemId}-${entryIndex}`;
+    setEntryPhotoBusy(busyKey);
+    const result = await removeEntryPhoto(itemId, entryIndex, projectId);
+    if (result.success) {
+      applyEntryUpdate(itemId, entryIndex, (entry) => ({
+        ...entry,
+        photo_path: undefined,
+        photo_uploaded_at: undefined,
+        client_status: undefined,
+        client_comment: undefined,
+        client_reviewed_at: undefined,
+      }));
+    } else {
+      alert(result.error ?? "Error al quitar la foto");
+    }
+    setEntryPhotoBusy(null);
+  }
+
+  function applyEntryUpdate(
+    itemId: string,
+    entryIndex: number,
+    updater: (entry: NameEntry) => NameEntry,
+  ) {
+    setLocalItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== itemId) return i;
+        const entries = [...(i.data?.entries ?? [])];
+        if (!entries[entryIndex]) return i;
+        entries[entryIndex] = updater(entries[entryIndex]);
+        return { ...i, data: { ...(i.data ?? {}), entries } };
+      }),
+    );
+  }
+
+  function handleCameraModePhoto(
+    itemId: string,
+    entryIndex: number,
+    photoPath: string,
+  ) {
+    applyEntryUpdate(itemId, entryIndex, (entry) => ({
+      ...entry,
+      photo_path: photoPath,
+      photo_uploaded_at: new Date().toISOString(),
+      client_status: "pending",
+      client_comment: undefined,
+      client_reviewed_at: undefined,
+    }));
+  }
+
+  const cameraModeItem =
+    cameraModeItemId !== null
+      ? localItems.find((i) => i.id === cameraModeItemId) ?? null
+      : null;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -331,12 +430,54 @@ export default function ProjectChecklist({
                         </svg>
                       </button>
                     )}
+                    {totalNames > 0 && (() => {
+                      const photoCount = entries!.filter((e) => e.photo_path).length;
+                      const issueCount = entries!.filter(
+                        (e) => e.client_status === "issue",
+                      ).length;
+                      return (
+                        <>
+                          <span
+                            className={`rounded-md px-2 py-1 text-xs font-medium ${
+                              photoCount === totalNames
+                                ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                            }`}
+                            title="Fotos hechas"
+                          >
+                            📷 {photoCount}/{totalNames}
+                          </span>
+                          {issueCount > 0 && (
+                            <span
+                              className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                              title="Trofeos con comentario del cliente"
+                            >
+                              ⚠ {issueCount}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setCameraModeItemId(item.id)}
+                            className="rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                          >
+                            Modo cámara
+                          </button>
+                        </>
+                      );
+                    })()}
                     <button
                       onClick={() => handleFileSelect(item.id)}
                       className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                     >
-                      Subir CSV
+                      Subir archivo
                     </button>
+                    <a
+                      href="/api/names-template"
+                      download
+                      className="rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-800"
+                      title="Descargar plantilla Excel para enviar al cliente"
+                    >
+                      ↓ Plantilla
+                    </a>
                   </div>
                 )}
               </div>
@@ -344,44 +485,111 @@ export default function ProjectChecklist({
               {/* Expanded checkable name list */}
               {item.item_type === "name_list" && isExpanded && entries && (
                 <div className="mt-2 ml-8 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                  <div className="space-y-1.5">
-                    {entries.map((entry, idx) => (
-                      <label
-                        key={idx}
-                        className="flex items-start gap-2 cursor-pointer group"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={entry.checked}
-                          onChange={() =>
-                            handleNameToggle(item.id, idx, !entry.checked)
-                          }
-                          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-700"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span
-                            className={`text-xs font-medium ${
-                              entry.checked
-                                ? "text-zinc-400 line-through dark:text-zinc-500"
-                                : "text-zinc-900 dark:text-white"
-                            }`}
-                          >
-                            {entry.line1}
-                          </span>
-                          {entry.line2 && (
+                  <div className="space-y-2">
+                    {entries.map((entry, idx) => {
+                      const busyKey = `${item.id}-${idx}`;
+                      const isBusy = entryPhotoBusy === busyKey;
+                      const status = entry.client_status;
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2 rounded-md border border-zinc-100 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900"
+                        >
+                          <label className="flex flex-1 items-start gap-2 cursor-pointer min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={entry.checked}
+                              onChange={() =>
+                                handleNameToggle(item.id, idx, !entry.checked)
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-700"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span
+                                className={`text-xs font-medium ${
+                                  entry.checked
+                                    ? "text-zinc-400 line-through dark:text-zinc-500"
+                                    : "text-zinc-900 dark:text-white"
+                                }`}
+                              >
+                                {entry.line1}
+                              </span>
+                              {entry.line2 && (
+                                <span
+                                  className={`block text-[11px] ${
+                                    entry.checked
+                                      ? "text-zinc-400 line-through dark:text-zinc-500"
+                                      : "text-zinc-500 dark:text-zinc-400"
+                                  }`}
+                                >
+                                  {entry.line2}
+                                </span>
+                              )}
+                              {status === "issue" && entry.client_comment && (
+                                <span className="mt-1 block rounded bg-amber-50 px-1.5 py-1 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                                  💬 {entry.client_comment}
+                                </span>
+                              )}
+                            </div>
+                          </label>
+
+                          {status === "approved" && (
                             <span
-                              className={`block text-[11px] ${
-                                entry.checked
-                                  ? "text-zinc-400 line-through dark:text-zinc-500"
-                                  : "text-zinc-500 dark:text-zinc-400"
-                              }`}
+                              className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              title="Aprobado por el cliente"
                             >
-                              {entry.line2}
+                              ✓
                             </span>
                           )}
+                          {status === "pending" && entry.photo_path && (
+                            <span
+                              className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                              title="Pendiente de revisión cliente"
+                            >
+                              ⏳
+                            </span>
+                          )}
+
+                          {entry.photo_path ? (
+                            <button
+                              onClick={() => setEntryLightbox({ itemId: item.id, entryIndex: idx })}
+                              className="shrink-0 overflow-hidden rounded border border-zinc-200 dark:border-zinc-700"
+                              title="Ver foto"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`/api/qc-photos/${item.id}/entry/${idx}`}
+                                alt={entry.line1}
+                                className="h-10 w-10 object-cover"
+                              />
+                            </button>
+                          ) : null}
+
+                          <div className="flex shrink-0 flex-col gap-1">
+                            <button
+                              onClick={() => handleEntryPhotoSelect(item.id, idx)}
+                              disabled={isBusy}
+                              className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                              {isBusy
+                                ? "Subiendo…"
+                                : entry.photo_path
+                                  ? "Reemplazar"
+                                  : "Foto"}
+                            </button>
+                            {entry.photo_path && (
+                              <button
+                                onClick={() => handleEntryPhotoRemove(item.id, idx)}
+                                disabled={isBusy}
+                                className="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/10"
+                              >
+                                Quitar
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -394,7 +602,7 @@ export default function ProjectChecklist({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,.txt"
+        accept=".xlsx,.xls,.csv,.txt"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -407,6 +615,16 @@ export default function ProjectChecklist({
         capture="environment"
         className="hidden"
         onChange={handlePhotoChange}
+      />
+
+      {/* Hidden photo input para foto por entry */}
+      <input
+        ref={entryPhotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleEntryPhotoChange}
       />
 
       {/* Photo lightbox */}
@@ -431,6 +649,44 @@ export default function ProjectChecklist({
             </svg>
           </button>
         </div>
+      )}
+
+      {/* Entry photo lightbox */}
+      {entryLightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setEntryLightbox(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/qc-photos/${entryLightbox.itemId}/entry/${entryLightbox.entryIndex}`}
+            alt="Trofeo"
+            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setEntryLightbox(null)}
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Modo cámara secuencial */}
+      {cameraModeItem && cameraModeItem.data?.entries && (
+        <EntryCameraMode
+          itemId={cameraModeItem.id}
+          itemName={cameraModeItem.name}
+          projectId={projectId}
+          entries={cameraModeItem.data.entries}
+          onClose={() => setCameraModeItemId(null)}
+          onPhotoUploaded={(idx, path) =>
+            handleCameraModePhoto(cameraModeItem.id, idx, path)
+          }
+        />
       )}
 
       {/* CSV confirmation modal */}

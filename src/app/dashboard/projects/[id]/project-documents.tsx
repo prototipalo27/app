@@ -28,6 +28,7 @@ interface BreadcrumbItem {
 interface ProjectDocumentsProps {
   folderId: string | null;
   projectId: string;
+  kind?: "project" | "studio";
 }
 
 interface UploadItem {
@@ -366,7 +367,7 @@ function UploadProgress({
 
 // ── Main Component ─────────────────────────────────────
 
-export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps) {
+export function ProjectDocuments({ folderId, projectId, kind = "project" }: ProjectDocumentsProps) {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -451,7 +452,7 @@ export function ProjectDocuments({ folderId, projectId }: ProjectDocumentsProps)
       const res = await fetch("/api/drive/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({ projectId, kind }),
       });
       if (!res.ok) {
         const data = await res.json();

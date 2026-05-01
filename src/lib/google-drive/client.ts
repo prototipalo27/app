@@ -14,6 +14,7 @@ export interface DriveFile {
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const PROJECT_SUBFOLDERS = ["Briefing", "Diseño", "Entregable"];
+const STUDIO_SUBFOLDERS = ["Brief", "Patentes", "Entregables", "Reuniones"];
 
 /**
  * Authenticate with a Service Account and return a Drive client.
@@ -107,6 +108,26 @@ export async function createProjectFolder(
   // Create sub-folders in parallel (Briefing, Diseño, Entregable)
   await Promise.all(
     PROJECT_SUBFOLDERS.map((name) => createFolder(drive, name, projectId)),
+  );
+
+  return projectId;
+}
+
+/**
+ * Same as createProjectFolder but with the Studio sub-folder set
+ * (Brief, Patentes, Entregables, Reuniones). Sits inside the same client
+ * folder as regular projects so the cliente final lo ve todo junto.
+ */
+export async function createStudioFolder(
+  projectName: string,
+  clientFolderId: string,
+): Promise<string> {
+  const drive = getDriveClient();
+
+  const projectId = await createFolder(drive, projectName, clientFolderId);
+
+  await Promise.all(
+    STUDIO_SUBFOLDERS.map((name) => createFolder(drive, name, projectId)),
   );
 
   return projectId;
@@ -266,6 +287,21 @@ export async function resolveSectionFolder(
     (f) => f.mimeType === FOLDER_MIME && f.name === folderName,
   );
   return folder?.id ?? null;
+}
+
+/**
+ * Return the immediate parent folder IDs for a file. Used by the public
+ * studio portal to confirm a requested file belongs to the project's
+ * folder tree before proxying the download.
+ */
+export async function getFileParents(fileId: string): Promise<string[]> {
+  const drive = getDriveClient();
+  const res = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: "parents",
+  });
+  return res.data.parents ?? [];
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   listFolderFiles,
   getOrCreateClientFolder,
   createProjectFolder,
+  createStudioFolder,
 } from "@/lib/google-drive/client";
 
 /**
@@ -65,7 +66,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { projectId } = await request.json();
+  const body = await request.json();
+  const { projectId } = body as { projectId?: string };
+  const kind: "project" | "studio" = body.kind === "studio" ? "studio" : "project";
   if (!projectId) {
     return NextResponse.json(
       { error: "Missing projectId" },
@@ -73,9 +76,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const table = kind === "studio" ? "studio_projects" : "projects";
+
   // Fetch project with client info
   const { data: project } = await supabase
-    .from("projects")
+    .from(table)
     .select("id, name, client_name, holded_contact_id, google_drive_folder_id")
     .eq("id", projectId)
     .single();
@@ -120,10 +125,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Create project folder inside client folder
-    const folderId = await createProjectFolder(project.name, clientFolderId);
+    const folderId = kind === "studio"
+      ? await createStudioFolder(project.name, clientFolderId)
+      : await createProjectFolder(project.name, clientFolderId);
 
     await supabase
-      .from("projects")
+      .from(table)
       .update({ google_drive_folder_id: folderId })
       .eq("id", project.id);
 
