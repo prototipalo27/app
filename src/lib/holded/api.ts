@@ -523,9 +523,20 @@ export interface PendingReceivables {
 }
 
 /**
+ * Treat as fully paid when a payment was received and the leftover is small
+ * enough to be either a payment-gateway fee (Stripe ~1.5–3% + 0.25€) or an
+ * applied "pronto pago" 5% discount the client took.
+ */
+function isPaidWithResidual(total: number, paid: number, pending: number) {
+  if (paid <= 0 || total <= 0) return false;
+  return pending < total * 0.055 + 1;
+}
+
+/**
  * Pending receivables: unpaid + partially-paid invoices.
  * Includes drafts (cash-paying clients per business rule).
  * Sums Holded's "Pendiente" field, not the full invoice total.
+ * Filters out residuals that match payment-gateway fee patterns.
  */
 export async function getPendingReceivables(): Promise<PendingReceivables> {
   const invoices = await listDocuments("invoice");
@@ -534,17 +545,19 @@ export async function getPendingReceivables(): Promise<PendingReceivables> {
   const pending: PendingInvoice[] = invoices
     .filter((inv) => inv.status === 0 || inv.status === 2)
     .map((inv) => {
+      const total = inv.total || 0;
+      const paid = inv.paymentsTotal || 0;
       const pendingAmount =
         typeof inv.paymentsPending === "number"
           ? inv.paymentsPending
-          : (inv.total || 0) - (inv.paymentsTotal || 0);
+          : total - paid;
       return {
         id: inv.id,
         contactName: inv.contactName,
         docNumber: inv.docNumber,
-        total: inv.total || 0,
+        total,
         pending: pendingAmount,
-        paid: inv.paymentsTotal || 0,
+        paid,
         date: inv.date,
         dueDate: inv.dueDate,
         status: inv.status,
@@ -553,6 +566,7 @@ export async function getPendingReceivables(): Promise<PendingReceivables> {
       };
     })
     .filter((inv) => inv.pending > 0)
+    .filter((inv) => !isPaidWithResidual(inv.total, inv.paid, inv.pending))
     .sort((a, b) => {
       if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
       return a.dueDate - b.dueDate;
