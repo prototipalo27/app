@@ -524,12 +524,16 @@ export interface PendingReceivables {
 
 /**
  * Treat as fully paid when a payment was received and the leftover is small
- * enough to be either a payment-gateway fee (Stripe ~1.5–3% + 0.25€) or an
- * applied "pronto pago" 5% discount the client took.
+ * enough to match the gateway-fee + early-payment-discount combo:
+ *   - Stripe withholds ~1.5–3% + 0.25€
+ *   - Some clients take the 5% "pronto pago" discount
+ *   - Both can stack
+ * The 8% + 1€ cutoff cleanly separates this noise (≤7% in practice) from
+ * legitimate partial payments (≥17% in practice — 50% deposits, anticipos).
  */
 function isPaidWithResidual(total: number, paid: number, pending: number) {
   if (paid <= 0 || total <= 0) return false;
-  return pending < total * 0.055 + 1;
+  return pending < total * 0.08 + 1;
 }
 
 /**
