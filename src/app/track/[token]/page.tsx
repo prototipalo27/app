@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -10,6 +11,15 @@ import { getTracking as getMrwTracking } from "@/lib/mrw/api";
 import { deriveMrwStatus } from "@/lib/mrw/status";
 import { getVerifiedClient } from "@/lib/client-auth";
 import ClientPortal from "./client-portal";
+
+type ChecklistEntry = {
+  photo_path?: string;
+  client_status?: "pending" | "approved" | "issue";
+};
+
+type ChecklistData = {
+  entries?: ChecklistEntry[];
+};
 
 interface TrackingEvent {
   city?: string;
@@ -294,7 +304,7 @@ async function TrackingContent({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, status, description, client_name, tracking_token, client_email, google_drive_folder_id, design_visible, design_approved_at, deliverable_visible, deliverable_approved_at, payment_confirmed_at")
+    .select("id, name, status, description, client_name, tracking_token, client_email, google_drive_folder_id, design_visible, design_approved_at, deliverable_visible, deliverable_approved_at, payment_confirmed_at, client_confirmed_at")
     .eq("tracking_token", token)
     .single();
 
@@ -302,7 +312,7 @@ async function TrackingContent({
     notFound();
   }
 
-  const [{ data: items }, { data: shippingFromDb }] = await Promise.all([
+  const [{ data: items }, { data: shippingFromDb }, { data: checklistItems }] = await Promise.all([
     supabase
       .from("project_items")
       .select("id, name, quantity, completed")
@@ -313,7 +323,33 @@ async function TrackingContent({
       .select("id, carrier, tracking_number, shipment_status, address_line, postal_code, city, country, shipped_at, delivered_at, packlink_shipment_ref, gls_barcode, mrw_albaran")
       .eq("project_id", project.id)
       .single(),
+    supabase
+      .from("project_checklist_items")
+      .select("data")
+      .eq("project_id", project.id)
+      .eq("item_type", "name_list"),
   ]);
+
+  const reviewStats = (checklistItems ?? []).reduce(
+    (acc, item) => {
+      const entries = (item.data as ChecklistData | null)?.entries ?? [];
+      for (const entry of entries) {
+        if (!entry.photo_path) continue;
+        acc.total += 1;
+        if (entry.client_status === "approved") acc.approved += 1;
+        else if (entry.client_status === "issue") acc.issues += 1;
+        else acc.pending += 1;
+      }
+      return acc;
+    },
+    { total: 0, approved: 0, issues: 0, pending: 0 },
+  );
+
+  const showReviewCta =
+    reviewStats.total > 0 &&
+    !project.client_confirmed_at &&
+    project.status === "qc";
+  const allApproved = reviewStats.pending === 0 && reviewStats.issues === 0;
 
   let shipping = shippingFromDb;
 
@@ -430,6 +466,47 @@ async function TrackingContent({
                 style={{ width: `${overallPct}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Review CTA — solo en QC mientras el cliente no haya confirmado y haya fotos */}
+        {showReviewCta && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-700/50 dark:bg-amber-900/20">
+            <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              {allApproved
+                ? "Todo aprobado — confirma el envío"
+                : "Revisa las fotos antes del envío"}
+            </h2>
+            <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+              {allApproved
+                ? `Ya has aprobado las ${reviewStats.total} fotos. Confírmanos para enviar.`
+                : `Hemos hecho fotos de ${reviewStats.total} pieza${reviewStats.total === 1 ? "" : "s"}. Apruébalas o coméntanos lo que cambiar antes de enviar.`}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-green-100 px-2 py-1 font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                ✓ {reviewStats.approved} aprobad{reviewStats.approved === 1 ? "a" : "as"}
+              </span>
+              {reviewStats.issues > 0 && (
+                <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  💬 {reviewStats.issues} con comentario
+                </span>
+              )}
+              {reviewStats.pending > 0 && (
+                <span className="rounded-full bg-white px-2 py-1 font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                  ⏳ {reviewStats.pending} pendiente{reviewStats.pending === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <Link
+              href={
+                allApproved
+                  ? `/track/${token}/confirm`
+                  : `/track/${token}/review`
+              }
+              className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+            >
+              {allApproved ? "Confirmar envío" : "Revisar fotos"}
+            </Link>
           </div>
         )}
 
