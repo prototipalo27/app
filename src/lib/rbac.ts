@@ -1,15 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  resolveEffectiveProfile,
+  type UserProfile,
+  type UserRole,
+} from "./auth/resolve-profile";
 import { getImpersonatedUserId } from "./impersonate";
 
-export type UserRole = "super_admin" | "manager" | "comercial" | "employee";
-
-export type UserProfile = {
-  id: string;
-  email: string;
-  role: UserRole;
-  is_active: boolean;
-};
+export { resolveEffectiveProfile };
+export type { UserProfile, UserRole };
 
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   employee: 0,
@@ -47,25 +47,32 @@ export async function getRealProfile(): Promise<UserProfile | null> {
   return data as UserProfile;
 }
 
+// Lee el perfil que el middleware ya pobló en cabeceras. Sin red.
+export async function getUserProfileFromHeaders(): Promise<UserProfile | null> {
+  const h = await headers();
+  const id = h.get("x-user-id");
+  const email = h.get("x-user-email");
+  const role = h.get("x-user-role") as UserRole | null;
+  const active = h.get("x-user-active");
+  if (!id || !email || !role || active === null) return null;
+  return { id, email, role, is_active: active === "1" };
+}
+
 export async function getUserProfile(): Promise<UserProfile | null> {
-  const realProfile = await getRealProfile();
-  if (!realProfile) return null;
+  // Fast path: el middleware ya cargó el perfil y lo metió en headers.
+  const fromHeaders = await getUserProfileFromHeaders();
+  if (fromHeaders) return fromHeaders;
 
-  if (realProfile.role === "super_admin") {
-    const targetId = await getImpersonatedUserId();
-    if (targetId && targetId !== realProfile.id) {
-      const supabase = await createClient();
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("id, email, role, is_active")
-        .eq("id", targetId)
-        .single();
+  // Fallback para server actions u otros contextos donde el middleware
+  // no haya corrido.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
 
-      if (data) return data as UserProfile;
-    }
-  }
-
-  return realProfile;
+  const impersonateId = await getImpersonatedUserId();
+  return resolveEffectiveProfile(supabase, user.id, impersonateId);
 }
 
 export async function requireRole(minRole: UserRole): Promise<UserProfile> {
