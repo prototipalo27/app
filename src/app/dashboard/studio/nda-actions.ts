@@ -79,18 +79,18 @@ export async function sendStudioNdaToClient(formData: FormData): Promise<void> {
     await sendEmailOrSchedule(
       {
         to: project.client_email,
-        subject: `Acuerdo de confidencialidad — ${project.name}`,
-        text: `Hola ${greetingName},\n\nAntes de empezar a trabajar en ${project.name} necesitamos formalizar un acuerdo de confidencialidad para proteger toda la información que compartas con nosotros.\n\nEs un proceso rápido — solo tienes que rellenar tus datos y firmar:\n${ndaUrl}\n\nGracias,\nEl equipo de Prototipalo Studio`,
+        subject: `Mutual NDA — ${project.name}`,
+        text: `Hello ${greetingName},\n\nBefore we kick off work on ${project.name}, we need to formalize a mutual non-disclosure agreement to protect any information either party shares.\n\nIt only takes a couple of minutes — just review the agreement, fill in your details and sign:\n${ndaUrl}\n\nThanks,\nThe Prototipalo Studio team`,
         html: `
-          <p>Hola ${greetingName},</p>
-          <p>Antes de empezar a trabajar en <strong>${project.name}</strong> necesitamos formalizar un acuerdo de confidencialidad para proteger toda la información que compartas con nosotros.</p>
-          <p>Es un proceso rápido — solo tienes que rellenar tus datos y firmar:</p>
+          <p>Hello ${greetingName},</p>
+          <p>Before we kick off work on <strong>${project.name}</strong>, we need to formalize a mutual non-disclosure agreement to protect any information either party shares.</p>
+          <p>It only takes a couple of minutes — just review the agreement, fill in your details and sign:</p>
           <p>
             <a href="${ndaUrl}" style="display:inline-block;padding:12px 24px;background:#18181b;color:white;border-radius:8px;text-decoration:none;font-weight:500;">
-              Firmar acuerdo de confidencialidad
+              Review and sign the NDA
             </a>
           </p>
-          <p style="font-size:13px;color:#71717a;margin-top:16px;">Tu información estará protegida en todo momento.</p>
+          <p style="font-size:13px;color:#71717a;margin-top:16px;">You'll be able to read the full agreement before signing.</p>
         `,
         emailSender,
         entityType: "studio_project",

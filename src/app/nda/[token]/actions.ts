@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { generateNdaPdf } from "@/lib/nda-pdf";
+import { generateStudioNdaPdf } from "@/lib/studio-nda-pdf";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -12,6 +13,8 @@ interface SignNdaData {
   signer_nif: string;
   signer_address: string;
   signer_email: string;
+  /** Cargo / position — solo relevante para NDAs de Studio. */
+  signer_position?: string;
   signature_data: string; // base64 PNG
 }
 
@@ -24,7 +27,7 @@ export async function signNda(
   // 1. Validate token exists and is pending
   const { data: nda, error: ndaError } = await supabase
     .from("nda_agreements")
-    .select("*, leads(full_name, company)")
+    .select("*, leads(full_name, company), studio_projects(nda_project_description)")
     .eq("token", token)
     .eq("status", "pending")
     .single();
@@ -51,6 +54,7 @@ export async function signNda(
       signer_nif: data.signer_nif.trim(),
       signer_address: data.signer_address.trim(),
       signer_email: data.signer_email.trim(),
+      signer_position: data.signer_position?.trim() || null,
       signature_data: data.signature_data,
       signed_at: new Date().toISOString(),
       signer_ip: ip,
@@ -63,26 +67,58 @@ export async function signNda(
     return { success: false, error: "Error al guardar la firma" };
   }
 
-  // 4. Generate PDF and send copy by email
+  // 4. Generate PDF (Studio template if studio-bound, lead template otherwise)
+  //    and send copy by email.
+  const isStudio = !!nda.studio_project_id;
+  const studioRel = nda.studio_projects as { nda_project_description: string | null } | null;
+
   try {
-    const pdfBuffer = await generateNdaPdf({
-      signerName: data.signer_name.trim(),
-      signerCompany: data.signer_company.trim(),
-      signerNif: data.signer_nif.trim(),
-      signerAddress: data.signer_address.trim(),
-      signatureData: data.signature_data,
-      signedAt: new Date(),
-    });
+    const pdfBuffer = isStudio
+      ? await generateStudioNdaPdf({
+          signerName: data.signer_name.trim(),
+          signerCompany: data.signer_company.trim(),
+          signerNif: data.signer_nif.trim(),
+          signerAddress: data.signer_address.trim(),
+          signerPosition: data.signer_position?.trim(),
+          signatureData: data.signature_data,
+          signedAt: new Date(),
+          projectDescription: studioRel?.nda_project_description ?? null,
+        })
+      : await generateNdaPdf({
+          signerName: data.signer_name.trim(),
+          signerCompany: data.signer_company.trim(),
+          signerNif: data.signer_nif.trim(),
+          signerAddress: data.signer_address.trim(),
+          signatureData: data.signature_data,
+          signedAt: new Date(),
+        });
+
+    const subject = isStudio
+      ? "Mutual NDA signed — Prototipalo"
+      : "Acuerdo de confidencialidad firmado — Prototipalo";
+    const greetingName = data.signer_name.trim();
+    const bodyText = isStudio
+      ? `Hello ${greetingName},\n\nAttached you'll find a signed copy of the mutual non-disclosure agreement.\n\nThank you,\nPrototipalo\nViriato 27 · 28010 Madrid\nprototipalo.com`
+      : `Hola ${greetingName},\n\nAdjuntamos una copia del acuerdo de confidencialidad que acabas de firmar.\n\nGracias por tu confianza.\n\nPrototipalo\nViriato 27 · 28010 Madrid\nprototipalo.com`;
+    const bodyHtml = isStudio
+      ? `
+        <p>Hello ${greetingName},</p>
+        <p>Attached you'll find a signed copy of the mutual non-disclosure agreement.</p>
+        <p>Thank you.</p>
+      `
+      : `
+        <p>Hola ${greetingName},</p>
+        <p>Adjuntamos una copia del acuerdo de confidencialidad que acabas de firmar.</p>
+        <p>Gracias por tu confianza.</p>
+      `;
 
     await sendEmail({
       to: data.signer_email.trim(),
-      subject: "Acuerdo de confidencialidad firmado — Prototipalo",
+      subject,
       signature: false,
-      text: `Hola ${data.signer_name.trim()},\n\nAdjuntamos una copia del acuerdo de confidencialidad que acabas de firmar.\n\nGracias por tu confianza.\n\nPrototipalo\nViriato 27 · 28010 Madrid\nprototipalo.com`,
+      text: bodyText,
       html: `
-        <p>Hola ${data.signer_name.trim()},</p>
-        <p>Adjuntamos una copia del acuerdo de confidencialidad que acabas de firmar.</p>
-        <p>Gracias por tu confianza.</p>
+        ${bodyHtml}
         <br>
         <table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#333333;line-height:1.6;">
           <tr><td style="padding-bottom:10px;"><strong style="font-size:12px;color:#1a1a1a;">Prototipalo</strong></td></tr>
@@ -93,7 +129,7 @@ export async function signNda(
       `,
       attachments: [
         {
-          filename: "NDA-Prototipalo.pdf",
+          filename: isStudio ? "Mutual-NDA-Prototipalo.pdf" : "NDA-Prototipalo.pdf",
           content: pdfBuffer,
           contentType: "application/pdf",
         },

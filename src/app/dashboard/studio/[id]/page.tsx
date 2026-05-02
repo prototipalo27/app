@@ -328,6 +328,7 @@ type StudioProject = {
   brief_objectives: string | null;
   brief_constraints: string | null;
   brief_references: string | null;
+  nda_project_description: string | null;
   notes: string | null;
   project_manager_id: string | null;
   google_drive_folder_id: string | null;
@@ -480,6 +481,25 @@ function BriefTab({
               placeholder="Links, productos parecidos, referencias visuales..."
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">NDA</h3>
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Descripción del proyecto para el NDA
+            </label>
+            <textarea
+              name="nda_project_description"
+              rows={2}
+              defaultValue={project.nda_project_description ?? ""}
+              placeholder='Por defecto: "the products, services and intellectual property developed under this collaboration". Personalízalo si quieres que el Recital I y la cláusula 5.2 mencionen algo concreto (ej. "a wearable monitoring device for horses").'
+              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Aparece en el contrato del cliente. Cámbialo antes de enviar el NDA.
+            </p>
           </div>
         </div>
 

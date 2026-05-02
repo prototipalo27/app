@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { generateNdaPdf } from "@/lib/nda-pdf";
+import { generateStudioNdaPdf } from "@/lib/studio-nda-pdf";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,7 +14,9 @@ export async function GET(req: NextRequest) {
     const sb = createServiceClient();
     const { data, error } = await sb
       .from("nda_agreements")
-      .select("signer_name, signer_company, signer_nif, signer_address, signature_data, signed_at, status")
+      .select(
+        "signer_name, signer_company, signer_nif, signer_address, signer_position, signature_data, signed_at, status, studio_project_id, studio_projects(nda_project_description)",
+      )
       .eq("id", id)
       .single();
 
@@ -23,20 +26,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "missing signer data" }, { status: 400 });
     }
 
-    const buf = await generateNdaPdf({
-      signerName: data.signer_name,
-      signerCompany: data.signer_company ?? "",
-      signerNif: data.signer_nif ?? "",
-      signerAddress: data.signer_address ?? "",
-      signatureData: data.signature_data,
-      signedAt: new Date(data.signed_at),
-    });
+    const isStudio = !!data.studio_project_id;
+    const studioRel = data.studio_projects as { nda_project_description: string | null } | null;
+
+    const buf = isStudio
+      ? await generateStudioNdaPdf({
+          signerName: data.signer_name,
+          signerCompany: data.signer_company ?? "",
+          signerNif: data.signer_nif ?? "",
+          signerAddress: data.signer_address ?? "",
+          signerPosition: data.signer_position ?? undefined,
+          signatureData: data.signature_data,
+          signedAt: new Date(data.signed_at),
+          projectDescription: studioRel?.nda_project_description ?? null,
+        })
+      : await generateNdaPdf({
+          signerName: data.signer_name,
+          signerCompany: data.signer_company ?? "",
+          signerNif: data.signer_nif ?? "",
+          signerAddress: data.signer_address ?? "",
+          signatureData: data.signature_data,
+          signedAt: new Date(data.signed_at),
+        });
 
     return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="NDA-${data.signer_name.replace(/\s+/g, "-")}.pdf"`,
+        "Content-Disposition": `inline; filename="${isStudio ? "Mutual-NDA" : "NDA"}-${data.signer_name.replace(/\s+/g, "-")}.pdf"`,
       },
     });
   } catch (e) {

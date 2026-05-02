@@ -76,6 +76,7 @@ export async function updateStudioProjectBrief(formData: FormData) {
       brief_objectives: strOrNull(formData.get("brief_objectives")),
       brief_constraints: strOrNull(formData.get("brief_constraints")),
       brief_references: strOrNull(formData.get("brief_references")),
+      nda_project_description: strOrNull(formData.get("nda_project_description")),
       notes: strOrNull(formData.get("notes")),
       project_manager_id: strOrNull(formData.get("project_manager_id")),
     })

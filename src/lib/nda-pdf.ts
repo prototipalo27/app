@@ -1,4 +1,13 @@
 import PDFDocument from "pdfkit";
+import {
+  COMPANY_NAME,
+  COMPANY_ADDRESS,
+  COMPANY_NIF,
+  COMPANY_REPRESENTATIVE,
+  EXPONEN_TEXT,
+  NDA_CLAUSES,
+  CLOSING_TEXT,
+} from "./nda-text";
 
 export interface NdaPdfData {
   signerName: string;
@@ -65,8 +74,8 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   heading("REUNIDOS");
   bodyMixed([
     { text: "De una parte, " },
-    { text: "PROTOTIPALO S.L.", bold: true },
-    { text: ", con domicilio en Calle Viriato 27, 28010 Madrid, y CIF B72410665, representada por Manuel de la Viña (en adelante, " },
+    { text: COMPANY_NAME, bold: true },
+    { text: `, con domicilio en ${COMPANY_ADDRESS}, y CIF ${COMPANY_NIF}, representada por ${COMPANY_REPRESENTATIVE} (en adelante, ` },
     { text: '"LA EMPRESA"', bold: true },
     { text: ")." },
   ]);
@@ -80,43 +89,11 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   doc.moveDown(0.5);
 
   heading("EXPONEN");
-  body(
-    "Que ambas partes desean iniciar o continuar una relación comercial que puede implicar el intercambio de información confidencial, incluyendo pero no limitándose a: diseños, planos, modelos 3D, prototipos, procesos de fabricación, estrategias comerciales, datos de clientes y cualquier otra información de carácter reservado.",
-  );
+  body(EXPONEN_TEXT);
   doc.moveDown(0.5);
 
   heading("ACUERDAN");
-  const clauses: [string, string][] = [
-    [
-      "Definición de información confidencial.",
-      "Se considera información confidencial toda aquella información, ya sea oral, escrita, gráfica, electrónica o en cualquier otro soporte, que una parte revele a la otra en el marco de la relación comercial, incluyendo diseños, archivos 3D, especificaciones técnicas, precios, plazos y cualquier dato relativo a proyectos en curso.",
-    ],
-    [
-      "Obligación de confidencialidad.",
-      "La parte receptora se compromete a mantener en estricta confidencialidad toda la información recibida, no divulgarla a terceros sin consentimiento previo por escrito de la parte reveladora, y utilizarla únicamente para los fines de la relación comercial entre ambas partes.",
-    ],
-    [
-      "Medidas de protección.",
-      "La parte receptora adoptará las medidas de seguridad razonables para proteger la información confidencial, con al menos el mismo grado de protección que aplica a su propia información confidencial.",
-    ],
-    [
-      "Exclusiones.",
-      "No se considerará confidencial la información que: (a) sea de dominio público sin culpa de la parte receptora; (b) haya sido recibida legítimamente de un tercero sin restricciones; (c) haya sido desarrollada independientemente por la parte receptora.",
-    ],
-    [
-      "Duración.",
-      "Las obligaciones de confidencialidad establecidas en este acuerdo permanecerán vigentes durante un plazo de 2 (dos) años a partir de la fecha de firma, incluso tras la finalización de la relación comercial entre las partes.",
-    ],
-    [
-      "Devolución de información.",
-      "A la terminación de la relación comercial o cuando lo solicite la parte reveladora, la parte receptora devolverá o destruirá toda la información confidencial recibida y cualquier copia de la misma.",
-    ],
-    [
-      "Legislación aplicable.",
-      "Este acuerdo se regirá por la legislación española. Para cualquier controversia derivada del mismo, las partes se someten a los juzgados y tribunales de Madrid.",
-    ],
-  ];
-  clauses.forEach(([title, txt], i) => {
+  NDA_CLAUSES.forEach(([title, txt], i) => {
     doc.font("Helvetica").fontSize(10).fillColor("#333333");
     doc.text(`${i + 1}. `, { continued: true, lineGap: 3 });
     doc.font("Helvetica-Bold").text(`${title} `, { continued: true });
@@ -125,7 +102,7 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   });
 
   doc.moveDown(1);
-  body("Y en prueba de conformidad, las partes firman el presente acuerdo:");
+  body(CLOSING_TEXT);
 
   // Signatures: two columns, sharing the same y baseline
   doc.moveDown(1);
@@ -138,8 +115,8 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
     .fontSize(10)
     .fillColor("#1a1a1a")
     .text("LA EMPRESA", 50, yStart);
-  doc.font("Helvetica").fillColor("#333333").text("Prototipalo S.L.", 50);
-  doc.text("Manuel de la Viña", 50);
+  doc.font("Helvetica").fillColor("#333333").text(COMPANY_NAME, 50);
+  doc.text(COMPANY_REPRESENTATIVE, 50);
 
   doc
     .font("Helvetica-Bold")
