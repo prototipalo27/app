@@ -69,7 +69,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
-type Tab = "brief" | "pagos" | "documentos" | "reuniones" | "accesos" | "costes";
+type Tab = "resumen" | "brief" | "pagos" | "documentos" | "reuniones" | "accesos" | "costes";
 
 const HOURLY_RATE_EUR = 20;
 
@@ -88,17 +88,19 @@ export default async function StudioProjectDetailPage({
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
   const tab: Tab =
-    tabParam === "pagos"
-      ? "pagos"
-      : tabParam === "documentos"
-        ? "documentos"
-        : tabParam === "reuniones"
-          ? "reuniones"
-          : tabParam === "accesos"
-            ? "accesos"
-            : tabParam === "costes"
-              ? "costes"
-              : "brief";
+    tabParam === "brief"
+      ? "brief"
+      : tabParam === "pagos"
+        ? "pagos"
+        : tabParam === "documentos"
+          ? "documentos"
+          : tabParam === "reuniones"
+            ? "reuniones"
+            : tabParam === "accesos"
+              ? "accesos"
+              : tabParam === "costes"
+                ? "costes"
+                : "resumen";
 
   const profile = await getUserProfile();
   if (!profile) redirect("/login");
@@ -219,6 +221,7 @@ export default async function StudioProjectDetailPage({
       {/* Tabs */}
       <div className="mb-4 border-b border-zinc-200 dark:border-zinc-800">
         <nav className="flex gap-1">
+          <TabLink id={project.id} tab="resumen" current={tab} label="Resumen" />
           <TabLink id={project.id} tab="brief" current={tab} label="Brief" />
           <TabLink id={project.id} tab="pagos" current={tab} label="Pagos" />
           <TabLink id={project.id} tab="documentos" current={tab} label="Documentos" />
@@ -239,6 +242,23 @@ export default async function StudioProjectDetailPage({
           />
         </nav>
       </div>
+
+      {tab === "resumen" && (
+        <ResumenTab
+          project={project}
+          team={activeUsers ?? []}
+          collaborators={collaborators ?? []}
+          meetings={meetings ?? []}
+          payments={payments ?? []}
+          expenses={expenses ?? []}
+          timeEntries={timeEntries ?? []}
+          ndaStatus={ndaStatus}
+          total={total}
+          cobrado={cobrado}
+          facturado={facturado}
+          canManage={canDelete}
+        />
+      )}
 
       {tab === "brief" && (
         <BriefTab
@@ -1652,6 +1672,348 @@ function NdaSection({
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ResumenTab({
+  project,
+  team,
+  collaborators,
+  meetings,
+  payments,
+  expenses,
+  timeEntries,
+  ndaStatus,
+  total,
+  cobrado,
+  facturado,
+  canManage,
+}: {
+  project: StudioProject;
+  team: { id: string; full_name: string | null; nickname: string | null; email: string }[];
+  collaborators: Collaborator[];
+  meetings: Meeting[];
+  payments: Payment[];
+  expenses: Expense[];
+  timeEntries: TimeEntry[];
+  ndaStatus: NdaStatus;
+  total: number;
+  cobrado: number;
+  facturado: number;
+  canManage: boolean;
+}) {
+  // Equipo: PM + miembros con horas imputadas
+  const pm = project.project_manager_id
+    ? team.find((u) => u.id === project.project_manager_id)
+    : null;
+  const teamLabelOf = (u: { full_name: string | null; nickname: string | null; email: string }) =>
+    u.nickname || u.full_name || u.email.split("@")[0];
+
+  const hoursByUserId = new Map<string, number>();
+  for (const t of timeEntries) {
+    if (!t.user_id) continue;
+    hoursByUserId.set(t.user_id, (hoursByUserId.get(t.user_id) ?? 0) + Number(t.hours));
+  }
+  const contributorsRaw = team.filter(
+    (u) => hoursByUserId.has(u.id) && u.id !== project.project_manager_id,
+  );
+
+  // Reuniones: meetings vienen ordenadas desc por meeting_date
+  const now = Date.now();
+  const upcomingMeetings = meetings
+    .filter((m) => new Date(m.meeting_date).getTime() > now)
+    .reverse(); // ascendente: la más cercana primero
+  const pastMeetings = meetings.filter((m) => new Date(m.meeting_date).getTime() <= now);
+  const nextMeeting = upcomingMeetings[0] ?? null;
+  const lastMeeting = pastMeetings[0] ?? null;
+
+  // Pagos
+  const pendiente = payments
+    .filter((p) => p.status === "pendiente" || p.status === "facturado")
+    .reduce((acc, p) => acc + Number(p.amount), 0);
+  const nextPayment = payments.find(
+    (p) => p.status === "pendiente" || p.status === "facturado",
+  );
+
+  // Costes (manager only)
+  const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+  const totalHours = timeEntries.reduce((acc, t) => acc + Number(t.hours), 0);
+  const horasCoste = totalHours * HOURLY_RATE_EUR;
+  const margen = cobrado - totalExpenses - horasCoste;
+
+  // NDA badge
+  const ndaBadge =
+    ndaStatus.status === "signed"
+      ? { label: "Firmado", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" }
+      : ndaStatus.status === "pending"
+        ? { label: "Pendiente", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" }
+        : { label: "Sin enviar", color: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" };
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {/* Equipo */}
+      <ResumenCard title="Equipo" linkHref={`/dashboard/studio/${project.id}?tab=accesos`} linkLabel="Gestionar accesos">
+        <div className="space-y-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Project Manager
+            </p>
+            <p className="mt-0.5 text-sm text-zinc-900 dark:text-white">
+              {pm ? teamLabelOf(pm) : <span className="text-zinc-400">Sin asignar</span>}
+            </p>
+          </div>
+
+          {canManage && contributorsRaw.length > 0 && (
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Equipo Prototipalo ({totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h totales)
+              </p>
+              <ul className="mt-1 space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                {contributorsRaw
+                  .sort((a, b) => (hoursByUserId.get(b.id) ?? 0) - (hoursByUserId.get(a.id) ?? 0))
+                  .map((u) => (
+                    <li key={u.id} className="flex items-center justify-between">
+                      <span>{teamLabelOf(u)}</span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {(hoursByUserId.get(u.id) ?? 0).toLocaleString("es-ES", { maximumFractionDigits: 1 })}h
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Cliente / colaboradores
+            </p>
+            {collaborators.length === 0 ? (
+              <p className="mt-0.5 text-sm text-zinc-400">Aún no hay nadie invitado al portal.</p>
+            ) : (
+              <ul className="mt-1 space-y-0.5 text-sm text-zinc-700 dark:text-zinc-300">
+                {collaborators.map((c) => (
+                  <li key={c.id} className="truncate">
+                    {c.name || c.email}
+                    {c.last_viewed_at && (
+                      <span className="ml-2 text-[11px] text-zinc-400">
+                        · visitado {formatDateMedium(c.last_viewed_at)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </ResumenCard>
+
+      {/* Reuniones */}
+      <ResumenCard
+        title={`Reuniones${meetings.length > 0 ? ` (${meetings.length})` : ""}`}
+        linkHref={`/dashboard/studio/${project.id}?tab=reuniones`}
+        linkLabel={meetings.length > 0 ? "Ver todas" : "Apuntar la primera"}
+      >
+        {meetings.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay reuniones registradas.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {nextMeeting && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/50 dark:bg-blue-900/10">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-blue-700 dark:text-blue-400">
+                  Próxima
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                  {formatDateTime(nextMeeting.meeting_date)}
+                </p>
+                {nextMeeting.attendees.length > 0 && (
+                  <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    {nextMeeting.attendees.join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {lastMeeting && (
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Última
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-900 dark:text-white">
+                  {formatDateTime(lastMeeting.meeting_date)}
+                </p>
+                {lastMeeting.summary && (
+                  <p className="mt-1 line-clamp-3 text-xs text-zinc-600 dark:text-zinc-400">
+                    {lastMeeting.summary}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </ResumenCard>
+
+      {/* NDA */}
+      <ResumenCard
+        title="NDA"
+        linkHref={`/dashboard/studio/${project.id}?tab=documentos`}
+        linkLabel="Gestionar"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${ndaBadge.color}`}>
+            {ndaBadge.label}
+          </span>
+          {ndaStatus.status === "signed" && (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {ndaStatus.signer_name && <>{ndaStatus.signer_name} · </>}
+              {ndaStatus.signed_at && formatDateMedium(ndaStatus.signed_at)}
+            </span>
+          )}
+          {ndaStatus.status === "pending" && ndaStatus.signer_email && (
+            <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+              enviado a {ndaStatus.signer_email}
+            </span>
+          )}
+        </div>
+      </ResumenCard>
+
+      {/* Documentos */}
+      <ResumenCard
+        title="Documentos"
+        linkHref={`/dashboard/studio/${project.id}?tab=documentos`}
+        linkLabel={project.google_drive_folder_id ? "Ver en Drive" : "Crear carpeta"}
+      >
+        {project.google_drive_folder_id ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            Drive vinculado.{" "}
+            <a
+              href={`https://drive.google.com/drive/folders/${project.google_drive_folder_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-blue hover:underline"
+            >
+              Abrir carpeta
+            </a>
+          </p>
+        ) : (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay carpeta de Drive para este proyecto.
+          </p>
+        )}
+      </ResumenCard>
+
+      {/* Estado financiero (solo manager) */}
+      {canManage && (
+        <ResumenCard
+          title="Finanzas (interno)"
+          className="md:col-span-2"
+          linkHref={`/dashboard/studio/${project.id}?tab=costes`}
+          linkLabel="Ver costes y margen"
+        >
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Total proyecto
+              </p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">
+                {formatEur(total)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Cobrado
+              </p>
+              <p className="mt-1 text-sm font-bold text-green-600 dark:text-green-400">
+                {formatEur(cobrado)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Pendiente
+              </p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">
+                {formatEur(pendiente)}
+              </p>
+              {facturado > 0 && (
+                <p className="mt-0.5 text-[11px] text-blue-600 dark:text-blue-400">
+                  {formatEur(facturado)} facturado
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Margen estimado
+              </p>
+              <p
+                className={`mt-1 text-sm font-bold ${
+                  margen >= 0
+                    ? "text-green-700 dark:text-green-300"
+                    : "text-red-700 dark:text-red-300"
+                }`}
+              >
+                {formatEur(margen)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                cobrado − gastos − {totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h × {HOURLY_RATE_EUR}€
+              </p>
+            </div>
+          </div>
+
+          {nextPayment && (
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Próximo hito
+              </p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span className="truncate text-sm text-zinc-900 dark:text-white">{nextPayment.label}</span>
+                <span className="shrink-0 text-sm font-semibold text-zinc-900 dark:text-white">
+                  {formatEur(Number(nextPayment.amount))}
+                </span>
+              </div>
+              {nextPayment.due_date && (
+                <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  vence {formatDateMedium(nextPayment.due_date)}
+                </p>
+              )}
+            </div>
+          )}
+        </ResumenCard>
+      )}
+    </div>
+  );
+}
+
+function ResumenCard({
+  title,
+  children,
+  linkHref,
+  linkLabel,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  linkHref?: string;
+  linkLabel?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 ${className ?? ""}`}
+    >
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{title}</h3>
+        {linkHref && linkLabel && (
+          <Link
+            href={linkHref}
+            className="text-xs text-brand-blue hover:underline"
+          >
+            {linkLabel}
+          </Link>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
