@@ -31,13 +31,19 @@ async function NdaContent({
 
   const { data: nda } = await supabase
     .from("nda_agreements")
-    .select("*, leads(full_name, company)")
+    .select("*, leads(full_name, company), studio_projects(name, client_name)")
     .eq("token", token)
     .single();
 
   if (!nda) notFound();
 
   const lead = nda.leads as { full_name: string; company: string | null } | null;
+  const studioProject = nda.studio_projects as { name: string; client_name: string | null } | null;
+  const contextName = lead
+    ? `${lead.full_name}${lead.company ? ` — ${lead.company}` : ""}`
+    : studioProject
+      ? `${studioProject.name}${studioProject.client_name ? ` — ${studioProject.client_name}` : ""}`
+      : null;
 
   if (nda.status === "signed") {
     return (
@@ -80,10 +86,9 @@ async function NdaContent({
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
             Acuerdo de confidencialidad
           </h1>
-          {lead && (
+          {contextName && (
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {lead.full_name}
-              {lead.company ? ` — ${lead.company}` : ""}
+              {contextName}
             </p>
           )}
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">

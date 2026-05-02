@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { generateNdaPdf } from "@/lib/nda-pdf";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 interface SignNdaData {
   signer_name: string;
@@ -103,21 +104,31 @@ export async function signNda(
     console.error("[signNda] PDF/email step failed:", e);
   }
 
-  // 5. Log activity on lead
-  try {
-    await supabase.from("lead_activities").insert({
-      lead_id: nda.lead_id,
-      activity_type: "note",
-      content: `NDA firmado por ${data.signer_name.trim()} (${data.signer_nif.trim()})`,
-      metadata: {
-        type: "nda_signed",
-        signer_name: data.signer_name.trim(),
-        signer_nif: data.signer_nif.trim(),
-        signer_email: data.signer_email.trim(),
-      },
-    });
-  } catch {
-    // Activity log failure should not block
+  // 5. Log activity on lead (solo si el NDA pertenece a un lead, no a Studio).
+  if (nda.lead_id) {
+    try {
+      await supabase.from("lead_activities").insert({
+        lead_id: nda.lead_id,
+        activity_type: "note",
+        content: `NDA firmado por ${data.signer_name.trim()} (${data.signer_nif.trim()})`,
+        metadata: {
+          type: "nda_signed",
+          signer_name: data.signer_name.trim(),
+          signer_nif: data.signer_nif.trim(),
+          signer_email: data.signer_email.trim(),
+        },
+      });
+    } catch {
+      // Activity log failure should not block
+    }
+  }
+
+  // 6. Revalidar la pantalla del owner (lead o studio) para que refleje
+  //    el estado "firmado" sin tener que recargar a mano.
+  if (nda.lead_id) {
+    revalidatePath(`/dashboard/crm/${nda.lead_id}`);
+  } else if (nda.studio_project_id) {
+    revalidatePath(`/dashboard/studio/${nda.studio_project_id}`);
   }
 
   return { success: true };

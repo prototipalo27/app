@@ -28,9 +28,14 @@ import {
   updateStudioTimeEntry,
   deleteStudioTimeEntry,
 } from "../cost-actions";
+import {
+  sendStudioNdaToClient,
+  getStudioNdaStatus,
+  cancelStudioNda,
+} from "../nda-actions";
 import { CopyPortalLink } from "./copy-portal-link";
 import { ProjectDocuments } from "../../projects/[id]/project-documents";
-import { formatDateTime, toMadridDateTimeInput } from "@/lib/dates";
+import { formatDateTime, formatDateMedium, toMadridDateTimeInput } from "@/lib/dates";
 
 const STATUSES = [
   { value: "brief", label: "Brief" },
@@ -149,6 +154,8 @@ export default async function StudioProjectDetailPage({
       : Promise.resolve({ data: null }),
   ]);
 
+  const ndaStatus = await getStudioNdaStatus(id);
+
   const total = Number(project.total_price ?? 0);
   const cobrado = (payments ?? [])
     .filter((p) => p.status === "cobrado")
@@ -253,11 +260,14 @@ export default async function StudioProjectDetailPage({
       )}
 
       {tab === "documentos" && (
-        <ProjectDocuments
-          projectId={project.id}
-          folderId={project.google_drive_folder_id}
-          kind="studio"
-        />
+        <div className="space-y-6">
+          <NdaSection projectId={project.id} ndaStatus={ndaStatus} canManage={canDelete} />
+          <ProjectDocuments
+            projectId={project.id}
+            folderId={project.google_drive_folder_id}
+            kind="studio"
+          />
+        </div>
       )}
 
       {tab === "reuniones" && (
@@ -1510,6 +1520,118 @@ function CostesTab({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+type NdaStatus = Awaited<ReturnType<typeof getStudioNdaStatus>>;
+
+function NdaSection({
+  projectId,
+  ndaStatus,
+  canManage,
+}: {
+  projectId: string;
+  ndaStatus: NdaStatus;
+  canManage: boolean;
+}) {
+  if (ndaStatus.status === "signed") {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/10">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <h3 className="text-sm font-semibold text-green-700 dark:text-green-400">
+                NDA firmado
+              </h3>
+            </div>
+            <p className="mt-1 text-xs text-green-700/80 dark:text-green-400/80">
+              {ndaStatus.signer_name && <>{ndaStatus.signer_name} — </>}
+              {ndaStatus.signed_at && formatDateMedium(ndaStatus.signed_at)}
+            </p>
+          </div>
+          {canManage && ndaStatus.id && (
+            <a
+              href={`/api/admin/regen-nda?id=${ndaStatus.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 dark:border-green-800 dark:bg-zinc-900 dark:text-green-300 dark:hover:bg-zinc-800"
+            >
+              Descargar PDF
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (ndaStatus.status === "pending") {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                NDA pendiente de firma
+              </h3>
+            </div>
+            <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
+              Enviado{ndaStatus.signer_email ? ` a ${ndaStatus.signer_email}` : ""}. Esperando firma del cliente.
+            </p>
+          </div>
+          {canManage && ndaStatus.id && (
+            <form action={cancelStudioNda} className="shrink-0">
+              <input type="hidden" name="studio_project_id" value={projectId} />
+              <input type="hidden" name="nda_id" value={ndaStatus.id} />
+              <button
+                type="submit"
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-zinc-800"
+              >
+                Cancelar y reenviar
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // status === "none"
+  if (!canManage) {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        Aún no se ha enviado NDA al cliente.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Acuerdo de confidencialidad
+          </h3>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Manda el NDA al cliente antes de compartir info sensible (patentes, datos del cliente, etc.).
+          </p>
+        </div>
+        <form action={sendStudioNdaToClient} className="shrink-0">
+          <input type="hidden" name="studio_project_id" value={projectId} />
+          <button
+            type="submit"
+            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
+          >
+            Enviar NDA al cliente
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

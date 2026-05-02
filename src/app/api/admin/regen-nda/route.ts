@@ -5,7 +5,7 @@ import { generateNdaPdf } from "@/lib/nda-pdf";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole("super_admin");
+    await requireRole("manager");
 
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
