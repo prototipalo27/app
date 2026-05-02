@@ -16,6 +16,8 @@ export interface NdaPdfData {
   signerAddress: string;
   signatureData: string;
   signedAt: Date;
+  /** Firma de Prototipalo (base64 PNG). Si está vacía, sale solo el nombre. */
+  companySignatureData?: string | null;
 }
 
 export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
@@ -118,6 +120,11 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   doc.font("Helvetica").fillColor("#333333").text(COMPANY_NAME, 50);
   doc.text(COMPANY_REPRESENTATIVE, 50);
 
+  if (data.companySignatureData) {
+    const buf = decodeBase64Png(data.companySignatureData);
+    if (buf) doc.image(buf, 50, doc.y + 8, { width: 180, height: 70 });
+  }
+
   doc
     .font("Helvetica-Bold")
     .fillColor("#1a1a1a")
@@ -126,16 +133,19 @@ export async function generateNdaPdf(data: NdaPdfData): Promise<Buffer> {
   doc.text(data.signerName, x2);
 
   if (data.signatureData) {
-    let imgBuf: Buffer;
-    const m = /^data:image\/[^;]+;base64,(.*)$/.exec(data.signatureData);
-    if (m) {
-      imgBuf = Buffer.from(m[1], "base64");
-    } else {
-      imgBuf = Buffer.from(data.signatureData, "base64");
-    }
-    doc.image(imgBuf, x2, doc.y + 8, { width: 180, height: 70 });
+    const buf = decodeBase64Png(data.signatureData);
+    if (buf) doc.image(buf, x2, doc.y + 8, { width: 180, height: 70 });
   }
 
   doc.end();
   return done;
+}
+
+function decodeBase64Png(input: string): Buffer | null {
+  const m = /^data:image\/[^;]+;base64,(.*)$/.exec(input);
+  try {
+    return m ? Buffer.from(m[1], "base64") : Buffer.from(input, "base64");
+  } catch {
+    return null;
+  }
 }

@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { generateNdaPdf } from "@/lib/nda-pdf";
 import { generateStudioNdaPdf } from "@/lib/studio-nda-pdf";
+import { getPrototipaloSignature } from "@/lib/prototipalo-signature";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -72,6 +73,8 @@ export async function signNda(
   const isStudio = !!nda.studio_project_id;
   const studioRel = nda.studio_projects as { nda_project_description: string | null } | null;
 
+  const companySignatureData = await getPrototipaloSignature();
+
   try {
     const pdfBuffer = isStudio
       ? await generateStudioNdaPdf({
@@ -83,6 +86,7 @@ export async function signNda(
           signatureData: data.signature_data,
           signedAt: new Date(),
           projectDescription: studioRel?.nda_project_description ?? null,
+          companySignatureData,
         })
       : await generateNdaPdf({
           signerName: data.signer_name.trim(),
@@ -91,6 +95,7 @@ export async function signNda(
           signerAddress: data.signer_address.trim(),
           signatureData: data.signature_data,
           signedAt: new Date(),
+          companySignatureData,
         });
 
     const subject = isStudio

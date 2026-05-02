@@ -24,6 +24,8 @@ export interface StudioNdaPdfData {
   signatureData: string;
   signedAt: Date;
   projectDescription: string | null | undefined;
+  /** Firma de Prototipalo (base64 PNG). Si está vacía, sale solo nombre. */
+  companySignatureData?: string | null;
 }
 
 export async function generateStudioNdaPdf(data: StudioNdaPdfData): Promise<Buffer> {
@@ -169,8 +171,15 @@ export async function generateStudioNdaPdf(data: StudioNdaPdfData): Promise<Buff
     .fontSize(10)
     .fillColor(HEADING_COLOR)
     .text(`On behalf of ${PROTOTIPALO_LEGAL_NAME}`, x1, yStart, { width: colWidth });
-  doc.moveDown(2.5);
-  doc.font("Helvetica").fillColor(TEXT_COLOR).text("_______________________________", x1);
+
+  if (data.companySignatureData) {
+    const buf = decodeBase64Png(data.companySignatureData);
+    if (buf) doc.image(buf, x1, yStart + 16, { width: 160, height: 50 });
+  }
+
+  const detailsY = yStart + 78;
+  doc.font("Helvetica").fontSize(10).fillColor(TEXT_COLOR);
+  doc.text("_______________________________", x1, detailsY);
   doc.text(`Name: ${PROTOTIPALO_REPRESENTATIVE_NAME}`, x1);
   doc.text(`Position: ${PROTOTIPALO_REPRESENTATIVE_POSITION}`, x1);
   doc.text(`Date: ${signedDate}`, x1);
@@ -185,14 +194,10 @@ export async function generateStudioNdaPdf(data: StudioNdaPdfData): Promise<Buff
 
   // Place signature image roughly where the line would be.
   if (data.signatureData) {
-    let imgBuf: Buffer;
-    const m = /^data:image\/[^;]+;base64,(.*)$/.exec(data.signatureData);
-    imgBuf = m ? Buffer.from(m[1], "base64") : Buffer.from(data.signatureData, "base64");
-    doc.image(imgBuf, x2, yStart + 16, { width: 160, height: 50 });
+    const buf = decodeBase64Png(data.signatureData);
+    if (buf) doc.image(buf, x2, yStart + 16, { width: 160, height: 50 });
   }
 
-  // Add line + details below the signature image, aligned with column 1.
-  const detailsY = yStart + 78;
   doc.font("Helvetica").fontSize(10).fillColor(TEXT_COLOR);
   doc.text("_______________________________", x2, detailsY);
   doc.text(`Name: ${data.signerName}`, x2);
@@ -202,4 +207,13 @@ export async function generateStudioNdaPdf(data: StudioNdaPdfData): Promise<Buff
 
   doc.end();
   return done;
+}
+
+function decodeBase64Png(input: string): Buffer | null {
+  const m = /^data:image\/[^;]+;base64,(.*)$/.exec(input);
+  try {
+    return m ? Buffer.from(m[1], "base64") : Buffer.from(input, "base64");
+  } catch {
+    return null;
+  }
 }

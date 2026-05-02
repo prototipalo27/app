@@ -27,6 +27,11 @@ const SECTIONS: { href: string; label: string; description: string }[] = [
     label: "Impresoras",
     description: "Configuración y credenciales de impresoras.",
   },
+  {
+    href: "/dashboard/settings/signature",
+    label: "Tu firma",
+    description: "Firma manuscrita que aparece como Prototipalo en los NDAs firmados.",
+  },
 ];
 
 export default async function SettingsHubPage() {

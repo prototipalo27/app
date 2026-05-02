@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { generateNdaPdf } from "@/lib/nda-pdf";
 import { generateStudioNdaPdf } from "@/lib/studio-nda-pdf";
+import { getPrototipaloSignature } from "@/lib/prototipalo-signature";
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
 
     const isStudio = !!data.studio_project_id;
     const studioRel = data.studio_projects as { nda_project_description: string | null } | null;
+    const companySignatureData = await getPrototipaloSignature();
 
     const buf = isStudio
       ? await generateStudioNdaPdf({
@@ -39,6 +41,7 @@ export async function GET(req: NextRequest) {
           signatureData: data.signature_data,
           signedAt: new Date(data.signed_at),
           projectDescription: studioRel?.nda_project_description ?? null,
+          companySignatureData,
         })
       : await generateNdaPdf({
           signerName: data.signer_name,
@@ -47,6 +50,7 @@ export async function GET(req: NextRequest) {
           signerAddress: data.signer_address ?? "",
           signatureData: data.signature_data,
           signedAt: new Date(data.signed_at),
+          companySignatureData,
         });
 
     return new NextResponse(new Uint8Array(buf), {
