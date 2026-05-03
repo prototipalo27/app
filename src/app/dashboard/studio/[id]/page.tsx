@@ -39,6 +39,7 @@ import {
   cancelStudioNda,
 } from "../nda-actions";
 import { CopyPortalLink } from "./copy-portal-link";
+import { NdaDescriptionField } from "./nda-description-field";
 import { ProjectDocuments } from "../../projects/[id]/project-documents";
 import { formatDateTime, formatDateMedium, toMadridDateTimeInput } from "@/lib/dates";
 
@@ -307,7 +308,12 @@ export default async function StudioProjectDetailPage({
 
       {tab === "documentos" && (
         <div className="space-y-6">
-          <NdaSection projectId={project.id} ndaStatus={ndaStatus} canManage={canDelete} />
+          <NdaSection
+            projectId={project.id}
+            ndaStatus={ndaStatus}
+            canManage={canDelete}
+            ndaProjectDescription={project.nda_project_description}
+          />
           <ProjectDocuments
             projectId={project.id}
             folderId={project.google_drive_folder_id}
@@ -534,21 +540,10 @@ function BriefTab({
 
         <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">NDA</h3>
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Descripción del proyecto para el NDA
-            </label>
-            <textarea
-              name="nda_project_description"
-              rows={2}
-              defaultValue={project.nda_project_description ?? ""}
-              placeholder='Por defecto: "the products, services and intellectual property developed under this collaboration". Personalízalo si quieres que el Recital I mencione algo concreto (ej. "a wearable monitoring device for horses").'
-              className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Aparece en el contrato del cliente. Cámbialo antes de enviar el NDA.
-            </p>
-          </div>
+          <NdaDescriptionField
+            projectId={project.id}
+            initialValue={project.nda_project_description ?? ""}
+          />
         </div>
 
         <div>
@@ -1698,11 +1693,14 @@ function NdaSection({
   projectId,
   ndaStatus,
   canManage,
+  ndaProjectDescription,
 }: {
   projectId: string;
   ndaStatus: NdaStatus;
   canManage: boolean;
+  ndaProjectDescription: string | null;
 }) {
+  const hasDescription = !!ndaProjectDescription?.trim();
   if (ndaStatus.status === "signed") {
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/10">
@@ -1789,12 +1787,25 @@ function NdaSection({
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Manda el NDA al cliente antes de compartir info sensible (patentes, datos del cliente, etc.).
           </p>
+          {!hasDescription && (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+              Falta la descripción del proyecto.{" "}
+              <Link
+                href={`/dashboard/studio/${projectId}?tab=brief`}
+                className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300"
+              >
+                Rellénala en el Brief
+              </Link>{" "}
+              para poder enviar el NDA.
+            </p>
+          )}
         </div>
         <form action={sendStudioNdaToClient} className="shrink-0">
           <input type="hidden" name="studio_project_id" value={projectId} />
           <button
             type="submit"
-            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
+            disabled={!hasDescription}
+            className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:hover:bg-zinc-300 dark:disabled:bg-zinc-700 dark:disabled:hover:bg-zinc-700 dark:focus:ring-offset-zinc-900"
           >
             Enviar NDA al cliente
           </button>

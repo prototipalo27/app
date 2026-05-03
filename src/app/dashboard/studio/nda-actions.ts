@@ -1,5 +1,6 @@
 "use server";
 
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
@@ -27,12 +28,22 @@ export async function sendStudioNdaToClient(formData: FormData): Promise<void> {
 
   const { data: project } = await supabase
     .from("studio_projects")
-    .select("name, client_name, client_email")
+    .select("name, client_name, client_email, nda_project_description")
     .eq("id", studioProjectId)
     .single();
 
   if (!project?.client_email) {
     throw new Error("El proyecto no tiene email de cliente");
+  }
+
+  // Sin descripción específica, el NDA cae al genérico "the products,
+  // services and intellectual property developed under this collaboration".
+  // Forzamos a rellenarlo para evitar que un proyecto mande un NDA con
+  // descripción de otro proyecto o totalmente genérica.
+  if (!project.nda_project_description?.trim()) {
+    throw new Error(
+      "Rellena la descripción del proyecto para el NDA en el Brief antes de enviarlo",
+    );
   }
 
   // Evitar duplicar NDAs pendientes para el mismo proyecto.
@@ -136,6 +147,90 @@ export async function getStudioNdaStatus(
     signer_name: nda.signer_name || undefined,
     signer_email: nda.signer_email || undefined,
   };
+}
+
+/**
+ * Sugiere una descripción para el Recital I del NDA usando Claude.
+ * El frasaje resultante encaja después de "Prototipalo ... is developing"
+ * (ej. `a wearable monitoring device for horses`).
+ */
+export async function suggestStudioNdaDescription(
+  studioProjectId: string,
+): Promise<{ suggestion: string } | { error: string }> {
+  if (!studioProjectId) return { error: "Falta proyecto" };
+
+  await requireRole("manager");
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { error: "ANTHROPIC_API_KEY no configurada" };
+
+  const supabase = await createClient();
+  const { data: project } = await supabase
+    .from("studio_projects")
+    .select(
+      "name, client_name, brief_description, brief_objectives, brief_constraints, nda_project_description",
+    )
+    .eq("id", studioProjectId)
+    .single();
+
+  if (!project) return { error: "Proyecto no encontrado" };
+
+  const context = [
+    `Project name: ${project.name}`,
+    project.client_name ? `Client: ${project.client_name}` : null,
+    project.brief_description ? `Brief: ${project.brief_description}` : null,
+    project.brief_objectives ? `Objectives: ${project.brief_objectives}` : null,
+    project.brief_constraints ? `Constraints: ${project.brief_constraints}` : null,
+    project.nda_project_description
+      ? `Current NDA description: ${project.nda_project_description}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const client = new Anthropic({ apiKey });
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [
+        {
+          role: "user",
+          content: `You are drafting the project description used in Recital I of a mutual NDA between Prototipalo (a custom hardware/electronics prototyping workshop) and a client.
+
+The sentence in the NDA reads:
+"Prototipalo is engaged in the design, prototyping and manufacture of custom hardware and electronics, and is developing <DESCRIPTION> (the 'Project')."
+
+Write the <DESCRIPTION> only. It must:
+- Be in English.
+- Start with an article ("a"/"an") or determiner so it grammatically follows "is developing".
+- Be 1 sentence, max ~30 words.
+- Describe what the Project is, at a level high enough to protect confidentiality but specific enough that a third party reading it would know which project this is about.
+- NOT repeat "Prototipalo is developing".
+- NOT add quotes, commentary, or alternatives — return only the description.
+
+Project context:
+${context}`,
+        },
+      ],
+    });
+
+    const block = response.content[0];
+    const text = block?.type === "text" ? block.text.trim() : "";
+    if (!text) return { error: "Respuesta vacía del modelo" };
+
+    // El modelo a veces devuelve la frase entre comillas o con punto final
+    // suelto: lo limpiamos para que se pueda pegar directo en el campo.
+    const cleaned = text
+      .replace(/^["“”']+|["“”']+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return { suggestion: cleaned };
+  } catch (e) {
+    console.error("[studio-nda] suggest failed:", e);
+    return { error: e instanceof Error ? e.message : "Error desconocido" };
+  }
 }
 
 /**
