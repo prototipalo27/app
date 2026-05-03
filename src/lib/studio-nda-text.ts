@@ -148,15 +148,19 @@ export const STUDIO_NDA_CLAUSES: NdaClause[] = [
     subsections: [
       {
         number: "5.1",
-        text: "All Confidential Information shall remain the exclusive property of the Disclosing Party. Nothing in this Agreement shall be construed as granting, by implication, estoppel or otherwise, any licence, assignment or transfer of any patent, utility model, copyright, trademark, design right, trade secret or any other intellectual or industrial property right to the Receiving Party.",
+        text: "All Confidential Information shall remain the exclusive property of the Disclosing Party. Nothing in this Agreement shall be construed as granting, by implication, estoppel or otherwise, any licence, assignment or transfer of any intellectual or industrial property right to the Receiving Party.",
       },
       {
         number: "5.2",
-        text: "In particular, the Parties expressly acknowledge that any background intellectual property of Prototipalo relating to the Project — including hardware architecture, sensor configurations, firmware, algorithms, mechanical design and industrial design — shall remain the sole and exclusive property of Prototipalo.",
+        text: "Background IP. Each Party shall retain ownership of its background intellectual property, meaning all rights, know-how, tools, libraries, methodologies and generic technical knowledge of such Party existing prior to the Effective Date or developed independently outside the scope of the Project.",
       },
       {
         number: "5.3",
-        text: "Should the collaboration between the Parties evolve toward joint development, the ownership of any resulting intellectual or industrial property rights shall be governed by a separate written agreement to be executed by the Parties.",
+        text: "Foreground IP. Prototipalo's business model is the provision of bespoke engineering and prototyping services to its clients. Accordingly, the Parties confirm their intention that any intellectual and industrial property specifically developed for the Project (the \"Foreground IP\") — including the specific hardware architecture, sensor configuration, firmware, mechanical design and industrial design developed for the Project — shall be owned by the Counterparty, on the terms to be set out in the corresponding development agreement to be executed by the Parties prior to the commencement of development works.",
+      },
+      {
+        number: "5.4",
+        text: "The foregoing is without prejudice to Prototipalo's right to continue freely using its background IP (including generic methods, libraries, tools and techniques) in other projects for third parties, provided that such use does not involve any use or disclosure of the Counterparty's Confidential Information, nor the reproduction of the specific device or system developed for the Project.",
       },
     ],
   },

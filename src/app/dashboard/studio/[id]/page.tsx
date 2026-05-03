@@ -542,7 +542,7 @@ function BriefTab({
               name="nda_project_description"
               rows={2}
               defaultValue={project.nda_project_description ?? ""}
-              placeholder='Por defecto: "the products, services and intellectual property developed under this collaboration". Personalízalo si quieres que el Recital I y la cláusula 5.2 mencionen algo concreto (ej. "a wearable monitoring device for horses").'
+              placeholder='Por defecto: "the products, services and intellectual property developed under this collaboration". Personalízalo si quieres que el Recital I mencione algo concreto (ej. "a wearable monitoring device for horses").'
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
