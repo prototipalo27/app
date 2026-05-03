@@ -16,6 +16,11 @@ import {
   deleteStudioCollaborator,
 } from "../collaborator-actions";
 import {
+  addStudioMember,
+  updateStudioMemberRole,
+  removeStudioMember,
+} from "../member-actions";
+import {
   addStudioMeeting,
   updateStudioMeeting,
   deleteStudioMeeting,
@@ -69,7 +74,7 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
   cancelado: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
 };
 
-type Tab = "resumen" | "brief" | "pagos" | "documentos" | "reuniones" | "accesos" | "costes";
+type Tab = "resumen" | "brief" | "pagos" | "documentos" | "reuniones" | "equipo" | "costes";
 
 const HOURLY_RATE_EUR = 20;
 
@@ -96,8 +101,8 @@ export default async function StudioProjectDetailPage({
           ? "documentos"
           : tabParam === "reuniones"
             ? "reuniones"
-            : tabParam === "accesos"
-              ? "accesos"
+            : tabParam === "equipo" || tabParam === "accesos"
+              ? "equipo"
               : tabParam === "costes"
                 ? "costes"
                 : "resumen";
@@ -121,6 +126,7 @@ export default async function StudioProjectDetailPage({
   const [
     { data: payments },
     { data: collaborators },
+    { data: members },
     { data: meetings },
     { data: expenses },
     { data: timeEntries },
@@ -133,6 +139,11 @@ export default async function StudioProjectDetailPage({
     supabase
       .from("studio_project_collaborators")
       .select("*")
+      .eq("studio_project_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("studio_project_members")
+      .select("id, user_id, role, created_at")
       .eq("studio_project_id", id)
       .order("created_at", { ascending: true }),
     supabase
@@ -155,6 +166,21 @@ export default async function StudioProjectDetailPage({
           .order("work_date", { ascending: false })
       : Promise.resolve({ data: null }),
   ]);
+
+  // Si el proyecto tiene miembros configurados, los pickers (PM, asistentes,
+  // imputación de horas) se filtran a esa lista. Si no hay ninguno, se muestra
+  // a toda la oficina como antes (migración suave).
+  const allUsers = activeUsers ?? [];
+  const memberRows = members ?? [];
+  const memberUserIds = new Set(memberRows.map((m) => m.user_id));
+  const baseTeam = memberUserIds.size > 0
+    ? allUsers.filter((u) => memberUserIds.has(u.id))
+    : allUsers;
+  // El PM actual debe seguir apareciendo en el dropdown aunque no esté en el equipo
+  // (ej. proyectos antiguos donde el PM se fijó antes de configurar miembros).
+  const projectTeam = project.project_manager_id && !baseTeam.some((u) => u.id === project.project_manager_id)
+    ? [...baseTeam, ...allUsers.filter((u) => u.id === project.project_manager_id)]
+    : baseTeam;
 
   const ndaStatus = await getStudioNdaStatus(id);
 
@@ -236,9 +262,9 @@ export default async function StudioProjectDetailPage({
           )}
           <TabLink
             id={project.id}
-            tab="accesos"
+            tab="equipo"
             current={tab}
-            label={`Accesos${collaborators && collaborators.length > 0 ? ` (${collaborators.length})` : ""}`}
+            label={`Equipo${(memberRows.length + (collaborators?.length ?? 0)) > 0 ? ` (${memberRows.length + (collaborators?.length ?? 0)})` : ""}`}
           />
         </nav>
       </div>
@@ -246,7 +272,7 @@ export default async function StudioProjectDetailPage({
       {tab === "resumen" && (
         <ResumenTab
           project={project}
-          team={activeUsers ?? []}
+          team={allUsers}
           collaborators={collaborators ?? []}
           meetings={meetings ?? []}
           payments={payments ?? []}
@@ -263,7 +289,7 @@ export default async function StudioProjectDetailPage({
       {tab === "brief" && (
         <BriefTab
           project={project}
-          activeUsers={activeUsers ?? []}
+          activeUsers={projectTeam}
           canDelete={canDelete}
         />
       )}
@@ -294,7 +320,7 @@ export default async function StudioProjectDetailPage({
         <ReunionesTab
           projectId={project.id}
           meetings={meetings ?? []}
-          team={activeUsers ?? []}
+          team={projectTeam}
           collaborators={collaborators ?? []}
         />
       )}
@@ -304,14 +330,16 @@ export default async function StudioProjectDetailPage({
           projectId={project.id}
           expenses={expenses ?? []}
           timeEntries={timeEntries ?? []}
-          team={activeUsers ?? []}
+          team={projectTeam}
           cobrado={cobrado}
         />
       )}
 
-      {tab === "accesos" && (
-        <AccesosTab
+      {tab === "equipo" && (
+        <EquipoTab
           projectId={project.id}
+          members={memberRows}
+          allUsers={allUsers}
           collaborators={collaborators ?? []}
         />
       )}
@@ -767,15 +795,115 @@ type Collaborator = {
   created_at: string;
 };
 
-function AccesosTab({
+type Member = {
+  id: string;
+  user_id: string;
+  role: string | null;
+  created_at: string;
+};
+
+function EquipoTab({
   projectId,
+  members,
+  allUsers,
   collaborators,
 }: {
   projectId: string;
+  members: Member[];
+  allUsers: { id: string; full_name: string | null; nickname: string | null; email: string }[];
   collaborators: Collaborator[];
 }) {
+  const memberByUserId = new Map(members.map((m) => [m.user_id, m]));
+  const memberUsers = allUsers.filter((u) => memberByUserId.has(u.id));
+  const nonMemberUsers = allUsers.filter((u) => !memberByUserId.has(u.id));
+
   return (
     <div className="space-y-6">
+      {/* Equipo Prototipalo */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            Equipo Prototipalo{memberUsers.length > 0 ? ` (${memberUsers.length})` : ""}
+          </h3>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+            Quién de la oficina está involucrado. Filtra los selectores de PM, asistentes a reuniones e imputación de horas. Si no añades a nadie, los selectores muestran a toda la oficina.
+          </p>
+        </div>
+
+        {memberUsers.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay miembros internos. Añade abajo a quién está involucrado.
+          </p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {memberUsers.map((u) => {
+              const m = memberByUserId.get(u.id)!;
+              return (
+                <li key={u.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                      {u.nickname || u.full_name || u.email.split("@")[0]}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{u.email}</p>
+                  </div>
+                  <form action={updateStudioMemberRole} className="flex items-center gap-2">
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="studio_project_id" value={projectId} />
+                    <input
+                      type="text"
+                      name="role"
+                      defaultValue={m.role ?? ""}
+                      placeholder="Rol (opcional)"
+                      className="w-40 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Guardar
+                    </button>
+                  </form>
+                  <form action={removeStudioMember}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="studio_project_id" value={projectId} />
+                    <button
+                      type="submit"
+                      className="text-xs text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                    >
+                      Quitar
+                    </button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {nonMemberUsers.length > 0 && (
+          <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Añadir miembro
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {nonMemberUsers.map((u) => (
+                <form key={u.id} action={addStudioMember}>
+                  <input type="hidden" name="studio_project_id" value={projectId} />
+                  <input type="hidden" name="user_id" value={u.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:border-brand hover:bg-brand/10 hover:text-brand-dark dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-brand/20 dark:hover:text-white"
+                  >
+                    <span>+</span>
+                    {u.nickname || u.full_name || u.email.split("@")[0]}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cliente / colaboradores externos */}
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/10 dark:text-blue-300">
         Cada persona invitada recibe un link único a su portal. Marca abajo qué secciones puede ver. Pueden guardarlo en favoritos del navegador y entrar sin contraseña.
       </div>
@@ -784,7 +912,7 @@ function AccesosTab({
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-            Colaboradores{collaborators.length > 0 ? ` (${collaborators.length})` : ""}
+            Cliente / colaboradores externos{collaborators.length > 0 ? ` (${collaborators.length})` : ""}
           </h3>
         </div>
         {collaborators.length === 0 ? (
@@ -1753,7 +1881,7 @@ function ResumenTab({
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {/* Equipo */}
-      <ResumenCard title="Equipo" linkHref={`/dashboard/studio/${project.id}?tab=accesos`} linkLabel="Gestionar accesos">
+      <ResumenCard title="Equipo" linkHref={`/dashboard/studio/${project.id}?tab=equipo`} linkLabel="Gestionar equipo">
         <div className="space-y-3">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
