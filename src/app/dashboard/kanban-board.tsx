@@ -17,6 +17,13 @@ interface KanbanBoardProps {
   pmNames?: Record<string, string>;
 }
 
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
 function DiscardZone() {
   const { ref, isDropTarget } = useDroppable({ id: "discard" });
 
@@ -42,6 +49,7 @@ function DiscardZone() {
 export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {}, pmNames = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
+  const [search, setSearch] = useState("");
 
   // Prevent body scroll while dragging
   useEffect(() => {
@@ -114,9 +122,26 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
     [projects, initialProjects],
   );
 
+  const normalizedSearch = normalize(search.trim());
+
+  function matchesSearch(project: ProjectWithItems): boolean {
+    if (!normalizedSearch) return true;
+    const haystack = [
+      project.name,
+      project.client_name,
+      project.material,
+      project.holded_invoice_id ? invoiceDocNumbers[project.holded_invoice_id] : null,
+      project.invoice_doc_number,
+    ]
+      .filter(Boolean)
+      .map((v) => normalize(String(v)))
+      .join(" ");
+    return haystack.includes(normalizedSearch);
+  }
+
   /** Get projects for a column, with FIFO limit for delivered */
   function getColumnProjects(columnId: ProjectStatus) {
-    const columnProjects = projects.filter((p) => p.status === columnId);
+    const columnProjects = projects.filter((p) => p.status === columnId && matchesSearch(p));
     if (columnId === "delivered" && columnProjects.length > MAX_DELIVERED) {
       // Sort by created_at descending, keep only the newest
       return [...columnProjects]
@@ -128,6 +153,25 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
 
   return (
     <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="mb-3 flex shrink-0 items-center gap-2">
+        <div className="relative flex-1 md:max-w-sm">
+          <svg
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar proyecto, cliente, material..."
+            className="w-full rounded-lg border border-zinc-300 bg-white py-2 pr-3 pl-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+          />
+        </div>
+      </div>
       <div className="grid min-h-0 flex-1 auto-cols-[220px] grid-flow-col gap-3 overflow-x-auto md:grid-cols-4 md:auto-cols-auto md:gap-4">
         {COLUMNS.map((column) => {
           // These are rendered as the bottom half of a stacked pair
