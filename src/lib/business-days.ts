@@ -2,10 +2,11 @@
 // Se usan para el calendario de entregas: dada una fecha de entrega y N
 // horas laborales de margen, computamos el día en el que hay que empezar.
 //
-// Modelo simple: jornada de 8h, sin granularidad horaria — solo días.
-// hours = 48 → 6 días laborales (Math.ceil).
+// "48h laborales" = 48 horas naturales contadas SOLO en días laborales.
+// Es decir: 24h = 1 día lab., 48h = 2 días lab. Si entrega es lunes y
+// margen 48h → empezar jueves (lunes - 2 días lab. saltando finde).
 
-const WORK_HOURS_PER_DAY = 8;
+const HOURS_PER_DAY = 24;
 
 function toDateOnly(value: string | Date): Date {
   if (value instanceof Date) {
@@ -31,7 +32,7 @@ function isWeekend(date: Date): boolean {
 /** Convierte horas laborales en días laborales completos (redondeo arriba). */
 export function leadHoursToDays(hours: number): number {
   if (!Number.isFinite(hours) || hours <= 0) return 0;
-  return Math.ceil(hours / WORK_HOURS_PER_DAY);
+  return Math.ceil(hours / HOURS_PER_DAY);
 }
 
 /**
