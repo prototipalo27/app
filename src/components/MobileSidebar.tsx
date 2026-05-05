@@ -196,6 +196,21 @@ export default function MobileSidebar({
               </Link>
             )}
           </div>
+          <Link
+            href="/dashboard/entregas"
+            prefetch={false}
+            onClick={handleNavClick}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              pathname?.startsWith("/dashboard/entregas")
+                ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+                : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Entregas
+          </Link>
           <div className="flex items-center gap-0.5">
             <Link
               href="/dashboard/printers"

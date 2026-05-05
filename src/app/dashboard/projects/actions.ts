@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/rbac";
 import { syncHoldedDocuments, type SyncResult } from "@/lib/holded/sync";
 import { shouldNotifyStatus, sendStatusNotification } from "@/lib/email/status-notifications";
+import { syncProjectDeliveryEvents } from "@/lib/google-calendar/client";
 
 export async function createProject(formData: FormData) {
   const supabase = await createClient();
@@ -140,7 +141,11 @@ export async function updateProjectStatusById(id: string, status: string): Promi
   // Record status history + send notification (fire-and-forget)
   recordStatusChange(supabase, id, oldStatus, status, userData.user.id, project).catch(() => {});
 
+  // Sync calendar — al pasar a "delivered" elimina los eventos
+  syncProjectDeliveryEvents(id).catch(() => {});
+
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/entregas");
   return { success: true };
 }
 
@@ -197,8 +202,12 @@ export async function updateProjectDeadline(projectId: string, deadline: string 
 
   if (error) throw new Error(error.message);
 
+  // Fire-and-forget sync al calendario compartido
+  syncProjectDeliveryEvents(projectId).catch(() => {});
+
   revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/entregas");
 }
 
 export async function triggerHoldedSync(): Promise<SyncResult> {
@@ -405,7 +414,11 @@ export async function discardProject(id: string): Promise<{ success: boolean; er
 
   if (error) return { success: false, error: error.message };
 
+  // Sync calendar — al pasar a "discarded" se quitan los eventos
+  syncProjectDeliveryEvents(id).catch(() => {});
+
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/entregas");
   return { success: true };
 }
 
