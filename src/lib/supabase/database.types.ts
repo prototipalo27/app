@@ -1202,7 +1202,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          lead_id: string
+          language: string
+          lead_id: string | null
           sent_by: string | null
           signature_data: string | null
           signed_at: string | null
@@ -1212,15 +1213,18 @@ export type Database = {
           signer_ip: string | null
           signer_name: string | null
           signer_nif: string | null
+          signer_position: string | null
           signer_user_agent: string | null
           status: string
+          studio_project_id: string | null
           token: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
-          lead_id: string
+          language?: string
+          lead_id?: string | null
           sent_by?: string | null
           signature_data?: string | null
           signed_at?: string | null
@@ -1230,15 +1234,18 @@ export type Database = {
           signer_ip?: string | null
           signer_name?: string | null
           signer_nif?: string | null
+          signer_position?: string | null
           signer_user_agent?: string | null
           status?: string
+          studio_project_id?: string | null
           token?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
-          lead_id?: string
+          language?: string
+          lead_id?: string | null
           sent_by?: string | null
           signature_data?: string | null
           signed_at?: string | null
@@ -1248,8 +1255,10 @@ export type Database = {
           signer_ip?: string | null
           signer_name?: string | null
           signer_nif?: string | null
+          signer_position?: string | null
           signer_user_agent?: string | null
           status?: string
+          studio_project_id?: string | null
           token?: string
           updated_at?: string
         }
@@ -1266,6 +1275,13 @@ export type Database = {
             columns: ["sent_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nda_agreements_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1569,6 +1585,38 @@ export type Database = {
           },
         ]
       }
+      project_calendar_events: {
+        Row: {
+          calendar_id: string
+          delivery_event_id: string | null
+          prep_event_id: string | null
+          project_id: string
+          synced_at: string
+        }
+        Insert: {
+          calendar_id: string
+          delivery_event_id?: string | null
+          prep_event_id?: string | null
+          project_id: string
+          synced_at?: string
+        }
+        Update: {
+          calendar_id?: string
+          delivery_event_id?: string | null
+          prep_event_id?: string | null
+          project_id?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_calendar_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_checklist_items: {
         Row: {
           completed: boolean
@@ -1656,11 +1704,17 @@ export type Database = {
       }
       project_items: {
         Row: {
+          added_at: string | null
+          addon_status: string | null
+          addon_stripe_session_id: string | null
           batch_size: number
           completed: number
           created_at: string
           file_keyword: string | null
+          holded_invoice_id: string | null
+          holded_proforma_id: string | null
           id: string
+          is_addon: boolean
           name: string
           notes: string | null
           print_time_minutes: number | null
@@ -1669,13 +1723,20 @@ export type Database = {
           quantity: number
           stl_file_id: string | null
           stl_volume_cm3: number | null
+          unit_price: number | null
         }
         Insert: {
+          added_at?: string | null
+          addon_status?: string | null
+          addon_stripe_session_id?: string | null
           batch_size?: number
           completed?: number
           created_at?: string
           file_keyword?: string | null
+          holded_invoice_id?: string | null
+          holded_proforma_id?: string | null
           id?: string
+          is_addon?: boolean
           name: string
           notes?: string | null
           print_time_minutes?: number | null
@@ -1684,13 +1745,20 @@ export type Database = {
           quantity?: number
           stl_file_id?: string | null
           stl_volume_cm3?: number | null
+          unit_price?: number | null
         }
         Update: {
+          added_at?: string | null
+          addon_status?: string | null
+          addon_stripe_session_id?: string | null
           batch_size?: number
           completed?: number
           created_at?: string
           file_keyword?: string | null
+          holded_invoice_id?: string | null
+          holded_proforma_id?: string | null
           id?: string
+          is_addon?: boolean
           name?: string
           notes?: string | null
           print_time_minutes?: number | null
@@ -1699,6 +1767,7 @@ export type Database = {
           quantity?: number
           stl_file_id?: string | null
           stl_volume_cm3?: number | null
+          unit_price?: number | null
         }
         Relationships: [
           {
@@ -1809,6 +1878,7 @@ export type Database = {
           name: string
           notes: string | null
           payment_confirmed_at: string | null
+          payment_option: string | null
           price: number | null
           print_time_minutes: number | null
           proforma_sent_at: string | null
@@ -1846,6 +1916,7 @@ export type Database = {
           name: string
           notes?: string | null
           payment_confirmed_at?: string | null
+          payment_option?: string | null
           price?: number | null
           print_time_minutes?: number | null
           proforma_sent_at?: string | null
@@ -1883,6 +1954,7 @@ export type Database = {
           name?: string
           notes?: string | null
           payment_confirmed_at?: string | null
+          payment_option?: string | null
           price?: number | null
           print_time_minutes?: number | null
           proforma_sent_at?: string | null
@@ -2357,78 +2429,6 @@ export type Database = {
           },
         ]
       }
-      scheduled_emails: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          error: string | null
-          id: string
-          payload: Json
-          send_at: string
-          sent_at: string | null
-          status: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          error?: string | null
-          id?: string
-          payload: Json
-          send_at: string
-          sent_at?: string | null
-          status?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          error?: string | null
-          id?: string
-          payload?: Json
-          send_at?: string
-          sent_at?: string | null
-          status?: string
-        }
-        Relationships: []
-      }
-      sent_emails: {
-        Row: {
-          cc: string | null
-          entity_id: string | null
-          entity_type: string | null
-          gmail_message_id: string | null
-          gmail_thread_id: string | null
-          id: string
-          sent_at: string
-          subject: string
-          to: string
-          user_id: string | null
-        }
-        Insert: {
-          cc?: string | null
-          entity_id?: string | null
-          entity_type?: string | null
-          gmail_message_id?: string | null
-          gmail_thread_id?: string | null
-          id?: string
-          sent_at?: string
-          subject: string
-          to: string
-          user_id?: string | null
-        }
-        Update: {
-          cc?: string | null
-          entity_id?: string | null
-          entity_type?: string | null
-          gmail_message_id?: string | null
-          gmail_thread_id?: string | null
-          id?: string
-          sent_at?: string
-          subject?: string
-          to?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       sample_address_requests: {
         Row: {
           city: string | null
@@ -2513,6 +2513,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scheduled_emails: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          payload: Json
+          send_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          payload: Json
+          send_at: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          payload?: Json
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      sent_emails: {
+        Row: {
+          cc: string | null
+          entity_id: string | null
+          entity_type: string | null
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
+          id: string
+          sent_at: string
+          subject: string
+          to: string
+          user_id: string | null
+        }
+        Insert: {
+          cc?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          sent_at?: string
+          subject: string
+          to: string
+          user_id?: string | null
+        }
+        Update: {
+          cc?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          id?: string
+          sent_at?: string
+          subject?: string
+          to?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       shipping_info: {
         Row: {
@@ -2657,6 +2729,583 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      studio_dev_agreements: {
+        Row: {
+          approval_threshold: number
+          created_at: string
+          engineering_hours: number
+          engineering_rate: number
+          id: string
+          language: string
+          minimum_months: number
+          nda_reference_date: string | null
+          printing_hours: number
+          printing_rate: number
+          sent_by: string | null
+          signature_data: string | null
+          signed_at: string | null
+          signer_address: string | null
+          signer_company: string | null
+          signer_email: string | null
+          signer_ip: string | null
+          signer_name: string | null
+          signer_nif: string | null
+          signer_position: string | null
+          signer_user_agent: string | null
+          status: string
+          studio_project_id: string
+          token: string
+          updated_at: string
+          workspace_fee: number
+        }
+        Insert: {
+          approval_threshold: number
+          created_at?: string
+          engineering_hours: number
+          engineering_rate: number
+          id?: string
+          language?: string
+          minimum_months: number
+          nda_reference_date?: string | null
+          printing_hours: number
+          printing_rate: number
+          sent_by?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signer_address?: string | null
+          signer_company?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_nif?: string | null
+          signer_position?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          studio_project_id: string
+          token?: string
+          updated_at?: string
+          workspace_fee: number
+        }
+        Update: {
+          approval_threshold?: number
+          created_at?: string
+          engineering_hours?: number
+          engineering_rate?: number
+          id?: string
+          language?: string
+          minimum_months?: number
+          nda_reference_date?: string | null
+          printing_hours?: number
+          printing_rate?: number
+          sent_by?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signer_address?: string | null
+          signer_company?: string | null
+          signer_email?: string | null
+          signer_ip?: string | null
+          signer_name?: string | null
+          signer_nif?: string | null
+          signer_position?: string | null
+          signer_user_agent?: string | null
+          status?: string
+          studio_project_id?: string
+          token?: string
+          updated_at?: string
+          workspace_fee?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_dev_agreements_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_dev_agreements_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_documents: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string | null
+          name: string
+          studio_project_id: string
+          uploaded_by: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          name: string
+          studio_project_id: string
+          uploaded_by?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string | null
+          name?: string
+          studio_project_id?: string
+          uploaded_by?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_documents_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_expenses: {
+        Row: {
+          amount: number
+          category: string | null
+          concept: string
+          created_at: string
+          created_by: string | null
+          expense_date: string
+          id: string
+          notes: string | null
+          studio_project_id: string
+          supplier: string | null
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          concept: string
+          created_at?: string
+          created_by?: string | null
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          studio_project_id: string
+          supplier?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          concept?: string
+          created_at?: string
+          created_by?: string | null
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          studio_project_id?: string
+          supplier?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_expenses_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_meetings: {
+        Row: {
+          action_items: string | null
+          attendees: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          meeting_date: string
+          recording_url: string | null
+          studio_project_id: string
+          summary: string | null
+        }
+        Insert: {
+          action_items?: string | null
+          attendees?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meeting_date?: string
+          recording_url?: string | null
+          studio_project_id: string
+          summary?: string | null
+        }
+        Update: {
+          action_items?: string | null
+          attendees?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meeting_date?: string
+          recording_url?: string | null
+          studio_project_id?: string
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_meetings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_meetings_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          due_date: string | null
+          holded_invoice_id: string | null
+          id: string
+          label: string
+          paid_at: string | null
+          position: number
+          status: string
+          studio_project_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          holded_invoice_id?: string | null
+          id?: string
+          label: string
+          paid_at?: string | null
+          position?: number
+          status?: string
+          studio_project_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          due_date?: string | null
+          holded_invoice_id?: string | null
+          id?: string
+          label?: string
+          paid_at?: string | null
+          position?: number
+          status?: string
+          studio_project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_payments_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_project_collaborators: {
+        Row: {
+          can_see_brief: boolean
+          can_see_documents: boolean
+          can_see_meetings: boolean
+          can_see_payments: boolean
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          last_viewed_at: string | null
+          name: string | null
+          studio_project_id: string
+          token: string
+        }
+        Insert: {
+          can_see_brief?: boolean
+          can_see_documents?: boolean
+          can_see_meetings?: boolean
+          can_see_payments?: boolean
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          last_viewed_at?: string | null
+          name?: string | null
+          studio_project_id: string
+          token?: string
+        }
+        Update: {
+          can_see_brief?: boolean
+          can_see_documents?: boolean
+          can_see_meetings?: boolean
+          can_see_payments?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          last_viewed_at?: string | null
+          name?: string | null
+          studio_project_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_project_collaborators_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_project_collaborators_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_project_members: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string | null
+          studio_project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: string | null
+          studio_project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: string | null
+          studio_project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_project_members_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_project_members_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_project_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_projects: {
+        Row: {
+          brief_constraints: string | null
+          brief_description: string | null
+          brief_objectives: string | null
+          brief_references: string | null
+          client_email: string | null
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          dev_agreement_approval_threshold: number
+          dev_agreement_engineering_hours: number
+          dev_agreement_engineering_rate: number
+          dev_agreement_minimum_months: number
+          dev_agreement_printing_hours: number
+          dev_agreement_printing_rate: number
+          dev_agreement_workspace_fee: number
+          expected_end_date: string | null
+          google_drive_folder_id: string | null
+          holded_contact_id: string | null
+          id: string
+          name: string
+          nda_project_description: string | null
+          notes: string | null
+          project_manager_id: string | null
+          start_date: string | null
+          status: string
+          total_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          brief_constraints?: string | null
+          brief_description?: string | null
+          brief_objectives?: string | null
+          brief_references?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          dev_agreement_approval_threshold?: number
+          dev_agreement_engineering_hours?: number
+          dev_agreement_engineering_rate?: number
+          dev_agreement_minimum_months?: number
+          dev_agreement_printing_hours?: number
+          dev_agreement_printing_rate?: number
+          dev_agreement_workspace_fee?: number
+          expected_end_date?: string | null
+          google_drive_folder_id?: string | null
+          holded_contact_id?: string | null
+          id?: string
+          name: string
+          nda_project_description?: string | null
+          notes?: string | null
+          project_manager_id?: string | null
+          start_date?: string | null
+          status?: string
+          total_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          brief_constraints?: string | null
+          brief_description?: string | null
+          brief_objectives?: string | null
+          brief_references?: string | null
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          dev_agreement_approval_threshold?: number
+          dev_agreement_engineering_hours?: number
+          dev_agreement_engineering_rate?: number
+          dev_agreement_minimum_months?: number
+          dev_agreement_printing_hours?: number
+          dev_agreement_printing_rate?: number
+          dev_agreement_workspace_fee?: number
+          expected_end_date?: string | null
+          google_drive_folder_id?: string | null
+          holded_contact_id?: string | null
+          id?: string
+          name?: string
+          nda_project_description?: string | null
+          notes?: string | null
+          project_manager_id?: string | null
+          start_date?: string | null
+          status?: string
+          total_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_projects_project_manager_id_fkey"
+            columns: ["project_manager_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_time_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          hours: number
+          id: string
+          studio_project_id: string
+          user_id: string | null
+          user_label: string | null
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hours: number
+          id?: string
+          studio_project_id: string
+          user_id?: string | null
+          user_label?: string | null
+          work_date?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          hours?: number
+          id?: string
+          studio_project_id?: string
+          user_id?: string | null
+          user_label?: string | null
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_time_entries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_time_entries_studio_project_id_fkey"
+            columns: ["studio_project_id"]
+            isOneToOne: false
+            referencedRelation: "studio_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       supplier_payments: {
         Row: {
@@ -2864,54 +3513,6 @@ export type Database = {
           },
         ]
       }
-      tax_payments: {
-        Row: {
-          amount: number | null
-          clave_liquidacion: string | null
-          concepto: string | null
-          created_at: string | null
-          due_date: string
-          id: string
-          model: string
-          notes: string | null
-          paid_date: string | null
-          period: string
-          situacion: string
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          amount?: number | null
-          clave_liquidacion?: string | null
-          concepto?: string | null
-          created_at?: string | null
-          due_date: string
-          id?: string
-          model: string
-          notes?: string | null
-          paid_date?: string | null
-          period: string
-          situacion?: string
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          amount?: number | null
-          clave_liquidacion?: string | null
-          concepto?: string | null
-          created_at?: string | null
-          due_date?: string
-          id?: string
-          model?: string
-          notes?: string | null
-          paid_date?: string | null
-          period?: string
-          situacion?: string
-          status?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       tax_installments: {
         Row: {
           created_at: string | null
@@ -2961,6 +3562,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tax_payments: {
+        Row: {
+          amount: number | null
+          clave_liquidacion: string | null
+          concepto: string | null
+          created_at: string | null
+          due_date: string
+          id: string
+          model: string
+          notes: string | null
+          paid_date: string | null
+          period: string
+          situacion: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number | null
+          clave_liquidacion?: string | null
+          concepto?: string | null
+          created_at?: string | null
+          due_date: string
+          id?: string
+          model: string
+          notes?: string | null
+          paid_date?: string | null
+          period: string
+          situacion?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number | null
+          clave_liquidacion?: string | null
+          concepto?: string | null
+          created_at?: string | null
+          due_date?: string
+          id?: string
+          model?: string
+          notes?: string | null
+          paid_date?: string | null
+          period?: string
+          situacion?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       template_checklist_items: {
         Row: {
@@ -3157,6 +3806,7 @@ export type Database = {
           nickname: string | null
           phone: string | null
           role: string
+          signature_data: string | null
           updated_at: string | null
         }
         Insert: {
@@ -3172,6 +3822,7 @@ export type Database = {
           nickname?: string | null
           phone?: string | null
           role?: string
+          signature_data?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -3187,6 +3838,7 @@ export type Database = {
           nickname?: string | null
           phone?: string | null
           role?: string
+          signature_data?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -3655,4 +4307,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

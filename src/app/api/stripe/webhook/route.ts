@@ -12,7 +12,48 @@ function getSupabase() {
   );
 }
 
+async function handleAddonPayment(session: Stripe.Checkout.Session) {
+  const projectId = session.metadata?.project_id;
+  const itemIds = (session.metadata?.item_ids ?? "").split(",").filter(Boolean);
+
+  if (!projectId || itemIds.length === 0) {
+    console.error("[Stripe Webhook] addon payment without project_id or item_ids");
+    return;
+  }
+
+  const supabase = getSupabase();
+
+  // Idempotency: skip if already paid
+  const { data: existingItems } = await supabase
+    .from("project_items")
+    .select("addon_status")
+    .in("id", itemIds);
+
+  if (existingItems && existingItems.every((i) => i.addon_status === "paid")) {
+    return;
+  }
+
+  await supabase
+    .from("project_items")
+    .update({ addon_status: "paid" })
+    .in("id", itemIds);
+
+  const amountTotal = (session.amount_total || 0) / 100;
+  const customerEmail = session.customer_details?.email || session.customer_email || "Cliente";
+  sendPushForEvent("payment_received", {
+    title: "Pago de ampliación recibido",
+    body: `${customerEmail} ha pagado ${amountTotal.toFixed(2)} € por items extra`,
+    url: `/dashboard/projects/${projectId}`,
+  });
+}
+
 async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
+  // Branch on payment_type for addon vs original quote
+  if (session.metadata?.payment_type === "addon_full") {
+    await handleAddonPayment(session);
+    return;
+  }
+
   const quoteRequestId = session.metadata?.quote_request_id;
 
   if (!quoteRequestId) {

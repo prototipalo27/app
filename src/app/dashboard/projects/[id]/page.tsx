@@ -67,6 +67,7 @@ export default async function ProjectDetailPage({
   const profile = await getUserProfile();
   if (!profile) redirect("/login");
   const canDelete = hasRole(profile.role, "manager");
+  const canAddAddons = hasRole(profile.role, "comercial");
 
   const supabase = await createClient();
 
@@ -305,6 +306,8 @@ export default async function ProjectDetailPage({
           driveFiles={driveFiles}
           holdedInvoiceId={project.holded_invoice_id}
           holdedProformaId={project.holded_proforma_id}
+          paymentOption={project.payment_option as "full" | "split" | null}
+          canAddAddons={canAddAddons}
         />
       </div>
 

@@ -5,6 +5,7 @@ import { addItem, updateItemCompleted, updateItemBatchSize, updateItemFileKeywor
 import { generateProjectQueue } from "../queue-actions";
 import type { Tables } from "@/lib/supabase/database.types";
 import { ItemQueue } from "./item-queue";
+import { AddonForm } from "./addon-form";
 
 type PrintJob = Tables<"print_jobs"> & { printer_name?: string };
 
@@ -16,6 +17,8 @@ interface ProjectItemsProps {
   driveFiles?: Array<{ id: string; name: string }>;
   holdedInvoiceId?: string | null;
   holdedProformaId?: string | null;
+  paymentOption?: "full" | "split" | null;
+  canAddAddons?: boolean;
 }
 
 function ItemRow({
@@ -76,8 +79,36 @@ function ItemRow({
   const itemJobs = jobs.filter((j) => j.project_item_id === item.id);
   const activeJobCount = itemJobs.filter((j) => j.status !== "cancelled").length;
 
+  const isAddon = item.is_addon === true;
+  const addonStatus = item.addon_status as "pending_payment" | "pending_second_invoice" | "paid" | null;
+
   return (
-    <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+    <div className={`rounded-lg border p-3 ${
+      isAddon
+        ? "border-amber-200 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-900/10"
+        : "border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-800/50"
+    }`}>
+      {isAddon && (
+        <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider">
+          <span className="rounded bg-amber-200 px-1.5 py-0.5 text-amber-800 dark:bg-amber-800 dark:text-amber-100">
+            Ampliación
+          </span>
+          {addonStatus === "pending_payment" && (
+            <span className="text-amber-700 dark:text-amber-400">⌛ Esperando pago Stripe</span>
+          )}
+          {addonStatus === "pending_second_invoice" && (
+            <span className="text-amber-700 dark:text-amber-400">📋 Se cobra en 2º pago</span>
+          )}
+          {addonStatus === "paid" && (
+            <span className="text-green-700 dark:text-green-400">✓ Pagado</span>
+          )}
+          {item.unit_price && (
+            <span className="text-zinc-500 dark:text-zinc-400">
+              {Number(item.unit_price).toFixed(2)} €/ud
+            </span>
+          )}
+        </div>
+      )}
       {/* Top row: check + name + batch badge + count + queue toggle + delete */}
       <div className="flex items-center gap-2">
         {isComplete ? (
@@ -348,10 +379,11 @@ function ItemRow({
   );
 }
 
-export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [], holdedInvoiceId = null, holdedProformaId = null }: ProjectItemsProps) {
+export function ProjectItems({ projectId, items, printerTypes = [], printJobs = [], driveFiles = [], holdedInvoiceId = null, holdedProformaId = null, paymentOption = null, canAddAddons = false }: ProjectItemsProps) {
   const [isPending, startTransition] = useTransition();
   const [queueFeedback, setQueueFeedback] = useState<string | null>(null);
   const [resyncFeedback, setResyncFeedback] = useState<string | null>(null);
+  const [showAddon, setShowAddon] = useState(false);
   const hasHoldedDoc = Boolean(holdedInvoiceId || holdedProformaId);
 
   function handleResyncItems() {
@@ -449,6 +481,15 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
           {queueFeedback && (
             <span className="text-xs text-zinc-500 dark:text-zinc-400">{queueFeedback}</span>
           )}
+          {canAddAddons && hasHoldedDoc && (
+            <button
+              type="button"
+              onClick={() => setShowAddon(true)}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+            >
+              + Items extra
+            </button>
+          )}
           <button
             type="button"
             onClick={handleGenerateAll}
@@ -459,6 +500,14 @@ export function ProjectItems({ projectId, items, printerTypes = [], printJobs = 
           </button>
         </div>
       </div>
+
+      {showAddon && (
+        <AddonForm
+          projectId={projectId}
+          paymentOption={paymentOption}
+          onClose={() => setShowAddon(false)}
+        />
+      )}
 
       {/* Add form */}
       <form action={handleAdd} className="mb-4 flex items-end gap-2">
