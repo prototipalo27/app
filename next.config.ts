@@ -22,7 +22,9 @@ const nextConfig: NextConfig = {
   ],
   outputFileTracingIncludes: {
     "/api/admin/regen-nda": ["./node_modules/pdfkit/js/data/**/*"],
+    "/api/admin/regen-contract": ["./node_modules/pdfkit/js/data/**/*"],
     "/nda/**": ["./node_modules/pdfkit/js/data/**/*"],
+    "/contract/**": ["./node_modules/pdfkit/js/data/**/*"],
   },
   images: {
     remotePatterns: [

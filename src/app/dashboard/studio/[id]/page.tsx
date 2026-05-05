@@ -38,6 +38,12 @@ import {
   getStudioNdaStatus,
   cancelStudioNda,
 } from "../nda-actions";
+import {
+  sendStudioDevAgreement,
+  getStudioDevAgreementStatus,
+  cancelStudioDevAgreement,
+  updateStudioCommercialTerms,
+} from "../dev-agreement-actions";
 import { CopyPortalLink } from "./copy-portal-link";
 import { NdaDescriptionField } from "./nda-description-field";
 import { ProjectDocuments } from "../../projects/[id]/project-documents";
@@ -183,7 +189,10 @@ export default async function StudioProjectDetailPage({
     ? [...baseTeam, ...allUsers.filter((u) => u.id === project.project_manager_id)]
     : baseTeam;
 
-  const ndaStatus = await getStudioNdaStatus(id);
+  const [ndaStatus, devAgreementStatus] = await Promise.all([
+    getStudioNdaStatus(id),
+    getStudioDevAgreementStatus(id),
+  ]);
 
   const total = Number(project.total_price ?? 0);
   const cobrado = (payments ?? [])
@@ -314,6 +323,22 @@ export default async function StudioProjectDetailPage({
             canManage={canDelete}
             ndaProjectDescription={project.nda_project_description}
           />
+          <DevAgreementSection
+            projectId={project.id}
+            agreementStatus={devAgreementStatus}
+            canManage={canDelete}
+            ndaSigned={ndaStatus.status === "signed"}
+            ndaProjectDescription={project.nda_project_description}
+            terms={{
+              workspaceFee: Number(project.dev_agreement_workspace_fee),
+              engineeringHours: project.dev_agreement_engineering_hours,
+              engineeringRate: Number(project.dev_agreement_engineering_rate),
+              printingHours: project.dev_agreement_printing_hours,
+              printingRate: Number(project.dev_agreement_printing_rate),
+              minimumMonths: project.dev_agreement_minimum_months,
+              approvalThreshold: Number(project.dev_agreement_approval_threshold),
+            }}
+          />
           <ProjectDocuments
             projectId={project.id}
             folderId={project.google_drive_folder_id}
@@ -383,6 +408,13 @@ type StudioProject = {
   brief_constraints: string | null;
   brief_references: string | null;
   nda_project_description: string | null;
+  dev_agreement_workspace_fee: number;
+  dev_agreement_engineering_hours: number;
+  dev_agreement_engineering_rate: number;
+  dev_agreement_printing_hours: number;
+  dev_agreement_printing_rate: number;
+  dev_agreement_minimum_months: number;
+  dev_agreement_approval_threshold: number;
   notes: string | null;
   project_manager_id: string | null;
   google_drive_folder_id: string | null;
@@ -1812,6 +1844,267 @@ function NdaSection({
         </form>
       </div>
     </div>
+  );
+}
+
+type DevAgreementStatus = Awaited<ReturnType<typeof getStudioDevAgreementStatus>>;
+
+interface CommercialTerms {
+  workspaceFee: number;
+  engineeringHours: number;
+  engineeringRate: number;
+  printingHours: number;
+  printingRate: number;
+  minimumMonths: number;
+  approvalThreshold: number;
+}
+
+function DevAgreementSection({
+  projectId,
+  agreementStatus,
+  canManage,
+  ndaSigned,
+  ndaProjectDescription,
+  terms,
+}: {
+  projectId: string;
+  agreementStatus: DevAgreementStatus;
+  canManage: boolean;
+  ndaSigned: boolean;
+  ndaProjectDescription: string | null;
+  terms: CommercialTerms;
+}) {
+  const hasDescription = !!ndaProjectDescription?.trim();
+  const canSend = ndaSigned && hasDescription;
+
+  if (agreementStatus.status === "signed") {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/10">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <h3 className="text-sm font-semibold text-green-700 dark:text-green-400">
+                Contrato de desarrollo firmado
+              </h3>
+              {agreementStatus.language && (
+                <span className="rounded-full border border-green-300 bg-white px-2 py-0.5 text-[10px] font-medium uppercase text-green-700 dark:border-green-800 dark:bg-zinc-900 dark:text-green-300">
+                  {agreementStatus.language}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-green-700/80 dark:text-green-400/80">
+              {agreementStatus.signer_name && <>{agreementStatus.signer_name} — </>}
+              {agreementStatus.signed_at && formatDateMedium(agreementStatus.signed_at)}
+            </p>
+          </div>
+          {canManage && agreementStatus.id && (
+            <a
+              href={`/api/admin/regen-contract?id=${agreementStatus.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 dark:border-green-800 dark:bg-zinc-900 dark:text-green-300 dark:hover:bg-zinc-800"
+            >
+              Descargar PDF
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (agreementStatus.status === "pending") {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Contrato pendiente de firma
+              </h3>
+              {agreementStatus.language && (
+                <span className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-medium uppercase text-amber-700 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-300">
+                  {agreementStatus.language}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
+              Enviado{agreementStatus.signer_email ? ` a ${agreementStatus.signer_email}` : ""}. Esperando firma del cliente.
+            </p>
+          </div>
+          {canManage && agreementStatus.id && (
+            <form action={cancelStudioDevAgreement} className="shrink-0">
+              <input type="hidden" name="studio_project_id" value={projectId} />
+              <input type="hidden" name="agreement_id" value={agreementStatus.id} />
+              <button
+                type="submit"
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-300 dark:hover:bg-zinc-800"
+              >
+                Cancelar y reenviar
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // status === "none"
+  if (!canManage) {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        Aún no se ha enviado contrato de desarrollo al cliente.
+      </div>
+    );
+  }
+
+  const monthlyMin = terms.workspaceFee
+    + terms.engineeringHours * terms.engineeringRate
+    + terms.printingHours * terms.printingRate;
+
+  return (
+    <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+          Contrato de desarrollo y colaboración
+        </h3>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Manda el contrato al cliente para formalizar tarifas, IP y duración mínima. Los términos se pueden ajustar abajo antes de enviar.
+        </p>
+        {!ndaSigned && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            Necesitas un NDA firmado antes de poder enviar el contrato.
+          </p>
+        )}
+        {ndaSigned && !hasDescription && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            Falta la descripción del proyecto.{" "}
+            <Link
+              href={`/dashboard/studio/${projectId}?tab=brief`}
+              className="underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-300"
+            >
+              Rellénala en el Brief
+            </Link>{" "}
+            para poder enviar el contrato.
+          </p>
+        )}
+      </div>
+
+      <details className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+          Términos económicos del contrato
+        </summary>
+        <form action={updateStudioCommercialTerms} className="space-y-3 px-3 pb-3 pt-1">
+          <input type="hidden" name="studio_project_id" value={projectId} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <NumberField
+              label="Cuota de espacio (€/mes)"
+              name="workspace_fee"
+              defaultValue={terms.workspaceFee}
+              step="0.01"
+            />
+            <NumberField
+              label="Período mínimo (meses)"
+              name="minimum_months"
+              defaultValue={terms.minimumMonths}
+              step="1"
+            />
+            <NumberField
+              label="Horas ingeniería / mes"
+              name="engineering_hours"
+              defaultValue={terms.engineeringHours}
+              step="1"
+            />
+            <NumberField
+              label="Tarifa ingeniería (€/h)"
+              name="engineering_rate"
+              defaultValue={terms.engineeringRate}
+              step="0.01"
+            />
+            <NumberField
+              label="Horas impresión / bolsa"
+              name="printing_hours"
+              defaultValue={terms.printingHours}
+              step="1"
+            />
+            <NumberField
+              label="Tarifa impresión (€/h)"
+              name="printing_rate"
+              defaultValue={terms.printingRate}
+              step="0.01"
+            />
+            <NumberField
+              label="Umbral aprobación previa (€)"
+              name="approval_threshold"
+              defaultValue={terms.approvalThreshold}
+              step="0.01"
+            />
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Cuota mensual mínima: {formatEur(monthlyMin)} (IVA excluido).
+          </p>
+          <button
+            type="submit"
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Guardar términos
+          </button>
+        </form>
+      </details>
+
+      <form action={sendStudioDevAgreement} className="flex flex-wrap items-center gap-2">
+        <input type="hidden" name="studio_project_id" value={projectId} />
+        <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+          Idioma
+          <select
+            name="language"
+            defaultValue="en"
+            className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          >
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={!canSend}
+          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:hover:bg-zinc-300 dark:disabled:bg-zinc-700 dark:disabled:hover:bg-zinc-700 dark:focus:ring-offset-zinc-900"
+        >
+          Enviar contrato al cliente
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  name,
+  defaultValue,
+  step,
+}: {
+  label: string;
+  name: string;
+  defaultValue: number;
+  step: string;
+}) {
+  return (
+    <label className="block text-xs">
+      <span className="block text-zinc-600 dark:text-zinc-400">{label}</span>
+      <input
+        type="number"
+        name={name}
+        defaultValue={defaultValue}
+        step={step}
+        min="0"
+        className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+      />
+    </label>
   );
 }
 
