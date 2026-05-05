@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/quote/") ||
     pathname.startsWith("/proforma/") ||
     pathname.startsWith("/nda/") ||
+    pathname.startsWith("/contract/") ||
     pathname.startsWith("/sample/") ||
     pathname.startsWith("/studio-portal/") ||
     pathname.startsWith("/investors/") ||
