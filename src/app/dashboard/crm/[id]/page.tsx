@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getSharedUserProfiles } from "@/lib/supabase/cached-queries";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
@@ -346,7 +347,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
   const supabase = await createClient();
 
   const [
-    { data: managers },
+    allProfiles,
     { data: quoteRequest },
     { data: projectTemplates },
     { data: followUps },
@@ -354,7 +355,7 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
     ndaStatusResult,
     sampleRequest,
   ] = await Promise.all([
-    supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
+    getSharedUserProfiles(),
     supabase.from("quote_requests").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("project_templates").select("name").eq("is_active", true).order("name"),
     supabase.from("lead_follow_ups").select("id, scheduled_date, note, action_type, completed_at, created_at").eq("lead_id", leadId).order("scheduled_date"),
@@ -362,6 +363,10 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
     getNdaStatus(leadId),
     getSampleRequestStatus(leadId),
   ]);
+
+  const managers = allProfiles
+    .filter((p) => p.role === "manager" || p.role === "super_admin")
+    .map((p) => ({ id: p.id, email: p.email }));
 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
 
@@ -420,18 +425,17 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase.from("leads").select("*").eq("id", id).single();
   if (!lead) notFound();
 
-  // Fast parallel: nav + user names + managers (all we need for first paint)
-  const leadUserIds = [lead.assigned_to, lead.owned_by].filter(Boolean) as string[];
-  const [{ data: prevLeads }, { data: nextLeads }, userMap, { data: managers }] = await Promise.all([
+  // Fast parallel: nav + profiles (used for both userMap and managers, via service client so RLS doesn't hide non-super_admins)
+  const [{ data: prevLeads }, { data: nextLeads }, allProfiles] = await Promise.all([
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").lt("created_at", lead.created_at).order("created_at", { ascending: false }).limit(1),
-    leadUserIds.length > 0
-      ? supabase.from("user_profiles").select("id, email").in("id", leadUserIds).then(({ data: users }) =>
-          new Map(users?.map((u) => [u.id, u.email.split("@")[0]]) || [])
-        )
-      : Promise.resolve(new Map<string, string>()),
-    supabase.from("user_profiles").select("id, email").in("role", ["manager", "super_admin"]).eq("is_active", true),
+    getSharedUserProfiles(),
   ]);
+
+  const userMap = new Map(allProfiles.map((u) => [u.id, u.email.split("@")[0]]));
+  const managers = allProfiles
+    .filter((p) => p.role === "manager" || p.role === "super_admin")
+    .map((p) => ({ id: p.id, email: p.email }));
 
   const prevId = prevLeads?.[0]?.id ?? null;
   const nextId = nextLeads?.[0]?.id ?? null;
