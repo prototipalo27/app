@@ -3449,7 +3449,7 @@ export async function onPaymentConfirmed(
   // Get quote request with lead data (includes payment_condition — source of truth for discount)
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("*, leads(id, full_name, company, email, phone, attachments, message, payment_condition)")
+    .select("*, leads(id, full_name, company, email, phone, attachments, message, payment_condition, desired_delivery_date)")
     .eq("id", quoteRequestId)
     .single();
 
@@ -3545,6 +3545,8 @@ export async function onPaymentConfirmed(
       holded_invoice_id: invoiceId,
       client_name: lead.full_name,
       client_email: lead.email,
+      deadline: (lead as { desired_delivery_date?: string | null }).desired_delivery_date ?? null,
+      payment_option: qr.payment_option ?? null,
     })
     .select("id")
     .single();

@@ -64,6 +64,37 @@ export default async function DashboardPage() {
     }
   }
 
+  // Default shipping city per project — fetched in batch by holded_contact_id.
+  const contactIds = Array.from(
+    new Set(
+      (confirmedProjects ?? [])
+        .map((p) => p.holded_contact_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const cityByProject: Record<string, string> = {};
+  if (contactIds.length > 0) {
+    const { data: addresses } = await supabase
+      .from("client_addresses")
+      .select("holded_contact_id, city, is_default, created_at")
+      .in("holded_contact_id", contactIds)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    const cityByContact = new Map<string, string>();
+    for (const a of addresses ?? []) {
+      if (a.city && !cityByContact.has(a.holded_contact_id)) {
+        cityByContact.set(a.holded_contact_id, a.city);
+      }
+    }
+    for (const p of confirmedProjects ?? []) {
+      if (p.holded_contact_id) {
+        const city = cityByContact.get(p.holded_contact_id);
+        if (city) cityByProject[p.id] = city;
+      }
+    }
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
       <AutoSync lastSyncAt={syncMeta?.value ?? null} />
@@ -97,7 +128,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} pmNames={pmNames} />
+          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} pmNames={pmNames} cityByProject={cityByProject} />
         </div>
       )}
     </div>

@@ -16,6 +16,7 @@ interface KanbanCardProps {
   project: ProjectWithItems;
   invoiceDocNumber?: string;
   projectManagerName?: string;
+  city?: string;
 }
 
 function getDeadlineInfo(deadline: string | null): { label: string; days: number | null; colorClass: string } {
@@ -35,7 +36,7 @@ function getDeadlineInfo(deadline: string | null): { label: string; days: number
   return { label, days: diff, colorClass: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
 }
 
-export function KanbanCard({ project, invoiceDocNumber, projectManagerName }: KanbanCardProps) {
+export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city }: KanbanCardProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const { ref, isDragging } = useDraggable({
@@ -71,6 +72,14 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName }: Ka
           </span>
         )}
       </div>
+      {city && (
+        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <svg className="h-2.5 w-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span className="truncate">{city}</span>
+        </div>
+      )}
 
       {/* Hover tooltip with full info */}
       {showTooltip && !isDragging && (
