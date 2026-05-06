@@ -1930,6 +1930,27 @@ export async function updateDesiredDeliveryDate(
 
   if (error) return { success: false, error: error.message };
 
+  // Propagar a los proyectos vinculados (solo no entregados/descartados)
+  const newDeadline = date || null;
+  const { data: linkedProjects } = await supabase
+    .from("projects")
+    .update({ deadline: newDeadline })
+    .eq("lead_id", id)
+    .eq("project_type", "confirmed")
+    .neq("status", "delivered")
+    .select("id");
+
+  // Re-sync Google Calendar para cada proyecto afectado (fire-and-forget)
+  if (linkedProjects && linkedProjects.length > 0) {
+    const { syncProjectDeliveryEvents } = await import("@/lib/google-calendar/client");
+    for (const p of linkedProjects) {
+      syncProjectDeliveryEvents(p.id).catch(() => {});
+      revalidatePath(`/dashboard/projects/${p.id}`);
+    }
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/entregas");
+  }
+
   revalidatePath(`/dashboard/crm/${id}`);
   return { success: true };
 }
