@@ -199,7 +199,7 @@ export async function submitBillingData(
   if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
     await supabase
       .from("leads")
-      .update({ status: "won" })
+      .update({ status: "won", won_at: new Date().toISOString() })
       .eq("id", qr.lead_id);
 
     await supabase.from("lead_activities").insert({
