@@ -7,7 +7,7 @@ const MRW_API_URL =
 
 const MRW_TRACKING_URL =
   process.env.MRW_TRACKING_URL ||
-  "https://trackingservice.mrw.es/TrackingService.svc";
+  "https://trackingservice.mrw.es/TrackingService.svc/TrackingServices";
 
 function getCredentials() {
   const franquicia = process.env.MRW_FRANQUICIA?.trim();
@@ -318,36 +318,36 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
 
   const events: MrwTrackingEvent[] = [];
 
-  // El response real (manual TrackingServices p.11/22) trae:
-  //   <a:Seguimiento>
+  // El response real (verificado contra MRW prod) trae estructura anidada:
+  //   <a:Seguimiento>            (wrapper top-level, namespace a)
   //     <a:Abonado>
   //       <a:SeguimientoAbonado>
-  //         <b:Seguimiento>
-  //           <b:Estado>16</b:Estado>
-  //           <b:EstadoDescripcion>En reparto</b:EstadoDescripcion>
-  //           <b:FechaEntrega>...</b:FechaEntrega>
-  //           <b:HoraEntrega>...</b:HoraEntrega>
-  //           <b:Publicado>2026-05-08T14:30:00</b:Publicado>
-  //         </b:Seguimiento>
+  //         <a:Seguimiento>      (cada item — mismo nombre y namespace)
+  //           <a:Estado>17</a:Estado>
+  //           <a:EstadoDescripcion>Envío recogido en origen</a:EstadoDescripcion>
+  //           <a:FechaEntrega i:nil="true"/>
+  //           <a:Publicado>2026-05-07T18:58:36+02:00</a:Publicado>
+  //         </a:Seguimiento>
+  //         ...más <a:Seguimiento>
   //       </a:SeguimientoAbonado>
   //     </a:Abonado>
   //   </a:Seguimiento>
-  // Tras un detallado pueden venir varios <b:Seguimiento> en lista.
-  const segRegex = /<b:Seguimiento>([\s\S]*?)<\/b:Seguimiento>/g;
+  // Filtramos por la presencia de <a:Estado> para distinguir items de los wrappers.
+  const segRegex = /<a:Seguimiento>([\s\S]*?)<\/a:Seguimiento>/g;
   let match;
   while ((match = segRegex.exec(xml)) !== null) {
     const item = match[1];
-    const estado = extractTag(item, "b:Estado");
-    const desc = extractTag(item, "b:EstadoDescripcion");
+    const estado = extractTag(item, "a:Estado");
+    const desc = extractTag(item, "a:EstadoDescripcion");
     if (!estado && !desc) continue;
     events.push({
-      date: extractTag(item, "b:Publicado") || extractTag(item, "b:FechaEntrega") || "",
+      date: extractTag(item, "a:Publicado") || extractTag(item, "a:FechaEntrega") || "",
       description: desc || mrwEstadoDescripcion(estado) || `Estado ${estado}`,
       city: undefined,
     });
   }
 
-  // Fallback sin prefijo b: por si MRW devuelve sin namespaces
+  // Fallback sin prefijo (por si MRW cambia el formato)
   if (events.length === 0) {
     const segRegex2 = /<Seguimiento>([\s\S]*?)<\/Seguimiento>/g;
     while ((match = segRegex2.exec(xml)) !== null) {
@@ -362,6 +362,13 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
       });
     }
   }
+
+  // Ordenar por fecha de Publicado ascendente (MRW devuelve orden no garantizado)
+  events.sort((a, b) => {
+    const da = a.date ? new Date(a.date).getTime() : 0;
+    const db = b.date ? new Date(b.date).getTime() : 0;
+    return da - db;
+  });
 
   return events;
 }
