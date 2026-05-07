@@ -22,6 +22,77 @@ function getCredentials() {
   return { franquicia, abonado, username, password };
 }
 
+// Mapeo de códigos de estado MRW (manual TrackingServices, sección 2.6).
+// Si MRW no manda EstadoDescripcion, traducimos del numérico para que el
+// cliente vea texto entendible en vez de "Estado 16".
+const MRW_ESTADO_MAP: Record<string, string> = {
+  "00": "Entregado",
+  "01": "Destinatario ausente o cerrado",
+  "02": "Destinatario desconocido",
+  "03": "Dirección de entrega incompleta",
+  "04": "Dirección de entrega incorrecta",
+  "05": "No acepta el envío",
+  "06": "No acepta el reembolso",
+  "07": "Pendiente de recoger en franquicia",
+  "08": "Devuelto al remitente",
+  "09": "Destinatario aplaza la entrega",
+  "10": "Emisor aplaza la entrega",
+  "11": "En tránsito",
+  "12": "Fiesta local",
+  "13": "Recibido en franquicia destino",
+  "14": "Retenido en franquicia por orden del cliente",
+  "15": "En tránsito",
+  "16": "En reparto",
+  "17": "Envío recogido en origen",
+  "18": "Retorno no preparado",
+  "19": "Pendiente de recibir datos de entrega",
+  "31": "Envío rechazado por embalaje dañado",
+  "32": "Devuelto a origen por rotura del contenido",
+  "33": "Concertada próxima entrega",
+  "35": "Entrega aplazada pendiente de cobro o cita previa",
+  "36": "Contactado con el destinatario",
+  "39": "Pendiente de recibir datos de recogida",
+  "40": "Pendiente de recibir en MRW",
+  "41": "Remitente ausente o cerrado",
+  "42": "Remitente desconocido",
+  "43": "Dirección de recogida incorrecta",
+  "44": "Emisor anula la recogida",
+  "45": "Emisor aplaza la recogida",
+  "46": "Pendiente de recoger",
+  "47": "Pendiente de recoger",
+  "48": "Pendiente de recoger",
+  "49": "Recogido en origen",
+  "53": "Dirección de recogida incompleta",
+  "57": "En tránsito",
+  "58": "En tránsito",
+  "59": "En tránsito",
+  "60": "Información no disponible, contacta con tu franquicia",
+  "61": "Pendiente de recibir datos de entrega",
+  "68": "En tránsito",
+  "69": "En tránsito",
+  "70": "Pendiente de recoger en MRW Point",
+  "71": "En tránsito",
+  "72": "En tránsito",
+  "73": "En reparto",
+  "75": "En tránsito",
+  "76": "Retirado de MRW Point",
+  "77": "En tránsito",
+  "78": "En tránsito",
+  "79": "En tránsito",
+  "90": "En tránsito",
+  "91": "Pendiente de recibir datos de entrega",
+  "92": "Retenido en aduana",
+  "93": "Pendiente de recibir datos de entrega",
+  "94": "Cliente ordena destruir el envío",
+  "95": "Pendiente de recibir datos de entrega",
+  "96": "En tránsito",
+};
+
+function mrwEstadoDescripcion(code: string | null | undefined): string | undefined {
+  if (!code) return undefined;
+  return MRW_ESTADO_MAP[code.padStart(2, "0")];
+}
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -236,7 +307,7 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
   const buf = Buffer.from(envelope, "utf-8");
   const res = await httpsPost(MRW_TRACKING_URL, {
     "Content-Type": "text/xml; charset=utf-8",
-    SOAPAction: '"http://tempuri.org/ITrackingServiceContract/GetEnvios"',
+    SOAPAction: '"http://tempuri.org/ITrackingService/GetEnvios"',
   }, buf);
 
   if (res.status !== 200) {
@@ -247,39 +318,47 @@ export async function getTracking(albaran: string): Promise<MrwTrackingEvent[]> 
 
   const events: MrwTrackingEvent[] = [];
 
-  // Parse Seguimiento items from the tracking response
-  const segRegex = /<a:SeguimientoEnvioItem>([\s\S]*?)<\/a:SeguimientoEnvioItem>/g;
+  // El response real (manual TrackingServices p.11/22) trae:
+  //   <a:Seguimiento>
+  //     <a:Abonado>
+  //       <a:SeguimientoAbonado>
+  //         <b:Seguimiento>
+  //           <b:Estado>16</b:Estado>
+  //           <b:EstadoDescripcion>En reparto</b:EstadoDescripcion>
+  //           <b:FechaEntrega>...</b:FechaEntrega>
+  //           <b:HoraEntrega>...</b:HoraEntrega>
+  //           <b:Publicado>2026-05-08T14:30:00</b:Publicado>
+  //         </b:Seguimiento>
+  //       </a:SeguimientoAbonado>
+  //     </a:Abonado>
+  //   </a:Seguimiento>
+  // Tras un detallado pueden venir varios <b:Seguimiento> en lista.
+  const segRegex = /<b:Seguimiento>([\s\S]*?)<\/b:Seguimiento>/g;
   let match;
   while ((match = segRegex.exec(xml)) !== null) {
     const item = match[1];
+    const estado = extractTag(item, "b:Estado");
+    const desc = extractTag(item, "b:EstadoDescripcion");
+    if (!estado && !desc) continue;
     events.push({
-      date: extractTag(item, "a:Fecha") || extractTag(item, "a:FechaHora"),
-      description: extractTag(item, "a:EstadoMercancia") || extractTag(item, "a:Comentario") || extractTag(item, "a:EstadoDescripcion"),
-      city: extractTag(item, "a:Poblacion") || undefined,
+      date: extractTag(item, "b:Publicado") || extractTag(item, "b:FechaEntrega") || "",
+      description: desc || mrwEstadoDescripcion(estado) || `Estado ${estado}`,
+      city: undefined,
     });
   }
 
-  // Fallback: try without namespace prefix
+  // Fallback sin prefijo b: por si MRW devuelve sin namespaces
   if (events.length === 0) {
-    const segRegex2 = /<SeguimientoEnvioItem>([\s\S]*?)<\/SeguimientoEnvioItem>/g;
+    const segRegex2 = /<Seguimiento>([\s\S]*?)<\/Seguimiento>/g;
     while ((match = segRegex2.exec(xml)) !== null) {
       const item = match[1];
+      const estado = extractTag(item, "Estado");
+      const desc = extractTag(item, "EstadoDescripcion");
+      if (!estado && !desc) continue;
       events.push({
-        date: extractTag(item, "Fecha") || extractTag(item, "FechaHora"),
-        description: extractTag(item, "EstadoMercancia") || extractTag(item, "Comentario") || extractTag(item, "EstadoDescripcion"),
-        city: extractTag(item, "Poblacion") || undefined,
-      });
-    }
-  }
-
-  // If still no events, try to get the top-level status
-  if (events.length === 0) {
-    const estado = extractTag(xml, "Estado") || extractTag(xml, "a:Estado");
-    const desc = extractTag(xml, "EstadoDescripcion") || extractTag(xml, "a:EstadoDescripcion");
-    if (estado || desc) {
-      events.push({
-        date: extractTag(xml, "FechaEntrega") || extractTag(xml, "a:FechaEntrega") || "",
-        description: desc || `Estado: ${estado}`,
+        date: extractTag(item, "Publicado") || extractTag(item, "FechaEntrega") || "",
+        description: desc || mrwEstadoDescripcion(estado) || `Estado ${estado}`,
+        city: undefined,
       });
     }
   }
