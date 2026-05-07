@@ -10,7 +10,7 @@ export interface MrwShipmentParams {
   weight: number; // kg (integers recommended)
   reference?: string;
   observations?: string;
-  service: string; // MRW service code: 0200=Urg19, 0300=Economico, 0800=Ecommerce, etc.
+  service: string; // MRW SAGEC code: 0000=Urg10, 0100=Urg12, 0110=Urg14, 0200=Urg19, 0300=Economico, 0800=Ecommerce
 }
 
 export interface MrwShipmentResult {

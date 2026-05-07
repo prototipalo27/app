@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     weight: weight || 1,
     reference,
     observations,
-    service: service || "0205",
+    service: service || "0110",
   };
 
   try {
@@ -104,10 +104,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Service code → human label for the audit trail
+    // Service code → human label for the audit trail.
+    // Codes from SAGEC v4.5 manual.
     const serviceCode = mrwParams.service;
     const SERVICE_LABELS: Record<string, string> = {
-      "0205": "MRW Urgente 14",
+      "0000": "MRW Urgente 10",
+      "0100": "MRW Urgente 12",
+      "0110": "MRW Urgente 14",
       "0200": "MRW Urgente 19",
       "0300": "MRW Económico",
       "0800": "MRW Ecommerce",
