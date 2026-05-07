@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { LeadForm } from "./LeadForm";
 
 export const metadata: Metadata = {
@@ -12,10 +13,15 @@ type Props = {
   searchParams: Promise<{ src?: string }>;
 };
 
-export default async function EventosLanding({ searchParams }: Props) {
+// Lee searchParams en un componente aparte para que el shell estático se
+// pueda prerenderizar bajo cacheComponents.
+async function LeadFormWithSource({ searchParams }: Props) {
   const { src } = await searchParams;
   const source = typeof src === "string" ? src : null;
+  return <LeadForm source={source} />;
+}
 
+export default function EventosLanding({ searchParams }: Props) {
   return (
     <main className="min-h-svh bg-neutral-950 text-neutral-100 selection:bg-[#fdc52c] selection:text-neutral-900">
       <div
@@ -51,7 +57,9 @@ export default async function EventosLanding({ searchParams }: Props) {
             un diseño 3D personalizado al suscribirte.
           </p>
           <div className="mt-4">
-            <LeadForm source={source} />
+            <Suspense fallback={<LeadForm source={null} />}>
+              <LeadFormWithSource searchParams={searchParams} />
+            </Suspense>
           </div>
         </div>
 
