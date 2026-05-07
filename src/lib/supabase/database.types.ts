@@ -3168,16 +3168,8 @@ export type Database = {
           brief_description: string | null
           brief_objectives: string | null
           brief_references: string | null
-          client_address: string | null
-          client_city: string | null
-          client_company_name: string | null
-          client_country: string | null
-          client_country_code: string | null
           client_email: string | null
           client_name: string | null
-          client_postal_code: string | null
-          client_representative: string | null
-          client_tax_id: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -3207,16 +3199,8 @@ export type Database = {
           brief_description?: string | null
           brief_objectives?: string | null
           brief_references?: string | null
-          client_address?: string | null
-          client_city?: string | null
-          client_company_name?: string | null
-          client_country?: string | null
-          client_country_code?: string | null
           client_email?: string | null
           client_name?: string | null
-          client_postal_code?: string | null
-          client_representative?: string | null
-          client_tax_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -3246,16 +3230,8 @@ export type Database = {
           brief_description?: string | null
           brief_objectives?: string | null
           brief_references?: string | null
-          client_address?: string | null
-          client_city?: string | null
-          client_company_name?: string | null
-          client_country?: string | null
-          client_country_code?: string | null
           client_email?: string | null
           client_name?: string | null
-          client_postal_code?: string | null
-          client_representative?: string | null
-          client_tax_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string

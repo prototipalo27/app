@@ -192,7 +192,7 @@ async function StudioProformaScreen({
   const supabase = createServiceClient();
   const { data: project } = await supabase
     .from("studio_projects")
-    .select("name, client_company_name, client_name, tax_rate, currency")
+    .select("name, client_name, tax_rate, currency")
     .eq("id", payment.studio_project_id)
     .single();
 
@@ -213,7 +213,7 @@ async function StudioProformaScreen({
 
   const taxRate = Number(project?.tax_rate ?? 0);
   const taxAmount = total - subtotal;
-  const clientLabel = project?.client_company_name || project?.client_name || "";
+  const clientLabel = project?.client_name || "";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-zinc-950">

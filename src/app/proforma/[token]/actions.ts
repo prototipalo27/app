@@ -324,7 +324,7 @@ export async function payStudioProforma(
 
   const { data: project } = await supabase
     .from("studio_projects")
-    .select("name, client_email, client_company_name, client_name")
+    .select("name, client_email, client_name")
     .eq("id", payment.studio_project_id)
     .single();
 
@@ -341,7 +341,7 @@ export async function payStudioProforma(
           ? existing.data[0]
           : await stripe.customers.create({
               email: project.client_email,
-              name: project.client_company_name || project.client_name || undefined,
+              name: project.client_name || undefined,
             });
       stripeCustomerId = cust.id;
     }

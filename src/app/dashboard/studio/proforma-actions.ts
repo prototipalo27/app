@@ -25,7 +25,7 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   usa: "US",
 };
 
-function inferCountryCode(country: string | null): string | undefined {
+function inferCountryCode(country: string | null | undefined): string | undefined {
   if (!country) return undefined;
   const c = country.trim().toLowerCase();
   if (COUNTRY_CODE_MAP[c]) return COUNTRY_CODE_MAP[c];
@@ -33,33 +33,139 @@ function inferCountryCode(country: string | null): string | undefined {
   return undefined;
 }
 
-async function ensureHoldedContact(projectId: string): Promise<string | null> {
+interface ParsedAddress {
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+}
+
+/**
+ * Parse a one-line address from a signed contract into Holded's structured fields.
+ * Tolerates extra whitespace and variable comma placement.
+ *   "Via Ressiga 7, 6514, Sementina, Switzerland"
+ *   → { address: "Via Ressiga 7", postalCode: "6514", city: "Sementina", country: "Switzerland" }
+ *
+ * Heuristic: postal code = first part that's mostly digits (with optional letters
+ * for UK/CA codes). Anything before it is the street; anything after is city + country.
+ */
+function parseSignerAddress(raw: string | null | undefined): ParsedAddress {
+  if (!raw) return {};
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { address: parts[0] };
+
+  const isPostalCode = (s: string) => /^[\dA-Z\s-]{3,10}$/i.test(s) && /\d/.test(s);
+  const postalIdx = parts.findIndex(isPostalCode);
+
+  if (postalIdx === -1) {
+    // No postal code detected: assume [street, city, country] or [street, country]
+    return {
+      address: parts[0],
+      city: parts.length >= 3 ? parts[1] : undefined,
+      country: parts[parts.length - 1],
+    };
+  }
+
+  return {
+    address: parts.slice(0, postalIdx).join(", ") || undefined,
+    postalCode: parts[postalIdx],
+    city: parts[postalIdx + 1],
+    country: parts.slice(postalIdx + 2).join(", ") || undefined,
+  };
+}
+
+interface ProjectBillingData {
+  name: string;
+  taxId?: string;
+  email?: string;
+  address: ParsedAddress;
+  countryCode?: string;
+  source: "nda" | "dev_agreement";
+}
+
+/**
+ * Pull billing data for a studio project from the most recent signed contract.
+ * NDA wins over dev_agreement because it is signed first in the operational flow.
+ */
+async function getProjectBillingFromContracts(
+  projectId: string,
+): Promise<ProjectBillingData | null> {
+  const supabase = await createClient();
+
+  const [{ data: nda }, { data: devAgreement }] = await Promise.all([
+    supabase
+      .from("nda_agreements")
+      .select("signer_name, signer_company, signer_nif, signer_address, signer_email, signed_at")
+      .eq("studio_project_id", projectId)
+      .not("signed_at", "is", null)
+      .order("signed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("studio_dev_agreements")
+      .select("signer_name, signer_company, signer_nif, signer_address, signer_email, signed_at")
+      .eq("studio_project_id", projectId)
+      .not("signed_at", "is", null)
+      .order("signed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const source = nda ? ("nda" as const) : devAgreement ? ("dev_agreement" as const) : null;
+  const row = nda || devAgreement;
+  if (!source || !row) return null;
+
+  const billingName = row.signer_company?.trim() || row.signer_name?.trim();
+  if (!billingName) return null;
+
+  const address = parseSignerAddress(row.signer_address);
+  const countryCode = inferCountryCode(address.country);
+
+  return {
+    name: billingName,
+    taxId: row.signer_nif?.trim() || undefined,
+    email: row.signer_email?.trim() || undefined,
+    address,
+    countryCode,
+    source,
+  };
+}
+
+async function ensureHoldedContact(
+  projectId: string,
+): Promise<{ contactId: string | null; error?: string }> {
   const supabase = await createClient();
   const { data: project } = await supabase
     .from("studio_projects")
-    .select(
-      "id, holded_contact_id, client_email, client_name, client_company_name, client_tax_id, client_address, client_city, client_postal_code, client_country, client_country_code",
-    )
+    .select("id, holded_contact_id, client_email, client_name")
     .eq("id", projectId)
     .single();
-  if (!project) return null;
-  if (project.holded_contact_id) return project.holded_contact_id;
+  if (!project) return { contactId: null, error: "Proyecto no encontrado" };
+  if (project.holded_contact_id) return { contactId: project.holded_contact_id };
 
-  const billingName = project.client_company_name?.trim() || project.client_name?.trim();
-  if (!billingName) return null;
-
-  const countryCode = project.client_country_code || inferCountryCode(project.client_country);
+  const billing = await getProjectBillingFromContracts(projectId);
+  if (!billing) {
+    return {
+      contactId: null,
+      error:
+        "Faltan datos de facturación. Pide al cliente que firme la NDA o el Dev Agreement antes de generar la proforma.",
+    };
+  }
 
   const created = await createContact({
-    name: billingName,
-    code: project.client_tax_id?.trim() || undefined,
-    email: project.client_email?.trim() || undefined,
+    name: billing.name,
+    code: billing.taxId,
+    email: billing.email || project.client_email?.trim() || undefined,
     billAddress: {
-      address: project.client_address?.trim() || undefined,
-      city: project.client_city?.trim() || undefined,
-      postalCode: project.client_postal_code?.trim() || undefined,
-      country: project.client_country?.trim() || undefined,
-      countryCode,
+      address: billing.address.address,
+      city: billing.address.city,
+      postalCode: billing.address.postalCode,
+      country: billing.address.country,
+      countryCode: billing.countryCode,
     },
   });
 
@@ -68,7 +174,7 @@ async function ensureHoldedContact(projectId: string): Promise<string | null> {
     .update({ holded_contact_id: created.id })
     .eq("id", projectId);
 
-  return created.id;
+  return { contactId: created.id };
 }
 
 export async function createStudioPaymentProforma(
@@ -90,18 +196,14 @@ export async function createStudioPaymentProforma(
 
   const { data: project } = await supabase
     .from("studio_projects")
-    .select("id, name, tax_rate, holded_contact_id")
+    .select("id, name, tax_rate")
     .eq("id", payment.studio_project_id)
     .single();
   if (!project) return { success: false, error: "Proyecto no encontrado" };
 
-  const contactId = await ensureHoldedContact(project.id);
+  const { contactId, error: contactError } = await ensureHoldedContact(project.id);
   if (!contactId) {
-    return {
-      success: false,
-      error:
-        "Faltan datos de facturación del cliente: añade al menos razón social o nombre antes de generar la proforma.",
-    };
+    return { success: false, error: contactError || "No se pudo resolver el contacto Holded" };
   }
 
   const taxRate = Number(project.tax_rate ?? 21);
@@ -161,12 +263,17 @@ export async function sendStudioPaymentProforma(
 
   const { data: project } = await supabase
     .from("studio_projects")
-    .select("id, name, client_email, client_name, client_company_name, tax_rate")
+    .select("id, name, client_email, client_name, tax_rate")
     .eq("id", payment.studio_project_id)
     .single();
   if (!project) return { success: false, error: "Proyecto no encontrado" };
-  if (!project.client_email) {
-    return { success: false, error: "El proyecto no tiene email de cliente" };
+
+  // Email destino: el del contrato firmado si existe, si no el del proyecto.
+  const billing = await getProjectBillingFromContracts(project.id);
+  const recipientEmail = billing?.email || project.client_email;
+  const recipientName = billing?.name || project.client_name || "";
+  if (!recipientEmail) {
+    return { success: false, error: "No hay email de cliente (ni en contrato ni en proyecto)" };
   }
 
   const emailSender = await getUserEmailSender(profile.id);
@@ -208,16 +315,15 @@ export async function sendStudioPaymentProforma(
     maximumFractionDigits: 2,
   });
   const conceptoLine = docNumber ? `${docNumber} – Prototipalo` : "Prototipalo – Studio";
-  const greetingName = project.client_name || project.client_company_name || "";
 
   try {
     await sendEmailOrSchedule(
       {
-        to: project.client_email,
+        to: recipientEmail,
         subject: `Proforma${proformaRef} — ${project.name} — Prototipalo`,
-        text: `Hola ${greetingName},\n\nTe adjuntamos la proforma${proformaRef} (${payment.label}) por importe de ${formattedTotal} €.\n\nPuedes pagarla online en este enlace:\n${proformaUrl}\n\nO por transferencia bancaria:\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM\nConcepto: ${conceptoLine}\n\nGracias.`,
+        text: `Hola ${recipientName},\n\nTe adjuntamos la proforma${proformaRef} (${payment.label}) por importe de ${formattedTotal} €.\n\nPuedes pagarla online en este enlace:\n${proformaUrl}\n\nO por transferencia bancaria:\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM\nConcepto: ${conceptoLine}\n\nGracias.`,
         html: `
-          <p>Hola ${greetingName},</p>
+          <p>Hola ${recipientName},</p>
           <p>Te adjuntamos la proforma${proformaRef} (<strong>${payment.label}</strong>) por importe de <strong>${formattedTotal} €</strong>.</p>
           <p>Puedes pagarla online:</p>
           <p style="margin:20px 0;">
