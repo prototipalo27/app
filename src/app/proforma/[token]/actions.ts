@@ -287,3 +287,101 @@ function computeChargeAmount(proformaTotal: number, condition: PaymentCondition)
   if (condition === "50-50") return proformaTotal * 0.5;
   return proformaTotal;
 }
+
+// ── Studio proforma: simple pay-by-card flow ───────────────────────────
+
+export async function payStudioProforma(
+  token: string,
+): Promise<{ success: boolean; error?: string; redirectUrl?: string }> {
+  const supabase = createServiceClient();
+
+  const { data: payment } = await supabase
+    .from("studio_payments")
+    .select(
+      "id, label, amount, holded_proforma_id, holded_proforma_doc_number, payment_status, studio_project_id",
+    )
+    .eq("tracking_token", token)
+    .maybeSingle();
+
+  if (!payment) return { success: false, error: "Enlace no válido" };
+  if (payment.payment_status === "paid") {
+    return { success: false, error: "Este hito ya está pagado" };
+  }
+  if (!payment.holded_proforma_id) {
+    return { success: false, error: "Proforma no disponible" };
+  }
+
+  // Authoritative total comes from Holded so taxes/discounts stay consistent.
+  let total = Number(payment.amount);
+  let docNumber = payment.holded_proforma_doc_number || "";
+  try {
+    const doc = await getDocument("proform", payment.holded_proforma_id);
+    total = doc.total || total;
+    if (!docNumber && doc.docNumber) docNumber = doc.docNumber;
+  } catch {
+    // Fall back to local amount if Holded is unreachable.
+  }
+
+  const { data: project } = await supabase
+    .from("studio_projects")
+    .select("name, client_email, client_company_name, client_name")
+    .eq("id", payment.studio_project_id)
+    .single();
+
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+
+    let stripeCustomerId: string | undefined;
+    if (project?.client_email) {
+      const existing = await stripe.customers.list({ email: project.client_email, limit: 1 });
+      const cust =
+        existing.data.length > 0
+          ? existing.data[0]
+          : await stripe.customers.create({
+              email: project.client_email,
+              name: project.client_company_name || project.client_name || undefined,
+            });
+      stripeCustomerId = cust.id;
+    }
+
+    const productName = `${payment.label}${project?.name ? ` — ${project.name}` : ""}`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "eur",
+            product_data: { name: productName },
+            unit_amount: Math.round(total * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        payment_type: "studio_payment",
+        studio_payment_id: payment.id,
+        studio_project_id: payment.studio_project_id,
+        proforma_doc_number: docNumber,
+      },
+      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/proforma/${token}`,
+      customer: stripeCustomerId,
+    });
+
+    await supabase
+      .from("studio_payments")
+      .update({ stripe_checkout_session_id: session.id })
+      .eq("id", payment.id);
+
+    return { success: true, redirectUrl: session.url ?? undefined };
+  } catch (err) {
+    console.error("[payStudioProforma] Stripe failed:", err);
+    return {
+      success: false,
+      error: "No pudimos generar el enlace de pago. Vuelve a intentarlo en unos minutos.",
+    };
+  }
+}

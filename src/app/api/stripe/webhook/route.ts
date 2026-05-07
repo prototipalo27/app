@@ -47,10 +47,54 @@ async function handleAddonPayment(session: Stripe.Checkout.Session) {
   });
 }
 
+async function handleStudioPayment(session: Stripe.Checkout.Session) {
+  const paymentId = session.metadata?.studio_payment_id;
+  const projectId = session.metadata?.studio_project_id;
+  if (!paymentId) {
+    console.error("[Stripe Webhook] studio_payment without studio_payment_id");
+    return;
+  }
+
+  const supabase = getSupabase();
+
+  // Idempotency: skip if already paid
+  const { data: existing } = await supabase
+    .from("studio_payments")
+    .select("payment_status")
+    .eq("id", paymentId)
+    .single();
+  if (existing?.payment_status === "paid") return;
+
+  const amountTotal = (session.amount_total || 0) / 100;
+  await supabase
+    .from("studio_payments")
+    .update({
+      payment_status: "paid",
+      status: "cobrado",
+      paid_at: new Date().toISOString(),
+      stripe_payment_intent_id:
+        typeof session.payment_intent === "string" ? session.payment_intent : null,
+    })
+    .eq("id", paymentId);
+
+  const customerEmail =
+    session.customer_details?.email || session.customer_email || "Cliente";
+  sendPushForEvent("payment_received", {
+    title: "Pago recibido (Studio)",
+    body: `${customerEmail} ha pagado ${amountTotal.toFixed(2)} €`,
+    url: projectId ? `/dashboard/studio/${projectId}` : "/dashboard/studio",
+  });
+}
+
 async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
   // Branch on payment_type for addon vs original quote
   if (session.metadata?.payment_type === "addon_full") {
     await handleAddonPayment(session);
+    return;
+  }
+
+  if (session.metadata?.payment_type === "studio_payment") {
+    await handleStudioPayment(session);
     return;
   }
 

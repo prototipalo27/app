@@ -2989,12 +2989,19 @@ export type Database = {
           currency: string
           due_date: string | null
           holded_invoice_id: string | null
+          holded_proforma_doc_number: string | null
+          holded_proforma_id: string | null
           id: string
           label: string
           paid_at: string | null
+          payment_status: string | null
           position: number
+          proforma_sent_at: string | null
           status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
           studio_project_id: string
+          tracking_token: string
         }
         Insert: {
           amount: number
@@ -3002,12 +3009,19 @@ export type Database = {
           currency?: string
           due_date?: string | null
           holded_invoice_id?: string | null
+          holded_proforma_doc_number?: string | null
+          holded_proforma_id?: string | null
           id?: string
           label: string
           paid_at?: string | null
+          payment_status?: string | null
           position?: number
+          proforma_sent_at?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           studio_project_id: string
+          tracking_token?: string
         }
         Update: {
           amount?: number
@@ -3015,12 +3029,19 @@ export type Database = {
           currency?: string
           due_date?: string | null
           holded_invoice_id?: string | null
+          holded_proforma_doc_number?: string | null
+          holded_proforma_id?: string | null
           id?: string
           label?: string
           paid_at?: string | null
+          payment_status?: string | null
           position?: number
+          proforma_sent_at?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           studio_project_id?: string
+          tracking_token?: string
         }
         Relationships: [
           {
@@ -3147,8 +3168,16 @@ export type Database = {
           brief_description: string | null
           brief_objectives: string | null
           brief_references: string | null
+          client_address: string | null
+          client_city: string | null
+          client_company_name: string | null
+          client_country: string | null
+          client_country_code: string | null
           client_email: string | null
           client_name: string | null
+          client_postal_code: string | null
+          client_representative: string | null
+          client_tax_id: string | null
           created_at: string
           created_by: string | null
           currency: string
@@ -3169,6 +3198,7 @@ export type Database = {
           project_manager_id: string | null
           start_date: string | null
           status: string
+          tax_rate: number
           total_price: number | null
           updated_at: string
         }
@@ -3177,8 +3207,16 @@ export type Database = {
           brief_description?: string | null
           brief_objectives?: string | null
           brief_references?: string | null
+          client_address?: string | null
+          client_city?: string | null
+          client_company_name?: string | null
+          client_country?: string | null
+          client_country_code?: string | null
           client_email?: string | null
           client_name?: string | null
+          client_postal_code?: string | null
+          client_representative?: string | null
+          client_tax_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -3199,6 +3237,7 @@ export type Database = {
           project_manager_id?: string | null
           start_date?: string | null
           status?: string
+          tax_rate?: number
           total_price?: number | null
           updated_at?: string
         }
@@ -3207,8 +3246,16 @@ export type Database = {
           brief_description?: string | null
           brief_objectives?: string | null
           brief_references?: string | null
+          client_address?: string | null
+          client_city?: string | null
+          client_company_name?: string | null
+          client_country?: string | null
+          client_country_code?: string | null
           client_email?: string | null
           client_name?: string | null
+          client_postal_code?: string | null
+          client_representative?: string | null
+          client_tax_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -3229,6 +3276,7 @@ export type Database = {
           project_manager_id?: string | null
           start_date?: string | null
           status?: string
+          tax_rate?: number
           total_price?: number | null
           updated_at?: string
         }

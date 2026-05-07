@@ -15,6 +15,8 @@ import {
   updateStudioCollaboratorAccess,
   deleteStudioCollaborator,
 } from "../collaborator-actions";
+import { duplicateStudioPaymentNextMonth } from "../proforma-actions";
+import PaymentProformaActions from "./payment-proforma-actions";
 import {
   addStudioMember,
   updateStudioMemberRole,
@@ -312,6 +314,7 @@ export default async function StudioProjectDetailPage({
           planificado={planificado}
           facturado={facturado}
           cobrado={cobrado}
+          baseUrl={process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es"}
         />
       )}
 
@@ -628,6 +631,11 @@ type Payment = {
   status: string;
   paid_at: string | null;
   position: number;
+  tracking_token: string;
+  holded_proforma_id: string | null;
+  holded_proforma_doc_number: string | null;
+  proforma_sent_at: string | null;
+  payment_status: string | null;
 };
 
 function PagosTab({
@@ -637,6 +645,7 @@ function PagosTab({
   planificado,
   facturado,
   cobrado,
+  baseUrl,
 }: {
   projectId: string;
   payments: Payment[];
@@ -644,6 +653,7 @@ function PagosTab({
   planificado: number;
   facturado: number;
   cobrado: number;
+  baseUrl: string;
 }) {
   const sinPlanificar = total > 0 ? total - planificado : 0;
 
@@ -739,16 +749,36 @@ function PagosTab({
                     Guardar
                   </button>
                 </form>
-                <form action={deleteStudioPayment} className="mt-1">
-                  <input type="hidden" name="id" value={p.id} />
-                  <input type="hidden" name="studio_project_id" value={projectId} />
-                  <button
-                    type="submit"
-                    className="text-xs text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
-                  >
-                    Eliminar hito
-                  </button>
-                </form>
+                <PaymentProformaActions
+                  paymentId={p.id}
+                  hasProforma={Boolean(p.holded_proforma_id)}
+                  docNumber={p.holded_proforma_doc_number}
+                  proformaSentAt={p.proforma_sent_at}
+                  paymentStatus={p.payment_status}
+                  trackingUrl={`${baseUrl}/proforma/${p.tracking_token}`}
+                  paymentLabel={p.label}
+                />
+                <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                  <form action={duplicateStudioPaymentNextMonth}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <button
+                      type="submit"
+                      className="text-zinc-500 hover:text-brand-blue dark:text-zinc-400 dark:hover:text-brand-blue"
+                    >
+                      Duplicar próximo mes
+                    </button>
+                  </form>
+                  <form action={deleteStudioPayment}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <input type="hidden" name="studio_project_id" value={projectId} />
+                    <button
+                      type="submit"
+                      className="text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400"
+                    >
+                      Eliminar hito
+                    </button>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>

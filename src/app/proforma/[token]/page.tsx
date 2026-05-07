@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getDocument } from "@/lib/holded/api";
 import ProformaForm from "./proforma-form";
+import StudioProformaPay from "./studio-proforma-pay";
 
 export const metadata: Metadata = {
   title: "Presupuesto — Prototipalo",
@@ -29,6 +30,24 @@ async function ProformaContent({
 }) {
   const { token } = await params;
   const supabase = createServiceClient();
+
+  // Studio payments come first: simpler flow, no billing form needed.
+  const { data: studioPayment } = await supabase
+    .from("studio_payments")
+    .select(
+      "id, label, amount, currency, holded_proforma_id, holded_proforma_doc_number, payment_status, status, studio_project_id",
+    )
+    .eq("tracking_token", token)
+    .maybeSingle();
+
+  if (studioPayment && studioPayment.holded_proforma_id) {
+    return (
+      <StudioProformaScreen
+        token={token}
+        payment={studioPayment}
+      />
+    );
+  }
 
   const { data: project } = await supabase
     .from("projects")
@@ -124,6 +143,104 @@ async function ProformaContent({
           subtotal={subtotal}
           totalTax={totalTax}
           total={total}
+        />
+      </div>
+    </div>
+  );
+}
+
+async function StudioProformaScreen({
+  token,
+  payment,
+}: {
+  token: string;
+  payment: {
+    id: string;
+    label: string;
+    amount: number;
+    currency: string;
+    holded_proforma_id: string | null;
+    holded_proforma_doc_number: string | null;
+    payment_status: string | null;
+    studio_project_id: string;
+  };
+}) {
+  if (payment.payment_status === "paid") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
+        <div className="w-full max-w-md">
+          <div className="mb-6 flex justify-center">
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-8 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="block h-8 w-auto dark:hidden" />
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+              <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white">Pago recibido</h1>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Hemos recibido tu pago. ¡Gracias!
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const supabase = createServiceClient();
+  const { data: project } = await supabase
+    .from("studio_projects")
+    .select("name, client_company_name, client_name, tax_rate, currency")
+    .eq("id", payment.studio_project_id)
+    .single();
+
+  let subtotal = Number(payment.amount);
+  let total = subtotal;
+  let docNumber = payment.holded_proforma_doc_number || "";
+
+  if (payment.holded_proforma_id) {
+    try {
+      const doc = await getDocument("proform", payment.holded_proforma_id);
+      subtotal = doc.subtotal || subtotal;
+      total = doc.total || subtotal;
+      if (!docNumber && doc.docNumber) docNumber = doc.docNumber;
+    } catch {
+      // Fallback to local values if Holded is unreachable.
+    }
+  }
+
+  const taxRate = Number(project?.tax_rate ?? 0);
+  const taxAmount = total - subtotal;
+  const clientLabel = project?.client_company_name || project?.client_name || "";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-zinc-950">
+      <div className="w-full max-w-xl">
+        <div className="mb-6 text-center">
+          <div className="mb-4 flex justify-center">
+            <Image src="/logo-dark.png" alt="Prototipalo" width={472} height={236} className="hidden h-8 w-auto dark:block" />
+            <Image src="/logo-light.png" alt="Prototipalo" width={472} height={236} className="block h-8 w-auto dark:hidden" />
+          </div>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
+            Proforma{docNumber ? ` ${docNumber}` : ""}
+          </h1>
+          {clientLabel && (
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              {clientLabel} — {project?.name}
+            </p>
+          )}
+        </div>
+
+        <StudioProformaPay
+          token={token}
+          label={payment.label}
+          subtotal={subtotal}
+          taxAmount={taxAmount}
+          taxRate={taxRate}
+          total={total}
+          docNumber={docNumber}
         />
       </div>
     </div>
