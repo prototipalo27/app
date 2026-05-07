@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     weight: weight || 1,
     reference,
     observations,
-    service: service || "0200",
+    service: service || "0205",
   };
 
   try {
@@ -104,6 +104,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Service code → human label for the audit trail
+    const serviceCode = mrwParams.service;
+    const SERVICE_LABELS: Record<string, string> = {
+      "0205": "MRW Urgente 14",
+      "0200": "MRW Urgente 19",
+      "0300": "MRW Económico",
+      "0800": "MRW Ecommerce",
+    };
+
     // Build DB row
     const row: Record<string, unknown> = {
       mrw_albaran: result.albaran,
@@ -121,6 +130,7 @@ export async function POST(request: NextRequest) {
       package_length: packageLength ?? null,
       package_weight: weight ?? null,
       label_url: labelUrl,
+      service_name: SERVICE_LABELS[serviceCode] ?? `MRW ${serviceCode}`,
       shipped_at: new Date().toISOString(),
       created_by: userData.user.id,
     };
