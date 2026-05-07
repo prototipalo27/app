@@ -34,6 +34,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/studio-portal/") ||
     pathname.startsWith("/investors/") ||
     pathname.startsWith("/scan") ||
+    pathname === "/eventos" ||
+    pathname.startsWith("/eventos/") ||
     pathname === "/offline";
 
   // Skip Supabase auth check entirely for public routes
