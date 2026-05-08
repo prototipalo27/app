@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getSharedUserProfiles } from "@/lib/supabase/cached-queries";
+import type { Tables } from "@/lib/supabase/database.types";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
 import LeadActions from "./lead-actions";
+import LeadAddresses from "./lead-addresses";
 import LeadNav from "./lead-nav";
 import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
@@ -370,6 +372,17 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
 
   const projectTemplateTags = (projectTemplates || []).map((t) => t.name);
 
+  // Direcciones del cliente — solo cuando ya hay contact en Holded
+  const holdedContactId = (quoteRequest as { holded_contact_id?: string | null } | null)?.holded_contact_id ?? null;
+  const { data: addresses } = holdedContactId
+    ? await supabase
+        .from("client_addresses")
+        .select("*")
+        .eq("holded_contact_id", holdedContactId)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false })
+    : { data: [] as Tables<"client_addresses">[] };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -395,6 +408,14 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
             ndaSignedAt={ndaStatusResult.signed_at}
             ndaSignerName={ndaStatusResult.signer_name}
             sampleRequest={sampleRequest}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent>
+          <LeadAddresses
+            holdedContactId={holdedContactId}
+            initialAddresses={addresses ?? []}
           />
         </CardContent>
       </Card>
