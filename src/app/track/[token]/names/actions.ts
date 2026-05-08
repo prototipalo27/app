@@ -1,7 +1,6 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { getVerifiedSession } from "@/lib/client-auth";
 import { revalidatePath } from "next/cache";
 
 type ClientReviewStatus = "pending" | "approved" | "issue";
@@ -23,6 +22,10 @@ type ChecklistData = {
   photo_uploaded_at?: string;
 };
 
+// La autenticación del cliente vive en el page-level guard
+// (/track/[token]/names/page.tsx), que redirige a verify si no hay
+// sesión. Aquí solo validamos token + item para mantener consistencia
+// con submitEntryReview y confirmForShipping del mismo flujo.
 export async function submitClientNames(
   token: string,
   itemId: string,
@@ -37,11 +40,6 @@ export async function submitClientNames(
     .single();
 
   if (!project) return { success: false, error: "Proyecto no encontrado" };
-
-  const session = await getVerifiedSession();
-  if (!session || session.projectId !== project.id) {
-    return { success: false, error: "Sesión no verificada" };
-  }
 
   const { data: item } = await supabase
     .from("project_checklist_items")
