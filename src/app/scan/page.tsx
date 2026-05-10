@@ -9,7 +9,8 @@ export default function ScanPage() {
   const [pin, setPin] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [pinError, setPinError] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [initialFolderId, setInitialFolderId] = useState<string | undefined>(undefined);
 
   const extraHeaders = useMemo(() => {
@@ -17,25 +18,28 @@ export default function ScanPage() {
     return { "x-scan-pin": stored || pin };
   }, [pin, authenticated]);
 
+  // En mount: si hay PIN guardado, mostramos scanner inmediatamente
+  // (optimista) y verificamos en background. Si no hay PIN, pasamos a
+  // la pantalla de PIN. Nunca bloqueamos con spinner — el server-side
+  // cache de /api/scan/folder hace el verify casi instantáneo en warm.
   useEffect(() => {
     const urlPin = new URLSearchParams(window.location.search).get("pin");
     const saved = urlPin || localStorage.getItem(PIN_STORAGE_KEY);
-    if (saved) {
-      setPin(saved);
-      verifyPin(saved).then(({ ok, folderId }) => {
-        if (ok) {
-          localStorage.setItem(PIN_STORAGE_KEY, saved);
-          setAuthenticated(true);
-          setInitialFolderId(folderId);
-        } else {
-          localStorage.removeItem(PIN_STORAGE_KEY);
-        }
-        setChecking(false);
-      });
-    } else {
-      setChecking(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setMounted(true);
+    if (!saved) return;
+
+    setPin(saved);
+    setAuthenticated(true); // optimista
+    verifyPin(saved).then(({ ok, folderId }) => {
+      if (ok) {
+        localStorage.setItem(PIN_STORAGE_KEY, saved);
+        setInitialFolderId(folderId);
+      } else {
+        localStorage.removeItem(PIN_STORAGE_KEY);
+        setAuthenticated(false);
+        setPin("");
+      }
+    });
   }, []);
 
   // verify devuelve el folderId del mes actual ya resuelto — así el
@@ -71,7 +75,13 @@ export default function ScanPage() {
     setChecking(false);
   };
 
-  // Loading
+  // Pre-mount: shell vacío para evitar flash de PIN screen antes de
+  // leer localStorage. Tan corto que ni se nota (< 16 ms).
+  if (!mounted) {
+    return <div className="min-h-dvh bg-zinc-950" />;
+  }
+
+  // Loading (sólo al introducir PIN a mano)
   if (checking) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-zinc-950">

@@ -9,6 +9,12 @@ const MONTH_NAMES_ES = [
   "09 - Septiembre", "10 - Octubre", "11 - Noviembre", "12 - Diciembre",
 ];
 
+// Cache module-level: dentro del lifetime de la function instance de
+// Vercel (Fluid Compute mantiene caliente la instancia minutos/horas),
+// el segundo request en adelante es instantáneo, sin tocar Drive.
+// Keys: "yyyy" para año, "yyyy-mm" para mes.
+const folderCache = new Map<string, string>();
+
 function validateAuth(request: NextRequest): boolean {
   // PIN auth (standalone scan)
   const pin = request.headers.get("x-scan-pin");
@@ -18,6 +24,23 @@ function validateAuth(request: NextRequest): boolean {
   // Cookie auth (dashboard user)
   const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
   return hasAuthCookie;
+}
+
+async function resolveMonthFolder(year: number, month: number): Promise<string> {
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const cachedMonth = folderCache.get(monthKey);
+  if (cachedMonth) return cachedMonth;
+
+  const yearKey = String(year);
+  let yearFolderId = folderCache.get(yearKey);
+  if (!yearFolderId) {
+    yearFolderId = await getOrCreateSubfolder(INVOICES_DRIVE_PARENT, yearKey);
+    folderCache.set(yearKey, yearFolderId);
+  }
+
+  const monthFolderId = await getOrCreateSubfolder(yearFolderId, MONTH_NAMES_ES[month - 1]);
+  folderCache.set(monthKey, monthFolderId);
+  return monthFolderId;
 }
 
 /**
@@ -36,11 +59,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan month o year" }, { status: 400 });
     }
 
-    const yearFolderId = await getOrCreateSubfolder(INVOICES_DRIVE_PARENT, String(year));
-    const monthFolderName = MONTH_NAMES_ES[month - 1];
-    const monthFolderId = await getOrCreateSubfolder(yearFolderId, monthFolderName);
-
-    return NextResponse.json({ folderId: monthFolderId });
+    const folderId = await resolveMonthFolder(year, month);
+    return NextResponse.json({ folderId });
   } catch (err) {
     console.error("[Scan Folder] Error:", err);
     const message = err instanceof Error ? err.message : "Error al acceder a Drive";
