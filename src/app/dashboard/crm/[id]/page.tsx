@@ -208,7 +208,6 @@ async function EmailSection({ leadId, lead }: { leadId: string; lead: any }) {
       snippets={snippets || []}
       emailResources={emailResources || []}
       leadMessage={lead.message}
-      aiDraft={lead.ai_draft}
     />
   );
 }

@@ -10,7 +10,6 @@ import { decrypt } from "@/lib/encryption";
 import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
-import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 // AI estimation is now handled by Postgres trigger auto_estimate_lead
 
@@ -1206,9 +1205,6 @@ export async function sendLeadEmail(
       .select("status, assigned_to")
       .eq("id", id)
       .single();
-
-    // Clear AI draft after sending
-    await supabase.from("leads").update({ ai_draft: null }).eq("id", id);
 
     if (lead?.status === "new") {
       await supabase
@@ -2526,47 +2522,6 @@ export async function sendInvoiceToClient(
 
   revalidatePath(`/dashboard/crm/${leadId}`);
   return { success: true };
-}
-
-// ── Generate Email Draft with AI ─────────────────────────
-
-export async function generateEmailDraft(
-  leadId: string,
-  replyToContent?: string
-): Promise<{ success: boolean; draft?: string; error?: string }> {
-  await requireRole("manager");
-  const supabase = await createClient();
-
-  // Get lead info
-  const { data: lead } = await supabase
-    .from("leads")
-    .select("full_name, company, email, message")
-    .eq("id", leadId)
-    .single();
-
-  if (!lead) return { success: false, error: "Lead no encontrado" };
-
-  try {
-    await generateAndSaveDraft(
-      leadId,
-      { fullName: lead.full_name, company: lead.company, message: lead.message },
-      replyToContent
-    );
-
-    // Read back the saved draft
-    const { data: updated } = await supabase
-      .from("leads")
-      .select("ai_draft")
-      .eq("id", leadId)
-      .single();
-
-    return { success: true, draft: updated?.ai_draft || "" };
-  } catch (e) {
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : "Error al generar borrador",
-    };
-  }
 }
 
 export async function sendLeadProforma(
