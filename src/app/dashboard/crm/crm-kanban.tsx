@@ -496,7 +496,12 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAt
     return m === closedMonth;
   }
 
+  // Cuando hay búsqueda activa, ignoramos el filtro de mes de cierre — el
+  // usuario quiere encontrar el lead esté donde esté en el tiempo.
+  const hasSearch = search.trim().length > 0;
+
   function passesClosedMonth(l: LeadWithAssignee): boolean {
+    if (hasSearch) return true;
     if (l.status === "won") return isInClosedMonth(l.won_at);
     if (l.status === "paid") return isInClosedMonth(paidAtMap[l.id] ?? l.won_at);
     return true;
@@ -527,10 +532,12 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAt
       if (filterType === "none" && l.project_type_tag) return false;
       if (filterType !== "none" && l.project_type_tag !== filterType) return false;
     }
-    const range = getTimeFilterRange();
-    if (range) {
-      const created = new Date(l.created_at);
-      if (created < range.from || created > range.to) return false;
+    if (!hasSearch) {
+      const range = getTimeFilterRange();
+      if (range) {
+        const created = new Date(l.created_at);
+        if (created < range.from || created > range.to) return false;
+      }
     }
     return true;
   });
