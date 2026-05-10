@@ -345,7 +345,7 @@ async function SentEmailsSection({ leadId }: { leadId: string }) {
   );
 }
 
-async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: any; nextId: string | null }) {
+async function ActionsSection({ leadId, lead }: { leadId: string; lead: any }) {
   const supabase = await createClient();
 
   const [
@@ -401,7 +401,6 @@ async function ActionsSection({ leadId, lead, nextId }: { leadId: string; lead: 
             estimatedComplexity={lead.estimated_complexity}
             estimatedUrgency={lead.estimated_urgency}
             estimatedValue={lead.estimated_value}
-            nextId={nextId}
             commission={commission}
             ndaStatus={ndaStatusResult.status}
             ndaId={ndaStatusResult.id}
@@ -589,7 +588,7 @@ export default async function LeadDetailPage({
           {/* Actions panel — appears here on mobile (before heavy sections), sidebar on desktop */}
           <div className="md:hidden">
             <Suspense fallback={<ActionsSkeleton />}>
-              <ActionsSection leadId={id} lead={lead} nextId={nextId} />
+              <ActionsSection leadId={id} lead={lead} />
             </Suspense>
           </div>
 
@@ -619,7 +618,7 @@ export default async function LeadDetailPage({
         {/* Right panel — desktop only (mobile version rendered inline above) */}
         <div className="hidden md:block">
           <Suspense fallback={<ActionsSkeleton />}>
-            <ActionsSection leadId={id} lead={lead} nextId={nextId} />
+            <ActionsSection leadId={id} lead={lead} />
           </Suspense>
         </div>
       </div>

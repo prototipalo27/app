@@ -55,7 +55,6 @@ interface LeadActionsProps {
   estimatedUrgency: string | null;
   estimatedValue: number | null;
   desiredDeliveryDate: string | null;
-  nextId: string | null;
   commission: {
     isReturning: boolean;
     rate: number;
@@ -83,7 +82,6 @@ export default function LeadActions({
   estimatedUrgency,
   estimatedValue,
   desiredDeliveryDate,
-  nextId,
   commission,
   ndaStatus,
   ndaId,
@@ -131,11 +129,7 @@ export default function LeadActions({
     }
     startTransition(async () => {
       await updateLeadStatus(leadId, newStatus);
-      if (nextId) {
-        router.push(`/dashboard/crm/${nextId}`);
-      } else {
-        router.push("/dashboard/crm");
-      }
+      router.refresh();
     });
   };
 
@@ -144,11 +138,7 @@ export default function LeadActions({
       await updateLeadStatus(leadId, "lost", lostReason || undefined);
       setShowLostReason(false);
       setLostReason("");
-      if (nextId) {
-        router.push(`/dashboard/crm/${nextId}`);
-      } else {
-        router.push("/dashboard/crm");
-      }
+      router.refresh();
     });
   };
 
