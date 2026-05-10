@@ -10,6 +10,7 @@ export default function ScanPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [pinError, setPinError] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [initialFolderId, setInitialFolderId] = useState<string | undefined>(undefined);
 
   const extraHeaders = useMemo(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(PIN_STORAGE_KEY) : null;
@@ -21,10 +22,11 @@ export default function ScanPage() {
     const saved = urlPin || localStorage.getItem(PIN_STORAGE_KEY);
     if (saved) {
       setPin(saved);
-      verifyPin(saved).then((ok) => {
+      verifyPin(saved).then(({ ok, folderId }) => {
         if (ok) {
           localStorage.setItem(PIN_STORAGE_KEY, saved);
           setAuthenticated(true);
+          setInitialFolderId(folderId);
         } else {
           localStorage.removeItem(PIN_STORAGE_KEY);
         }
@@ -36,7 +38,9 @@ export default function ScanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function verifyPin(testPin: string): Promise<boolean> {
+  // verify devuelve el folderId del mes actual ya resuelto — así el
+  // InvoiceScanner se ahorra el roundtrip duplicado en la 1ª subida.
+  async function verifyPin(testPin: string): Promise<{ ok: boolean; folderId?: string }> {
     try {
       const now = new Date();
       const res = await fetch("/api/scan/folder", {
@@ -44,9 +48,11 @@ export default function ScanPage() {
         headers: { "Content-Type": "application/json", "x-scan-pin": testPin },
         body: JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear() }),
       });
-      return res.ok;
+      if (!res.ok) return { ok: false };
+      const data = await res.json().catch(() => null);
+      return { ok: true, folderId: data?.folderId };
     } catch {
-      return false;
+      return { ok: false };
     }
   }
 
@@ -54,10 +60,11 @@ export default function ScanPage() {
     e.preventDefault();
     setPinError(false);
     setChecking(true);
-    const ok = await verifyPin(pin);
+    const { ok, folderId } = await verifyPin(pin);
     if (ok) {
       localStorage.setItem(PIN_STORAGE_KEY, pin);
       setAuthenticated(true);
+      setInitialFolderId(folderId);
     } else {
       setPinError(true);
     }
@@ -134,7 +141,7 @@ export default function ScanPage() {
       </div>
 
       <div className="flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6">
-        <InvoiceScanner extraHeaders={extraHeaders} />
+        <InvoiceScanner extraHeaders={extraHeaders} initialFolderId={initialFolderId} />
       </div>
     </div>
   );

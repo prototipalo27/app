@@ -1,12 +1,50 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { slugifyCompany } from "@/lib/invoice-slug";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+// Reescalado de imágenes antes de enviar. Una foto de móvil son 3-8 MB;
+// para OCR de factura basta con 1600 px y JPEG 0.85 (~150-300 KB).
+// Acelera subida y procesamiento del OCR sin perder legibilidad.
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.85;
+
+async function compressImage(file: File): Promise<File> {
+  // PDFs y archivos no-imagen pasan tal cual
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file;
+
+  const ratio = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  if (ratio === 1 && file.size < 1_000_000) {
+    bitmap.close();
+    return file; // ya es razonable
+  }
+
+  const w = Math.round(bitmap.width * ratio);
+  const h = Math.round(bitmap.height * ratio);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    return file;
+  }
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
+  );
+  if (!blob) return file;
+  return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" });
+}
 
 interface UploadedFile {
   id: string;
@@ -22,13 +60,16 @@ interface InvoiceScannerProps {
   extraHeaders?: Record<string, string>;
   /** API base paths — defaults to /api/scan/* for standalone, override for dashboard */
   folderEndpoint?: string;
-  uploadEndpoint?: string;
+  processEndpoint?: string;
+  /** folderId pre-resolved for the current month (skips first roundtrip) */
+  initialFolderId?: string;
 }
 
 export default function InvoiceScanner({
   extraHeaders = {},
   folderEndpoint = "/api/scan/folder",
-  uploadEndpoint = "/api/scan/upload",
+  processEndpoint = "/api/scan/process",
+  initialFolderId,
 }: InvoiceScannerProps) {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -38,7 +79,11 @@ export default function InvoiceScanner({
   const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderIdCache = useRef<Record<string, string>>({});
+  const folderIdCache = useRef<Record<string, string>>(
+    initialFolderId
+      ? { [`${now.getFullYear()}-${now.getMonth() + 1}`]: initialFolderId }
+      : {},
+  );
 
   const getFolderId = useCallback(async (m: number, y: number) => {
     const key = `${y}-${m}`;
@@ -60,28 +105,6 @@ export default function InvoiceScanner({
     return data.folderId;
   }, [folderEndpoint, extraHeaders]);
 
-  const detectInvoiceData = async (file: File): Promise<{ company: string | null; total: string | null }> => {
-    try {
-      setOcrStatus("Detectando empresa...");
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/scan/ocr", {
-        method: "POST",
-        headers: extraHeaders,
-        body: formData,
-      });
-
-      if (!res.ok) return { company: null, total: null };
-      const data = await res.json();
-      return { company: data.company || null, total: data.total || null };
-    } catch {
-      return { company: null, total: null };
-    } finally {
-      setOcrStatus(null);
-    }
-  };
-
   const handleCapture = () => {
     setError(null);
     fileInputRef.current?.click();
@@ -98,41 +121,36 @@ export default function InvoiceScanner({
       const folderId = await getFolderId(month, year);
 
       for (const file of Array.from(files)) {
-        // OCR: detect company name + total from image
-        const { company, total } = await detectInvoiceData(file);
+        setOcrStatus("Comprimiendo...");
+        const compressed = await compressImage(file);
 
-        const timestamp = Date.now();
-        const ext = file.name.split(".").pop() || "jpg";
-        const companySlug = company ? slugifyCompany(company) : null;
-        const totalSlug = total ? `_${total}eur` : "";
-        const fileName = companySlug
-          ? `${companySlug}${totalSlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`
-          : `factura${totalSlug}_${year}-${String(month).padStart(2, "0")}_${timestamp}.${ext}`;
-
+        setOcrStatus("Procesando...");
         const formData = new FormData();
-        formData.append("file", file, fileName);
+        formData.append("file", compressed);
         formData.append("folderId", folderId);
+        formData.append("month", String(month));
+        formData.append("year", String(year));
 
-        const res = await fetch(uploadEndpoint, {
+        const res = await fetch(processEndpoint, {
           method: "POST",
           headers: extraHeaders,
           body: formData,
         });
 
         if (!res.ok) {
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Error al subir");
         }
 
-        const driveFile = await res.json();
+        const result = await res.json();
         setUploads((prev) => [
           {
-            id: driveFile.id,
-            name: fileName,
-            company,
-            total,
-            webViewLink: driveFile.webViewLink,
-            timestamp,
+            id: result.id,
+            name: result.name,
+            company: result.company,
+            total: result.total,
+            webViewLink: result.webViewLink,
+            timestamp: Date.now(),
           },
           ...prev,
         ]);
@@ -141,6 +159,7 @@ export default function InvoiceScanner({
       setError(err instanceof Error ? err.message : "Error al subir la factura");
     } finally {
       setUploading(false);
+      setOcrStatus(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };

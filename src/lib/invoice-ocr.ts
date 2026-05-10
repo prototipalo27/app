@@ -14,7 +14,10 @@ export interface InvoiceOcrResult {
 const PROMPT =
   'Esta es una factura o ticket. Extrae: 1) nombre de la empresa que EMITE (proveedor, NO cliente), 2) importe TOTAL con IVA, 3) fecha de la factura. Responde SOLO JSON: {"company":"Nombre","total":"123.45","date":"2026-04-17"}. Si no detectas algo, pon null. Solo el JSON.';
 
-const MODEL = "claude-sonnet-4-20250514";
+// Haiku 4.5 es ~3x más rápido que Sonnet para esta tarea y suficiente
+// para extraer nombre + total + fecha de una factura. Lo importante aquí
+// es latencia, no razonamiento.
+const MODEL = "claude-haiku-4-5";
 
 function parseAndSanitize(rawText: string): InvoiceOcrResult {
   // Strip markdown code fences if Claude wraps the response

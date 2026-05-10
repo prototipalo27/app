@@ -238,6 +238,20 @@ export async function uploadFile(
 }
 
 /**
+ * Rename an existing Drive file. Used by the scan pipeline to set the
+ * final filename (which depends on OCR output) after uploading in
+ * parallel with the OCR call under a temporary name.
+ */
+export async function renameFile(fileId: string, newName: string): Promise<void> {
+  const drive = getDriveClient();
+  await drive.files.update({
+    fileId,
+    supportsAllDrives: true,
+    requestBody: { name: newName },
+  });
+}
+
+/**
  * Download a file's binary content from Drive.
  * Returns { buffer, mimeType, name }.
  */
