@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { searchContacts, createContact, updateContact, createProforma, getDocumentPdf } from "@/lib/holded/api";
+import { searchContacts, createContact, updateContact, createProforma, getDocument, getDocumentPdf } from "@/lib/holded/api";
 import { sendEmail } from "@/lib/email";
 
 interface BillingData {
@@ -140,6 +140,7 @@ export async function submitBillingData(
 
   // 4. Create proforma in Holded
   let holdedProformaId: string | null = null;
+  let holdedProformaDocNumber: string | null = null;
   const originalItems = (qr.items || []) as unknown as QuoteItem[];
   const items = data.items && data.items.length > 0
     ? originalItems.map((orig, i) => ({
@@ -172,6 +173,13 @@ export async function submitBillingData(
         notes: proformaNotes,
       });
       holdedProformaId = proforma.id;
+
+      try {
+        const doc = await getDocument("proform", proforma.id);
+        holdedProformaDocNumber = doc.docNumber || null;
+      } catch (e) {
+        console.error("[submitBillingData] failed to fetch docNumber:", e);
+      }
     } catch (e) {
       console.error("[submitBillingData] Holded proforma creation failed:", e);
     }
@@ -185,6 +193,7 @@ export async function submitBillingData(
       submitted_at: new Date().toISOString(),
       holded_contact_id: holdedContactId,
       holded_proforma_id: holdedProformaId,
+      holded_proforma_doc_number: holdedProformaDocNumber,
       payment_option: data.payment_option,
     })
     .eq("id", qr.id);
@@ -292,7 +301,10 @@ export async function submitBillingData(
         ? `Te adjuntamos la factura proforma correspondiente, para proceder al primer pago (50%) necesario para iniciar la produccion.`
         : `Te adjuntamos la factura proforma correspondiente, para proceder al pago total${isFullPayment ? " con un 5% de descuento por pago anticipado" : ""}.`;
 
-      const conceptoLine = isSplit ? "Prototipalo – Inicio de proyecto (50%)" : "Prototipalo – Proyecto completo";
+      const conceptoLine = holdedProformaDocNumber
+        ? `${holdedProformaDocNumber} – Prototipalo`
+        : "Prototipalo – Proyecto";
+      const proformaRef = holdedProformaDocNumber ? ` ${holdedProformaDocNumber}` : "";
 
       const onlinePayText = stripeCheckoutUrl
         ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
@@ -306,7 +318,7 @@ export async function submitBillingData(
       await sendEmail({
         to: lead.email,
         cc: ccString,
-        subject: "Proforma — Prototipalo",
+        subject: `Proforma${proformaRef} — Prototipalo`,
         signature: false,
         text: `Hola ${lead.full_name},\n\nMuchas gracias por confirmar el proyecto — estamos listos para empezar.\n\n${introText}\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nUna vez recibido el pago, comenzaremos la produccion de inmediato y te mantendremos informado del avance del proyecto.\n\nQuedamos atentos a cualquier duda.`,
         html: `
