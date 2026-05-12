@@ -416,139 +416,131 @@ export default function LeadActions({
         )}
       </div>
 
-      {/* Payment condition */}
+      {/* Atributos — todos los selectores compactos en una sola grid */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Condicion de pago
-        </h3>
-        <select
-          value={paymentCondition || ""}
-          onChange={(e) => {
-            const value = e.target.value || null;
-            startTransition(async () => {
-              await updatePaymentCondition(leadId, value);
-              router.refresh();
-            });
-          }}
-          disabled={isPending}
-          className={selectClass}
-        >
-          <option value="">Sin definir</option>
-          <option value="50-50">50-50 (dos plazos)</option>
-          <option value="100-5">100% (-5% dto)</option>
-          <option value="cash">Efectivo</option>
-        </select>
-      </div>
+        <h3 className="mb-2 text-sm font-semibold text-card-foreground">Atributos</h3>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          <Field label="Pago">
+            <select
+              value={paymentCondition || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updatePaymentCondition(leadId, value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            >
+              <option value="">Sin definir</option>
+              <option value="50-50">50-50</option>
+              <option value="100-5">100% (-5%)</option>
+              <option value="cash">Efectivo</option>
+            </select>
+          </Field>
 
-      {/* Desired delivery date */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Fecha de entrega deseada
-        </h3>
-        <input
-          type="date"
-          value={desiredDeliveryDate || ""}
-          onChange={(e) => {
-            const value = e.target.value || null;
-            startTransition(async () => {
-              await updateDesiredDeliveryDate(leadId, value);
-              router.refresh();
-            });
-          }}
-          disabled={isPending}
-          className={selectClass}
-        />
-      </div>
+          <Field label="Entrega">
+            <input
+              type="date"
+              value={desiredDeliveryDate || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updateDesiredDeliveryDate(leadId, value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            />
+          </Field>
 
-      {/* Project type tag */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Tipo de proyecto
-        </h3>
-        <select
-          value={projectTypeTag || ""}
-          onChange={(e) => {
-            const value = e.target.value || null;
-            startTransition(async () => {
-              await updateLeadTag(leadId, value);
-              router.refresh();
-            });
-          }}
-          disabled={isPending}
-          className={selectClass}
-        >
-          <option value="">Sin tipo</option>
-          {projectTemplateTags.map((tag) => (
-            <option key={tag} value={tag}>
-              {tag}
-            </option>
-          ))}
-        </select>
-      </div>
+          <Field label="Tipo" className="col-span-2">
+            <select
+              value={projectTypeTag || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updateLeadTag(leadId, value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            >
+              <option value="">Sin tipo</option>
+              {projectTemplateTags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-      {/* Estimation */}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-          Estimacion de valor
-        </h3>
-        <div className="space-y-2">
-          <select
-            value={estimatedQuantity || ""}
-            onChange={(e) => {
-              const value = e.target.value || null;
-              startTransition(async () => {
-                await updateEstimationField(leadId, "estimated_quantity", value);
-                router.refresh();
-              });
-            }}
-            disabled={isPending}
-            className={selectClass}
-          >
-            <option value="">Cantidad...</option>
-            {QUANTITY_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
+          <Field label="Cantidad">
+            <select
+              value={estimatedQuantity || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updateEstimationField(leadId, "estimated_quantity", value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            >
+              <option value="">—</option>
+              {QUANTITY_RANGES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </Field>
 
-          <select
-            value={estimatedComplexity || ""}
-            onChange={(e) => {
-              const value = e.target.value || null;
-              startTransition(async () => {
-                await updateEstimationField(leadId, "estimated_complexity", value);
-                router.refresh();
-              });
-            }}
-            disabled={isPending}
-            className={selectClass}
-          >
-            <option value="">Complejidad...</option>
-            {COMPLEXITY_OPTIONS.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+          <Field label="Complejidad">
+            <select
+              value={estimatedComplexity || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updateEstimationField(leadId, "estimated_complexity", value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            >
+              <option value="">—</option>
+              {COMPLEXITY_OPTIONS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </Field>
 
-          <select
-            value={estimatedUrgency || ""}
-            onChange={(e) => {
-              const value = e.target.value || null;
-              startTransition(async () => {
-                await updateEstimationField(leadId, "estimated_urgency", value);
-                router.refresh();
-              });
-            }}
-            disabled={isPending}
-            className={selectClass}
-          >
-            <option value="">Urgencia...</option>
-            {URGENCY_OPTIONS.map((u) => (
-              <option key={u.value} value={u.value}>{u.label}</option>
-            ))}
-          </select>
+          <Field label="Urgencia">
+            <select
+              value={estimatedUrgency || ""}
+              onChange={(e) => {
+                const value = e.target.value || null;
+                startTransition(async () => {
+                  await updateEstimationField(leadId, "estimated_urgency", value);
+                  router.refresh();
+                });
+              }}
+              disabled={isPending}
+              className={selectClass}
+            >
+              <option value="">—</option>
+              {URGENCY_OPTIONS.map((u) => (
+                <option key={u.value} value={u.value}>{u.label}</option>
+              ))}
+            </select>
+          </Field>
 
-          <div>
+          <Field label="Valor estimado">
             <div className="flex items-center gap-1.5">
-              <div className="relative">
+              <div className="relative flex-1">
                 <input
                   type="number"
                   min="0"
@@ -557,7 +549,7 @@ export default function LeadActions({
                   onChange={(e) => setEditedValue(e.target.value)}
                   placeholder="0"
                   disabled={isPending}
-                  className="h-8 w-28 rounded-lg border border-input bg-transparent px-2.5 pr-7 text-sm tabular-nums text-green-700 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:text-green-400"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 pr-7 text-sm tabular-nums text-green-700 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:text-green-400"
                 />
                 <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-green-700 dark:text-green-400">€</span>
               </div>
@@ -578,8 +570,7 @@ export default function LeadActions({
                 </Button>
               )}
             </div>
-            <span className="mt-1 block text-[11px] text-muted-foreground">valor estimado</span>
-          </div>
+          </Field>
         </div>
       </div>
 
@@ -1113,6 +1104,25 @@ export default function LeadActions({
         )}
       </div>
     </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }
 
