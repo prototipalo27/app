@@ -14,6 +14,7 @@ import AttachmentGallery from "./attachment-gallery";
 import EditableContactInfo from "./editable-contact-info";
 import InlineAssignSelect from "./inline-assign-select";
 import { FollowUpSection } from "./follow-up-section";
+import LeadRemarksSection from "./lead-remarks-section";
 import ProformaEditor from "./proforma-editor";
 import {
   LEAD_COLUMNS,
@@ -117,6 +118,45 @@ async function UtmSection({ leadId, leadSource }: { leadId: string; leadSource: 
             </div>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function RemarksSection({ leadId }: { leadId: string }) {
+  const supabase = await createClient();
+  const { data: remarks } = await supabase
+    .from("lead_remarks")
+    .select("id, content, photo_paths, created_at, created_by")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false });
+
+  const creatorIds = [...new Set((remarks || []).map((r) => r.created_by).filter((id): id is string => !!id))];
+  const userMap: Record<string, string> = {};
+  if (creatorIds.length > 0) {
+    const { data: users } = await supabase
+      .from("user_profiles")
+      .select("id, email")
+      .in("id", creatorIds);
+    users?.forEach((u) => {
+      userMap[u.id] = u.email.split("@")[0];
+    });
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <LeadRemarksSection
+          leadId={leadId}
+          remarks={(remarks || []).map((r) => ({
+            id: r.id,
+            content: r.content,
+            photo_paths: r.photo_paths || [],
+            created_at: r.created_at,
+            created_by: r.created_by,
+          }))}
+          userMap={userMap}
+        />
       </CardContent>
     </Card>
   );
@@ -583,6 +623,11 @@ export default async function LeadDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {/* Notas comerciales — justo debajo de la info del lead */}
+          <Suspense fallback={<CardSkeleton lines={2} />}>
+            <RemarksSection leadId={id} />
+          </Suspense>
 
           {/* Actions panel — appears here on mobile (before heavy sections), sidebar on desktop */}
           <div className="md:hidden">

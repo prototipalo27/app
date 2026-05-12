@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { subtractBusinessHours, leadHoursToDays } from "@/lib/business-days";
 import { updateDeliveryLeadHours, resyncAllDeliveries } from "./actions";
@@ -48,9 +48,22 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
   const [draftHours, setDraftHours] = useState(String(initialLeadHours));
   const [pending, startTransition] = useTransition();
   const [resyncMessage, setResyncMessage] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const lastJumpedQuery = useRef<string>("");
 
   const holidaySet = useMemo(() => new Set(holidays.map((h) => h.date)), [holidays]);
   const holidayMap = useMemo(() => new Map(holidays.map((h) => [h.date, h.name])), [holidays]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchIds = useMemo(() => {
+    if (!normalizedQuery) return null;
+    const ids = new Set<string>();
+    for (const p of projects) {
+      const haystack = `${p.name ?? ""} ${p.client_name ?? ""}`.toLowerCase();
+      if (haystack.includes(normalizedQuery)) ids.add(p.id);
+    }
+    return ids;
+  }, [normalizedQuery, projects]);
 
   // Para cada proyecto: día de entrega + día de inicio de preparación.
   const eventsByDate = useMemo(() => {
@@ -74,6 +87,40 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
   const month = currentDate.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfWeek(year, month);
+
+  // Si el usuario busca un proyecto que no está en el mes visible, saltar
+  // al mes de la primera coincidencia (entrega o preparación, la más temprana).
+  useEffect(() => {
+    if (!matchIds || matchIds.size === 0) {
+      lastJumpedQuery.current = normalizedQuery;
+      return;
+    }
+    if (lastJumpedQuery.current === normalizedQuery) return;
+
+    const monthStart = new Date(year, month, 1).getTime();
+    const monthEnd = new Date(year, month + 1, 1).getTime();
+
+    let earliest: { date: string; time: number } | null = null;
+    let hasInCurrentMonth = false;
+    for (const [dateStr, ev] of eventsByDate.entries()) {
+      const anyMatch =
+        ev.deliveries.some((p) => matchIds.has(p.id)) ||
+        ev.preps.some((p) => matchIds.has(p.id));
+      if (!anyMatch) continue;
+      const t = new Date(dateStr).getTime();
+      if (t >= monthStart && t < monthEnd) {
+        hasInCurrentMonth = true;
+        break;
+      }
+      if (!earliest || t < earliest.time) earliest = { date: dateStr, time: t };
+    }
+
+    if (!hasInCurrentMonth && earliest) {
+      const d = new Date(earliest.date);
+      setCurrentDate(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+    lastJumpedQuery.current = normalizedQuery;
+  }, [normalizedQuery, matchIds, eventsByDate, year, month]);
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
@@ -134,6 +181,28 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
           >
             Hoy
           </button>
+          <div className="relative">
+            <svg
+              className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+            </svg>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar proyecto o cliente..."
+              className="w-48 rounded-lg border border-zinc-300 bg-white py-1 pr-2 pl-7 text-xs text-zinc-900 placeholder-zinc-400 focus:border-brand focus:ring-1 focus:ring-brand focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+            />
+            {normalizedQuery && matchIds && matchIds.size === 0 && (
+              <span className="absolute top-full left-0 mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                Sin resultados
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -247,26 +316,36 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
                   {holidayName}
                 </p>
               )}
-              {events?.preps.map((p) => (
-                <button
-                  key={`prep-${p.id}`}
-                  onClick={() => router.push(`/dashboard/projects/${p.id}`)}
-                  className="mt-0.5 block w-full truncate rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-left text-[9px] font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
-                  title={`Empezar: ${p.client_name || p.name}`}
-                >
-                  ▶ {p.client_name || p.name}
-                </button>
-              ))}
-              {events?.deliveries.map((p) => (
-                <button
-                  key={`del-${p.id}`}
-                  onClick={() => router.push(`/dashboard/projects/${p.id}`)}
-                  className="mt-0.5 block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[9px] font-semibold text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
-                  title={`Entrega: ${p.client_name || p.name}`}
-                >
-                  ✓ {p.client_name || p.name}
-                </button>
-              ))}
+              {events?.preps.map((p) => {
+                const dimmed = matchIds !== null && !matchIds.has(p.id);
+                return (
+                  <button
+                    key={`prep-${p.id}`}
+                    onClick={() => router.push(`/dashboard/projects/${p.id}`)}
+                    className={`mt-0.5 block w-full truncate rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-left text-[9px] font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 ${
+                      dimmed ? "opacity-20 grayscale" : ""
+                    }`}
+                    title={`Empezar: ${p.client_name || p.name}`}
+                  >
+                    ▶ {p.client_name || p.name}
+                  </button>
+                );
+              })}
+              {events?.deliveries.map((p) => {
+                const dimmed = matchIds !== null && !matchIds.has(p.id);
+                return (
+                  <button
+                    key={`del-${p.id}`}
+                    onClick={() => router.push(`/dashboard/projects/${p.id}`)}
+                    className={`mt-0.5 block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[9px] font-semibold text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60 ${
+                      dimmed ? "opacity-20 grayscale" : ""
+                    }`}
+                    title={`Entrega: ${p.client_name || p.name}`}
+                  >
+                    ✓ {p.client_name || p.name}
+                  </button>
+                );
+              })}
             </div>
           );
         })}

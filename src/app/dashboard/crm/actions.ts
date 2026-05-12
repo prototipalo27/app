@@ -1056,6 +1056,93 @@ export async function addNote(id: string, content: string): Promise<{ success: b
   return { success: true };
 }
 
+// ── Lead Remarks (notas comerciales con fotos) ───────────
+
+const REMARK_PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const REMARK_PHOTO_MAX_FILES = 12;
+
+export async function createLeadRemark(
+  leadId: string,
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const content = ((formData.get("content") as string) || "").trim();
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+
+  if (!content && files.length === 0) {
+    return { success: false, error: "Escribe una nota o adjunta una foto" };
+  }
+  if (files.length > REMARK_PHOTO_MAX_FILES) {
+    return { success: false, error: `Máximo ${REMARK_PHOTO_MAX_FILES} fotos por nota` };
+  }
+  for (const f of files) {
+    if (f.size > REMARK_PHOTO_MAX_BYTES) {
+      return { success: false, error: `"${f.name}" supera 10 MB` };
+    }
+  }
+
+  const uploadedPaths: string[] = [];
+  for (const file of files) {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `${leadId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("lead-remarks")
+      .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+    if (uploadError) {
+      // Limpiar lo subido hasta ahora
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from("lead-remarks").remove(uploadedPaths);
+      }
+      return { success: false, error: uploadError.message };
+    }
+    uploadedPaths.push(path);
+  }
+
+  const { error: insertError } = await supabase.from("lead_remarks").insert({
+    lead_id: leadId,
+    content: content || null,
+    photo_paths: uploadedPaths,
+    created_by: profile.id,
+  });
+
+  if (insertError) {
+    if (uploadedPaths.length > 0) {
+      await supabase.storage.from("lead-remarks").remove(uploadedPaths);
+    }
+    return { success: false, error: insertError.message };
+  }
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
+export async function deleteLeadRemark(
+  remarkId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: remark } = await supabase
+    .from("lead_remarks")
+    .select("lead_id, photo_paths")
+    .eq("id", remarkId)
+    .single();
+
+  if (!remark) return { success: false, error: "Nota no encontrada" };
+
+  const { error } = await supabase.from("lead_remarks").delete().eq("id", remarkId);
+  if (error) return { success: false, error: error.message };
+
+  if (remark.photo_paths && remark.photo_paths.length > 0) {
+    await supabase.storage.from("lead-remarks").remove(remark.photo_paths);
+  }
+
+  revalidatePath(`/dashboard/crm/${remark.lead_id}`);
+  return { success: true };
+}
+
 // ── Send Email ───────────────────────────────────────────
 
 export async function sendLeadEmail(

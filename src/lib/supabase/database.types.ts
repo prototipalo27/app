@@ -375,33 +375,6 @@ export type Database = {
         }
         Relationships: []
       }
-      event_leads: {
-        Row: {
-          created_at: string
-          email: string
-          id: string
-          ip_hash: string | null
-          source: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          id?: string
-          ip_hash?: string | null
-          source?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          id?: string
-          ip_hash?: string | null
-          source?: string | null
-          user_agent?: string | null
-        }
-        Relationships: []
-      }
       employee_documents: {
         Row: {
           document_type: string
@@ -449,6 +422,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      event_leads: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_hash: string | null
+          source: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_hash?: string | null
+          source?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_hash?: string | null
+          source?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       financings: {
         Row: {
@@ -1021,6 +1021,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "lead_follow_ups_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_remarks: {
+        Row: {
+          content: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+          photo_paths: string[]
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+          photo_paths?: string[]
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+          photo_paths?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_remarks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_remarks_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
@@ -4358,3 +4403,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
