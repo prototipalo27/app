@@ -38,12 +38,60 @@ export default function LeadRemarksSection({ leadId, remarks, userMap }: Props) 
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ remarkId: string; index: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
-  const handleAddFiles = (newFiles: FileList | null) => {
+  const handleAddFiles = (newFiles: FileList | File[] | null) => {
     if (!newFiles) return;
-    const arr = Array.from(newFiles);
+    const arr = Array.from(newFiles).filter((f) => f.type.startsWith("image/"));
+    if (arr.length === 0) return;
     setFiles((prev) => [...prev, ...arr].slice(0, 12));
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    if (!showForm) setShowForm(true);
+    handleAddFiles(e.dataTransfer.files);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.files;
+    if (items && items.length > 0) {
+      const imgs = Array.from(items).filter((f) => f.type.startsWith("image/"));
+      if (imgs.length > 0) {
+        e.preventDefault();
+        if (!showForm) setShowForm(true);
+        handleAddFiles(imgs);
+      }
+    }
   };
 
   const removeFileAt = (i: number) => {
@@ -93,7 +141,20 @@ export default function LeadRemarksSection({ leadId, remarks, userMap }: Props) 
   const activeRemark = lightbox ? remarks.find((r) => r.id === lightbox.remarkId) : null;
 
   return (
-    <>
+    <div
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
+      className="relative"
+    >
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-brand bg-brand/10 backdrop-blur-sm">
+          <p className="text-sm font-semibold text-brand">Suelta las fotos aquí</p>
+        </div>
+      )}
+
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-card-foreground">Notas comerciales</h3>
@@ -134,13 +195,26 @@ export default function LeadRemarksSection({ leadId, remarks, userMap }: Props) 
             ))}
           </div>
 
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input bg-background px-3 py-4 text-xs text-muted-foreground transition-colors hover:border-brand hover:bg-accent hover:text-foreground"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            <span>Arrastra fotos aquí, pega con ⌘V o haz clic</span>
+          </button>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             multiple
-            onChange={(e) => handleAddFiles(e.target.files)}
-            className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-accent"
+            onChange={(e) => {
+              handleAddFiles(e.target.files);
+              if (e.target) e.target.value = "";
+            }}
+            className="hidden"
           />
 
           {files.length > 0 && (
@@ -295,6 +369,6 @@ export default function LeadRemarksSection({ leadId, remarks, userMap }: Props) 
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
