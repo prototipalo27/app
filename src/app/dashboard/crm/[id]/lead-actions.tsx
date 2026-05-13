@@ -92,6 +92,13 @@ export default function LeadActions({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  // Estado local del date picker: evita que router.refresh() resetee
+  // el valor controlado mientras el popup nativo sigue abierto (flicker).
+  const [localDeliveryDate, setLocalDeliveryDate] = useState(desiredDeliveryDate || "");
+  useEffect(() => {
+    setLocalDeliveryDate(desiredDeliveryDate || "");
+  }, [desiredDeliveryDate]);
+
   const [note, setNote] = useState("");
   const [showLostReason, setShowLostReason] = useState(false);
   const [lostReason, setLostReason] = useState("");
@@ -443,15 +450,16 @@ export default function LeadActions({
           <Field label="Entrega">
             <input
               type="date"
-              value={desiredDeliveryDate || ""}
+              value={localDeliveryDate}
               onChange={(e) => {
-                const value = e.target.value || null;
-                startTransition(async () => {
-                  await updateDesiredDeliveryDate(leadId, value);
-                  router.refresh();
+                const value = e.target.value;
+                setLocalDeliveryDate(value);
+                // Fire-and-forget: el estado local ya muestra la fecha al instante.
+                // El servidor ya hace revalidatePath; la próxima navegación trae datos frescos.
+                updateDesiredDeliveryDate(leadId, value || null).catch(() => {
+                  setLocalDeliveryDate(desiredDeliveryDate || "");
                 });
               }}
-              disabled={isPending}
               className={selectClass}
             />
           </Field>
@@ -816,11 +824,28 @@ export default function LeadActions({
                     </span>
                   )}
                 </Badge>
-                {quoteRequest.paid_amount && (
-                  <p className="text-xs text-muted-foreground">
-                    {Number(quoteRequest.paid_amount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} €
-                  </p>
-                )}
+                {quoteRequest.paid_amount && (() => {
+                  const paid = Number(quoteRequest.paid_amount);
+                  const fee = quoteRequest.stripe_fee_amount != null
+                    ? Number(quoteRequest.stripe_fee_amount)
+                    : null;
+                  const net = fee != null ? paid - fee : null;
+                  const fmt = (n: number) =>
+                    n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  return (
+                    <div className="text-xs text-muted-foreground">
+                      <p>{fmt(paid)} €</p>
+                      {fee != null && net != null && (
+                        <p className="mt-0.5 text-[11px]">
+                          <span className="text-zinc-500">Comisión Stripe </span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(fee)} €</span>
+                          <span className="text-zinc-500"> · neto al banco </span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(net)} €</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <>

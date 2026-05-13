@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useDroppable } from "@dnd-kit/react";
 import { COLUMNS, type ProjectStatus } from "@/lib/kanban-config";
 import { KanbanColumn } from "./kanban-column";
 import { updateProjectStatusById, discardProject } from "./projects/actions";
+import { sendProjectToStudio } from "./studio/actions";
 import type { ProjectWithItems } from "./kanban-card";
 
 const MAX_DELIVERED = 6;
@@ -47,10 +49,42 @@ function DiscardZone() {
   );
 }
 
+function StudioDropZone({ pending }: { pending: boolean }) {
+  const { ref, isDropTarget } = useDroppable({ id: "studio" });
+
+  return (
+    <Link
+      ref={ref as unknown as React.Ref<HTMLAnchorElement>}
+      href="/dashboard/studio"
+      title="Arrastra un proyecto aquí para mandarlo a Studio · Click para abrir"
+      className={`group flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-dashed px-2.5 py-1.5 text-xs font-medium transition-colors ${
+        isDropTarget
+          ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400"
+          : pending
+            ? "border-purple-400 bg-purple-50 text-purple-600 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-400"
+            : "border-zinc-300 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+      }`}
+    >
+      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2 7-7 7 7 2 2M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10" />
+      </svg>
+      <span>
+        {isDropTarget ? "Soltar para Studio" : pending ? "Enviando..." : "Studio"}
+      </span>
+    </Link>
+  );
+}
+
 export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {}, pmNames = {}, cityByProject = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
   const [search, setSearch] = useState("");
+  const [studioPending, setStudioPending] = useState(false);
+  const [studioFeedback, setStudioFeedback] = useState<
+    | { type: "success"; studioProjectId: string; name: string }
+    | { type: "error"; message: string }
+    | null
+  >(null);
 
   // Prevent body scroll while dragging
   useEffect(() => {
@@ -63,6 +97,13 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
       document.body.style.overflow = "";
     };
   }, [dragging]);
+
+  // Limpia el feedback de Studio a los 5s
+  useEffect(() => {
+    if (!studioFeedback) return;
+    const t = setTimeout(() => setStudioFeedback(null), 5000);
+    return () => clearTimeout(t);
+  }, [studioFeedback]);
 
   const handleDragStart = useCallback(() => {
     setDragging(true);
@@ -88,6 +129,27 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
             if (project) {
               setProjects((prev) => [...prev, project]);
             }
+          }
+        });
+        return;
+      }
+
+      // Handle studio drop — copia el proyecto a studio_projects sin tocar el original
+      if (targetId === "studio") {
+        const project = projects.find((p) => p.id === projectId);
+        if (!project) return;
+        setStudioPending(true);
+        setStudioFeedback(null);
+        sendProjectToStudio(projectId).then((result) => {
+          setStudioPending(false);
+          if (result.success) {
+            setStudioFeedback({
+              type: "success",
+              studioProjectId: result.studioProjectId,
+              name: project.name,
+            });
+          } else {
+            setStudioFeedback({ type: "error", message: result.error });
           }
         });
         return;
@@ -171,6 +233,22 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
             placeholder="Buscar proyecto, cliente, material..."
             className="w-full rounded-lg border border-zinc-300 bg-white py-2 pr-3 pl-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
           />
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          {studioFeedback?.type === "success" && (
+            <Link
+              href={`/dashboard/studio/${studioFeedback.studioProjectId}`}
+              className="truncate rounded-md bg-purple-50 px-2 py-1 text-[11px] font-medium text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+            >
+              ✓ &quot;{studioFeedback.name}&quot; en Studio — Ver
+            </Link>
+          )}
+          {studioFeedback?.type === "error" && (
+            <span className="truncate rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+              Error: {studioFeedback.message}
+            </span>
+          )}
+          <StudioDropZone pending={studioPending} />
         </div>
       </div>
       <div className="grid min-h-0 flex-1 auto-cols-[220px] grid-flow-col gap-3 overflow-x-auto md:grid-cols-4 md:auto-cols-auto md:gap-4">

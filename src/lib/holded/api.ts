@@ -372,6 +372,36 @@ export async function createInvoice(
   return (await res.json()) as { id: string };
 }
 
+// Registra un pago contra una factura en Holded. Tras esto la factura deja
+// de aparecer como pendiente/borrador en su UI y queda totalmente saldada
+// si el amount coincide con el total. La fecha se pasa en segundos UNIX.
+export async function payInvoice(
+  invoiceId: string,
+  payment: {
+    amount: number;
+    date?: number;
+    description?: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const body: Record<string, unknown> = {
+    amount: payment.amount,
+    date: payment.date ?? Math.floor(Date.now() / 1000),
+  };
+  if (payment.description) body.description = payment.description;
+
+  const res = await fetch(`${HOLDED_API_BASE}/documents/invoice/${invoiceId}/pay`, {
+    method: "POST",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, error: `Holded pay error: ${res.status} ${res.statusText} ${text}` };
+  }
+  return { ok: true };
+}
+
 /** Update a proforma with line items and optional notes */
 export async function updateProforma(
   documentId: string,

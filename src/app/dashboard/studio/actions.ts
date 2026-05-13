@@ -191,3 +191,50 @@ export async function deleteStudioPayment(formData: FormData) {
 
   revalidatePath(`/dashboard/studio/${projectId}`);
 }
+
+// Convierte un proyecto de producción en un proyecto Studio copiando los
+// campos relevantes. No modifica el proyecto original.
+export async function sendProjectToStudio(
+  projectId: string,
+): Promise<{ success: true; studioProjectId: string } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) return { success: false, error: "No autorizado" };
+
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select(
+      "name, description, client_name, client_email, holded_contact_id, price, project_manager_id, deadline, notes",
+    )
+    .eq("id", projectId)
+    .single();
+
+  if (projectError || !project) {
+    return { success: false, error: projectError?.message ?? "Proyecto no encontrado" };
+  }
+
+  const { data: studioProject, error: insertError } = await supabase
+    .from("studio_projects")
+    .insert({
+      name: project.name,
+      status: "brief",
+      client_name: project.client_name,
+      client_email: project.client_email,
+      holded_contact_id: project.holded_contact_id,
+      total_price: project.price,
+      project_manager_id: project.project_manager_id,
+      expected_end_date: project.deadline,
+      brief_description: project.description,
+      notes: project.notes,
+      created_by: userData.user.id,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !studioProject) {
+    return { success: false, error: insertError?.message ?? "Error al crear Studio" };
+  }
+
+  revalidatePath("/dashboard/studio");
+  return { success: true, studioProjectId: studioProject.id };
+}

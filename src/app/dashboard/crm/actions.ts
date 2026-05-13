@@ -3,11 +3,12 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
+import { after } from "next/server";
 import { requireRole, getUserProfile, hasRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument } from "@/lib/holded/api";
+import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
@@ -2013,28 +2014,32 @@ export async function updateDesiredDeliveryDate(
 
   if (error) return { success: false, error: error.message };
 
-  // Propagar a los proyectos vinculados (solo no entregados/descartados)
-  const newDeadline = date || null;
-  const { data: linkedProjects } = await supabase
-    .from("projects")
-    .update({ deadline: newDeadline })
-    .eq("lead_id", id)
-    .eq("project_type", "confirmed")
-    .neq("status", "delivered")
-    .select("id");
-
-  // Re-sync Google Calendar para cada proyecto afectado (fire-and-forget)
-  if (linkedProjects && linkedProjects.length > 0) {
-    const { syncProjectDeliveryEvents } = await import("@/lib/google-calendar/client");
-    for (const p of linkedProjects) {
-      syncProjectDeliveryEvents(p.id).catch(() => {});
-      revalidatePath(`/dashboard/projects/${p.id}`);
-    }
-    revalidatePath("/dashboard");
-    revalidatePath("/dashboard/entregas");
-  }
-
   revalidatePath(`/dashboard/crm/${id}`);
+
+  // Diferir la cascada al servidor: el cliente recibe la confirmación
+  // en cuanto se guarda el lead; la propagación a proyectos y la sync a
+  // Google Calendar suceden después de devolver la respuesta.
+  after(async () => {
+    const newDeadline = date || null;
+    const { data: linkedProjects } = await supabase
+      .from("projects")
+      .update({ deadline: newDeadline })
+      .eq("lead_id", id)
+      .eq("project_type", "confirmed")
+      .neq("status", "delivered")
+      .select("id");
+
+    if (linkedProjects && linkedProjects.length > 0) {
+      const { syncProjectDeliveryEvents } = await import("@/lib/google-calendar/client");
+      for (const p of linkedProjects) {
+        syncProjectDeliveryEvents(p.id).catch(() => {});
+        revalidatePath(`/dashboard/projects/${p.id}`);
+      }
+      revalidatePath("/dashboard");
+      revalidatePath("/dashboard/entregas");
+    }
+  });
+
   return { success: true };
 }
 
@@ -2510,7 +2515,7 @@ export async function sendInvoiceToClient(
 
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, holded_contact_id, holded_invoice_id, items, notes")
+    .select("id, holded_contact_id, holded_invoice_id, items, notes, payment_option")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -2531,14 +2536,16 @@ export async function sendInvoiceToClient(
     return { success: false, error: "No hay contacto de Holded vinculado" };
   }
 
-  // Load payment_condition from lead (source of truth) to mirror proforma terms in invoice
+  // Load payment_condition from lead (source of truth) to mirror proforma terms in invoice.
+  // Fallback: qr.payment_option === "full" also implies a 5% discount on the proforma.
   const { data: leadCondition } = await supabase
     .from("leads")
     .select("payment_condition")
     .eq("id", leadId)
     .single();
 
-  const applyDiscount = leadCondition?.payment_condition === "100-5";
+  const applyDiscount =
+    leadCondition?.payment_condition === "100-5" || qr.payment_option === "full";
   let invoiceId = qr.holded_invoice_id;
   if (!invoiceId) {
     try {
@@ -3551,9 +3558,13 @@ export async function onPaymentConfirmed(
 
   const items = (qr.items || []) as unknown as ProformaLineItem[];
 
-  // 1. Create invoice in Holded — mirror the proforma terms, including the 5% discount per line when applicable
-  const applyDiscount = (qr.leads as unknown as { payment_condition: string | null }).payment_condition === "100-5";
+  // 1. Create invoice in Holded — mirror the proforma terms, including the 5% discount per line when applicable.
+  // Discount triggers: lead.payment_condition === "100-5" (proforma-flow re-acceptance)
+  // OR qr.payment_option === "full" (quote-flow accepted with 100% upfront, which bakes 5% into the proforma).
+  const leadPaymentCondition = (qr.leads as unknown as { payment_condition: string | null }).payment_condition;
+  const applyDiscount = leadPaymentCondition === "100-5" || qr.payment_option === "full";
   let invoiceId = qr.holded_invoice_id;
+  let invoiceJustCreated = false;
   if (!invoiceId && qr.holded_contact_id) {
     try {
       const invoice = await createInvoice(qr.holded_contact_id, {
@@ -3567,12 +3578,40 @@ export async function onPaymentConfirmed(
         notes: qr.notes || undefined,
       });
       invoiceId = invoice.id;
+      invoiceJustCreated = true;
       await supabase
         .from("quote_requests")
         .update({ holded_invoice_id: invoiceId })
         .eq("id", qr.id);
     } catch (e) {
       console.error("[onPaymentConfirmed] Invoice creation failed:", e);
+    }
+  }
+
+  // 1.5. Si el pago vino por Stripe, registra el pago contra la factura
+  // en Holded. Así la factura queda definitiva y pagada (no como borrador
+  // pendiente) — el cliente recibe ya el PDF saldado con número de factura.
+  // Importante: la comisión Stripe es gasto interno; en Holded marcamos el
+  // total íntegro como pagado (el cliente pagó el total).
+  if (invoiceJustCreated && invoiceId && qr.stripe_payment_intent_id) {
+    try {
+      const docDetails = await getDocument("invoice", invoiceId);
+      const totalToPay = docDetails.total ?? Number(qr.paid_amount ?? 0);
+      const paidAtSec = qr.paid_at
+        ? Math.floor(new Date(qr.paid_at).getTime() / 1000)
+        : Math.floor(Date.now() / 1000);
+      if (totalToPay > 0) {
+        const result = await payInvoice(invoiceId, {
+          amount: totalToPay,
+          date: paidAtSec,
+          description: "Pago Stripe (tarjeta)",
+        });
+        if (!result.ok) {
+          console.error("[onPaymentConfirmed] payInvoice failed:", result.error);
+        }
+      }
+    } catch (e) {
+      console.error("[onPaymentConfirmed] Failed to register Stripe payment in Holded:", e);
     }
   }
 

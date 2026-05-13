@@ -120,15 +120,28 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
 
   // Update payment status
   const amountTotal = (session.amount_total || 0) / 100;
+  const paymentIntentId = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : null;
+
+  // Comisión Stripe: la fee real solo se conoce tras el balance_transaction,
+  // así que la traemos aquí y persistimos para reconciliar contra el ingreso
+  // neto que llega al banco (BBVA recibe total − comisión ~3 días después).
+  let stripeFee: number | null = null;
+  if (paymentIntentId) {
+    const { getStripePaymentBreakdown } = await import("@/lib/finance/stripe-fees");
+    const breakdown = await getStripePaymentBreakdown(paymentIntentId);
+    if (breakdown) stripeFee = breakdown.fee;
+  }
+
   await supabase
     .from("quote_requests")
     .update({
       payment_status: "paid",
       paid_at: new Date().toISOString(),
       paid_amount: amountTotal,
-      stripe_payment_intent_id: typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : null,
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_fee_amount: stripeFee,
     })
     .eq("id", quoteRequestId);
 

@@ -2412,6 +2412,7 @@ export type Database = {
           shipping_recipient_phone: string | null
           status: string
           stripe_checkout_session_id: string | null
+          stripe_fee_amount: number | null
           stripe_payment_intent_id: string | null
           submitted_at: string | null
           tax_id: string | null
@@ -2449,6 +2450,7 @@ export type Database = {
           shipping_recipient_phone?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          stripe_fee_amount?: number | null
           stripe_payment_intent_id?: string | null
           submitted_at?: string | null
           tax_id?: string | null
@@ -2486,6 +2488,7 @@ export type Database = {
           shipping_recipient_phone?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          stripe_fee_amount?: number | null
           stripe_payment_intent_id?: string | null
           submitted_at?: string | null
           tax_id?: string | null

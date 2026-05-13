@@ -199,18 +199,25 @@ export async function submitBillingData(
     .eq("id", qr.id);
 
   // 5b. Move lead to "won" (cliente ha aceptado el presupuesto)
+  // y sincroniza payment_condition con la opción de pago elegida — así la
+  // factura que se cree luego aplicará el descuento correcto del 5%.
   const { data: currentLead } = await supabase
     .from("leads")
     .select("status")
     .eq("id", qr.lead_id)
     .single();
 
+  const leadUpdate: Record<string, unknown> = {
+    payment_condition: isFullPayment ? "100-5" : "50-50",
+  };
   if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
-    await supabase
-      .from("leads")
-      .update({ status: "won", won_at: new Date().toISOString() })
-      .eq("id", qr.lead_id);
+    leadUpdate.status = "won";
+    leadUpdate.won_at = new Date().toISOString();
+  }
 
+  await supabase.from("leads").update(leadUpdate).eq("id", qr.lead_id);
+
+  if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
     await supabase.from("lead_activities").insert({
       lead_id: qr.lead_id,
       activity_type: "status_change",
