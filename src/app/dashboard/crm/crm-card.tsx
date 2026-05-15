@@ -6,6 +6,8 @@ import { useDraggable, useDroppable } from "@dnd-kit/react";
 import type { Tables } from "@/lib/supabase/database.types";
 import { tagClasses } from "@/lib/tag-colors";
 import { Badge } from "@/components/ui/badge";
+import { ShippingAddressModal } from "./shipping-address-modal";
+import { DeliveryDateModal } from "./delivery-date-modal";
 
 export { tagClasses };
 
@@ -93,6 +95,8 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
   };
   const [pinning, setPinning] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
 
   const canPin = lead.status === "quoted" || lead.is_pre_won;
 
@@ -116,7 +120,7 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
   const age = timeAgo(interactionDate);
   const hint = maturationHint(lead.status, interactionDate);
   const risk = deliveryRisk(lead);
-  const riskMessage = risk.isAtRisk
+  const cardTitle = risk.isAtRisk
     ? risk.missingShipping && risk.missingDeliveryDate
       ? "Falta dirección de envío y fecha de entrega"
       : risk.missingShipping
@@ -124,13 +128,19 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
         : "Falta fecha de entrega"
     : null;
 
+  const AlertIcon = () => (
+    <svg className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+    </svg>
+  );
+
   return (
     <div
       ref={setRef}
       onClick={() => {
         if (!isDragging) router.push(`/dashboard/crm/${lead.id}`);
       }}
-      title={riskMessage ?? undefined}
+      title={cardTitle ?? undefined}
       className={`relative cursor-grab rounded-lg border bg-card p-3 shadow-sm transition select-none ${
         isDragging ? "z-50 cursor-grabbing scale-[1.02] opacity-75 shadow-lg" : ""
       } ${isDropTarget && !isDragging ? "ring-2 ring-brand ring-offset-1" : ""} ${
@@ -199,13 +209,57 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
         </p>
       )}
 
-      {riskMessage && (
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-red-700 dark:text-red-400">
-          <svg className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-          </svg>
-          {riskMessage}
-        </p>
+      {risk.isAtRisk && (
+        <div className="mt-1.5 space-y-1">
+          {risk.missingShipping && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAddressModal(true);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex w-full items-center gap-1 rounded-sm text-left text-[11px] font-medium text-red-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 dark:text-red-400"
+            >
+              <AlertIcon />
+              Falta dirección de envío
+            </button>
+          )}
+          {risk.missingDeliveryDate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDateModal(true);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex w-full items-center gap-1 rounded-sm text-left text-[11px] font-medium text-red-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 dark:text-red-400"
+            >
+              <AlertIcon />
+              Falta fecha de entrega
+            </button>
+          )}
+        </div>
+      )}
+
+      {showAddressModal && (
+        <ShippingAddressModal
+          leadId={lead.id}
+          open={showAddressModal}
+          onOpenChange={setShowAddressModal}
+          initialPickup={Boolean(lead.pickup_in_person)}
+          defaultRecipientEmail={lead.email}
+          defaultRecipientPhone={lead.phone}
+        />
+      )}
+
+      {showDateModal && (
+        <DeliveryDateModal
+          leadId={lead.id}
+          open={showDateModal}
+          onOpenChange={setShowDateModal}
+          initialDate={lead.desired_delivery_date}
+        />
       )}
 
       <div className="mt-2 flex items-center gap-2">

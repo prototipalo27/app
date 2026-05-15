@@ -2420,6 +2420,7 @@ export type Database = {
           shipping_country: string | null
           shipping_postal_code: string | null
           shipping_province: string | null
+          shipping_recipient_email: string | null
           shipping_recipient_name: string | null
           shipping_recipient_phone: string | null
           status: string
@@ -2470,6 +2471,7 @@ export type Database = {
           shipping_country?: string | null
           shipping_postal_code?: string | null
           shipping_province?: string | null
+          shipping_recipient_email?: string | null
           shipping_recipient_name?: string | null
           shipping_recipient_phone?: string | null
           status?: string
@@ -2520,6 +2522,7 @@ export type Database = {
           shipping_country?: string | null
           shipping_postal_code?: string | null
           shipping_province?: string | null
+          shipping_recipient_email?: string | null
           shipping_recipient_name?: string | null
           shipping_recipient_phone?: string | null
           status?: string

@@ -3508,6 +3508,71 @@ export async function createStripeCheckout(
   return { success: true, url: session.url! };
 }
 
+// ── Shipping address (quick-edit from kanban) ───────────
+// Permite rellenar la dirección de envío directamente desde un popup en la
+// ficha del lead cuando salta la alerta roja de "Falta dirección de envío".
+// Escribe sobre el quote_request más reciente y, si se mete una dirección,
+// apaga el flag pickup_in_person (si estaba activo).
+
+export async function updateShippingAddress(
+  leadId: string,
+  data: {
+    address: string;
+    postalCode: string;
+    city: string;
+    province?: string;
+    country?: string;
+    recipientName?: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+  },
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const trimmedAddress = data.address.trim();
+  if (!trimmedAddress) return { success: false, error: "La dirección es obligatoria" };
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  const update: Record<string, unknown> = {
+    shipping_address: trimmedAddress,
+    shipping_postal_code: data.postalCode.trim() || null,
+    shipping_city: data.city.trim() || null,
+    shipping_province: data.province?.trim() || null,
+    shipping_country: data.country?.trim() || null,
+    pickup_in_person: false,
+  };
+  if (data.recipientName !== undefined) {
+    update.shipping_recipient_name = data.recipientName.trim() || null;
+  }
+  if (data.recipientPhone !== undefined) {
+    update.shipping_recipient_phone = data.recipientPhone.trim() || null;
+  }
+  if (data.recipientEmail !== undefined) {
+    update.shipping_recipient_email = data.recipientEmail.trim() || null;
+  }
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update(update)
+    .eq("id", qr.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
 // ── Pickup in person flag ───────────────────────────────
 // Silencia la alerta de "falta dirección de envío" cuando el cliente recoge
 // el proyecto en mano. Aplica sobre el quote_request más reciente del lead.
