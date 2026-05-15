@@ -17,6 +17,8 @@ import {
   sendInvoiceToClient,
   createStripeCheckout,
   markAsPaid,
+  requestSecondPayment,
+  setPickupInPerson,
   searchHoldedInvoices,
   linkInvoiceToLead,
   sendQuoteToClient,
@@ -108,9 +110,12 @@ export default function LeadActions({
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [docSent, setDocSent] = useState<string | null>(null);
   const [generatingPayLink, setGeneratingPayLink] = useState(false);
-  const [markingPaid, setMarkingPaid] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<null | "first_half" | "second_half" | "full">(null);
   const [paidDate, setPaidDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [requestingSecond, setRequestingSecond] = useState(false);
+  const [secondLink, setSecondLink] = useState<string | null>(null);
+  const [togglingPickup, setTogglingPickup] = useState(false);
   const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
   const [invoiceQuery, setInvoiceQuery] = useState("");
   const [invoiceResults, setInvoiceResults] = useState<{ id: string; docNumber: string; contactName: string; total: number; date: number }[]>([]);
@@ -810,121 +815,371 @@ export default function LeadActions({
       </div>
 
       {/* Payment section */}
-      {quoteRequest && Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0 && quoteRequest.holded_proforma_id && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-card-foreground">Pago</h3>
-          <div className="space-y-2">
-            {quoteRequest.payment_status === "paid" ? (
-              <div className="space-y-1">
-                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                  Pagado
-                  {quoteRequest.paid_at && (
-                    <span className="ml-1 font-normal">
-                      {formatDate(quoteRequest.paid_at)}
-                    </span>
-                  )}
-                </Badge>
-                {quoteRequest.paid_amount && (() => {
-                  const paid = Number(quoteRequest.paid_amount);
-                  const fee = quoteRequest.stripe_fee_amount != null
-                    ? Number(quoteRequest.stripe_fee_amount)
-                    : null;
-                  const net = fee != null ? paid - fee : null;
-                  const fmt = (n: number) =>
-                    n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  return (
+      {quoteRequest && Array.isArray(quoteRequest.items) && (quoteRequest.items as unknown[]).length > 0 && quoteRequest.holded_proforma_id && (() => {
+        const isSplit = quoteRequest.payment_option === "split";
+        const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const items = (quoteRequest.items as unknown as { price: number; units: number; tax: number }[]) || [];
+        const discount = quoteRequest.payment_option === "full" ? 0.95 : 1;
+        const subtotal = items.reduce((s, i) => s + i.price * i.units * discount, 0);
+        const taxTotal = items.reduce((s, i) => s + i.price * i.units * discount * (i.tax / 100), 0);
+        const grandTotal = subtotal + taxTotal;
+        const halfTotal = grandTotal * 0.5;
+
+        const firstPaidAmount = quoteRequest.first_paid_amount != null ? Number(quoteRequest.first_paid_amount) : null;
+        const firstFee = quoteRequest.first_stripe_fee_amount != null ? Number(quoteRequest.first_stripe_fee_amount) : null;
+        const secondPaidAmount = quoteRequest.second_paid_amount != null ? Number(quoteRequest.second_paid_amount) : null;
+        const secondFee = quoteRequest.second_stripe_fee_amount != null ? Number(quoteRequest.second_stripe_fee_amount) : null;
+        const secondRequested = quoteRequest.second_payment_requested_at;
+
+        // SPLIT — dos filas (primer 50% / segundo 50%)
+        if (isSplit) {
+          return (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-card-foreground">Pago (50% + 50%)</h3>
+              <div className="space-y-3">
+                {/* Primer 50% */}
+                <div className="rounded-md border border-border bg-card/50 p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-card-foreground">Primer 50%</span>
+                    {firstPaidAmount ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        Pagado
+                        {quoteRequest.first_paid_at && <span className="ml-1 font-normal">{formatDate(quoteRequest.first_paid_at)}</span>}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        Pendiente
+                      </Badge>
+                    )}
+                  </div>
+                  {firstPaidAmount ? (
                     <div className="text-xs text-muted-foreground">
-                      <p>{fmt(paid)} €</p>
-                      {fee != null && net != null && (
+                      <p>{fmt(firstPaidAmount)} €</p>
+                      {firstFee != null && (
                         <p className="mt-0.5 text-[11px]">
                           <span className="text-zinc-500">Comisión Stripe </span>
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(fee)} €</span>
-                          <span className="text-zinc-500"> · neto al banco </span>
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(net)} €</span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(firstFee)} €</span>
+                          <span className="text-zinc-500"> · neto </span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(firstPaidAmount - firstFee)} €</span>
                         </p>
                       )}
                     </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <>
-                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                  Pendiente de pago
-                </Badge>
-
-                <div className="flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={async () => {
-                      setGeneratingPayLink(true);
-                      setQuoteError(null);
-                      const result = await createStripeCheckout(leadId);
-                      setGeneratingPayLink(false);
-                      if (result.success && result.url) {
-                        setPaymentLink(result.url);
-                        navigator.clipboard.writeText(result.url);
-                      } else {
-                        setQuoteError(result.error || "Error");
-                      }
-                    }}
-                    disabled={generatingPayLink}
-                  >
-                    {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Link pago tarjeta"}
-                  </Button>
-
-                  <input
-                    type="date"
-                    value={paidDate}
-                    onChange={(e) => setPaidDate(e.target.value)}
-                    disabled={markingPaid}
-                    className="h-9 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-                    title="Fecha de pago"
-                  />
-
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      setMarkingPaid(true);
-                      setQuoteError(null);
-                      const iso = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : undefined;
-                      const result = await markAsPaid(leadId, iso);
-                      setMarkingPaid(false);
-                      if (result.success) {
-                        setDocSent("pago");
-                        router.refresh();
-                      } else {
-                        setQuoteError(result.error || "Error");
-                      }
-                    }}
-                    disabled={markingPaid}
-                    className="bg-green-600 text-white hover:bg-green-700"
-                  >
-                    {markingPaid ? "Procesando..." : "Marcar como pagado"}
-                  </Button>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(halfTotal)} €</span></p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={async () => {
+                            setGeneratingPayLink(true);
+                            setQuoteError(null);
+                            const result = await createStripeCheckout(leadId);
+                            setGeneratingPayLink(false);
+                            if (result.success && result.url) {
+                              setPaymentLink(result.url);
+                              navigator.clipboard.writeText(result.url);
+                            } else {
+                              setQuoteError(result.error || "Error");
+                            }
+                          }}
+                          disabled={generatingPayLink}
+                        >
+                          {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Link pago tarjeta"}
+                        </Button>
+                        <input
+                          type="date"
+                          value={paidDate}
+                          onChange={(e) => setPaidDate(e.target.value)}
+                          disabled={markingPaid !== null}
+                          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                          title="Fecha de pago"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            setMarkingPaid("first_half");
+                            setQuoteError(null);
+                            const iso = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : undefined;
+                            const result = await markAsPaid(leadId, iso, "first_half");
+                            setMarkingPaid(null);
+                            if (result.success) {
+                              router.refresh();
+                            } else {
+                              setQuoteError(result.error || "Error");
+                            }
+                          }}
+                          disabled={markingPaid !== null}
+                          className="bg-green-600 text-white hover:bg-green-700"
+                        >
+                          {markingPaid === "first_half" ? "Procesando..." : "Marcar 1º como pagado"}
+                        </Button>
+                      </div>
+                      {paymentLink && (
+                        <input
+                          readOnly
+                          value={paymentLink}
+                          onClick={(e) => {
+                            (e.target as HTMLInputElement).select();
+                            navigator.clipboard.writeText(paymentLink);
+                          }}
+                          className="w-full rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {paymentLink && (
-                  <input
-                    readOnly
-                    value={paymentLink}
-                    onClick={(e) => {
-                      (e.target as HTMLInputElement).select();
-                      navigator.clipboard.writeText(paymentLink);
-                    }}
-                    className="w-full rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
-                  />
-                )}
+                {/* Segundo 50% */}
+                <div className="rounded-md border border-border bg-card/50 p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-card-foreground">Segundo 50%</span>
+                    {secondPaidAmount ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        Pagado
+                        {quoteRequest.second_paid_at && <span className="ml-1 font-normal">{formatDate(quoteRequest.second_paid_at)}</span>}
+                      </Badge>
+                    ) : secondRequested ? (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        Solicitado {formatDate(secondRequested)}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        Pendiente
+                      </Badge>
+                    )}
+                  </div>
+                  {secondPaidAmount ? (
+                    <div className="text-xs text-muted-foreground">
+                      <p>{fmt(secondPaidAmount)} €</p>
+                      {secondFee != null && (
+                        <p className="mt-0.5 text-[11px]">
+                          <span className="text-zinc-500">Comisión Stripe </span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(secondFee)} €</span>
+                          <span className="text-zinc-500"> · neto </span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(secondPaidAmount - secondFee)} €</span>
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(halfTotal)} €</span></p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={async () => {
+                            setRequestingSecond(true);
+                            setQuoteError(null);
+                            const result = await requestSecondPayment(leadId);
+                            setRequestingSecond(false);
+                            if (result.success) {
+                              if (result.url) {
+                                setSecondLink(result.url);
+                                navigator.clipboard.writeText(result.url);
+                              }
+                              router.refresh();
+                            } else {
+                              setQuoteError(result.error || "Error");
+                            }
+                          }}
+                          disabled={requestingSecond || !firstPaidAmount}
+                          className="bg-brand text-white hover:bg-brand-dark"
+                          title={!firstPaidAmount ? "Aún no se ha cobrado el primer 50%" : undefined}
+                        >
+                          {requestingSecond
+                            ? "Enviando..."
+                            : secondRequested
+                              ? "Reenviar solicitud"
+                              : "Solicitar segundo pago"}
+                        </Button>
+                        <input
+                          type="date"
+                          value={paidDate}
+                          onChange={(e) => setPaidDate(e.target.value)}
+                          disabled={markingPaid !== null}
+                          className="h-9 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                          title="Fecha de pago"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            setMarkingPaid("second_half");
+                            setQuoteError(null);
+                            const iso = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : undefined;
+                            const result = await markAsPaid(leadId, iso, "second_half");
+                            setMarkingPaid(null);
+                            if (result.success) {
+                              router.refresh();
+                            } else {
+                              setQuoteError(result.error || "Error");
+                            }
+                          }}
+                          disabled={markingPaid !== null || !firstPaidAmount}
+                          className="bg-green-600 text-white hover:bg-green-700"
+                          title={!firstPaidAmount ? "Aún no se ha cobrado el primer 50%" : undefined}
+                        >
+                          {markingPaid === "second_half" ? "Procesando..." : "Marcar 2º como pagado"}
+                        </Button>
+                      </div>
+                      {secondLink && (
+                        <input
+                          readOnly
+                          value={secondLink}
+                          onClick={(e) => {
+                            (e.target as HTMLInputElement).select();
+                            navigator.clipboard.writeText(secondLink);
+                          }}
+                          className="w-full rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+                {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
+              </div>
+            </div>
+          );
+        }
 
-                {docSent === "pago" && (
-                  <p className="text-xs text-green-600 dark:text-green-400">
-                    Pago confirmado. Factura enviada y proyecto creado.
-                  </p>
-                )}
-              </>
-            )}
+        // FULL o sin payment_option — UI clásica de una sola fila
+        return (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-card-foreground">Pago</h3>
+            <div className="space-y-2">
+              {quoteRequest.payment_status === "paid" ? (
+                <div className="space-y-1">
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    Pagado
+                    {quoteRequest.paid_at && (
+                      <span className="ml-1 font-normal">
+                        {formatDate(quoteRequest.paid_at)}
+                      </span>
+                    )}
+                  </Badge>
+                  {quoteRequest.paid_amount && (() => {
+                    const paid = Number(quoteRequest.paid_amount);
+                    const fee = quoteRequest.stripe_fee_amount != null
+                      ? Number(quoteRequest.stripe_fee_amount)
+                      : null;
+                    const net = fee != null ? paid - fee : null;
+                    return (
+                      <div className="text-xs text-muted-foreground">
+                        <p>{fmt(paid)} €</p>
+                        {fee != null && net != null && (
+                          <p className="mt-0.5 text-[11px]">
+                            <span className="text-zinc-500">Comisión Stripe </span>
+                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(fee)} €</span>
+                            <span className="text-zinc-500"> · neto al banco </span>
+                            <span className="font-medium text-zinc-700 dark:text-zinc-300">{fmt(net)} €</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    Pendiente de pago
+                  </Badge>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        setGeneratingPayLink(true);
+                        setQuoteError(null);
+                        const result = await createStripeCheckout(leadId);
+                        setGeneratingPayLink(false);
+                        if (result.success && result.url) {
+                          setPaymentLink(result.url);
+                          navigator.clipboard.writeText(result.url);
+                        } else {
+                          setQuoteError(result.error || "Error");
+                        }
+                      }}
+                      disabled={generatingPayLink}
+                    >
+                      {generatingPayLink ? "Generando..." : paymentLink ? "Link copiado!" : "Link pago tarjeta"}
+                    </Button>
+
+                    <input
+                      type="date"
+                      value={paidDate}
+                      onChange={(e) => setPaidDate(e.target.value)}
+                      disabled={markingPaid !== null}
+                      className="h-9 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                      title="Fecha de pago"
+                    />
+
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        setMarkingPaid("full");
+                        setQuoteError(null);
+                        const iso = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : undefined;
+                        const result = await markAsPaid(leadId, iso, "full");
+                        setMarkingPaid(null);
+                        if (result.success) {
+                          setDocSent("pago");
+                          router.refresh();
+                        } else {
+                          setQuoteError(result.error || "Error");
+                        }
+                      }}
+                      disabled={markingPaid !== null}
+                      className="bg-green-600 text-white hover:bg-green-700"
+                    >
+                      {markingPaid === "full" ? "Procesando..." : "Marcar como pagado"}
+                    </Button>
+                  </div>
+
+                  {paymentLink && (
+                    <input
+                      readOnly
+                      value={paymentLink}
+                      onClick={(e) => {
+                        (e.target as HTMLInputElement).select();
+                        navigator.clipboard.writeText(paymentLink);
+                      }}
+                      className="w-full rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
+                    />
+                  )}
+
+                  {docSent === "pago" && (
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      Pago confirmado. Factura enviada y proyecto creado.
+                    </p>
+                  )}
+                  {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
+                </>
+              )}
+            </div>
           </div>
+        );
+      })()}
+
+      {/* Logística: recogida en persona silencia la alerta de "falta dirección" */}
+      {quoteRequest && (
+        <div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(quoteRequest.pickup_in_person)}
+              disabled={togglingPickup}
+              onChange={async (e) => {
+                const next = e.target.checked;
+                setTogglingPickup(true);
+                const result = await setPickupInPerson(leadId, next);
+                setTogglingPickup(false);
+                if (result.success) router.refresh();
+              }}
+              className="rounded border-zinc-300 text-brand focus:ring-brand-blue dark:border-zinc-700"
+            />
+            <span>Recogida en persona <span className="text-muted-foreground/70">(no necesita envío)</span></span>
+          </label>
         </div>
       )}
 

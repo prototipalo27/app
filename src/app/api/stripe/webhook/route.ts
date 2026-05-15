@@ -105,28 +105,35 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
     return;
   }
 
+  // Normalize: `split_50` was the original tag for the first 50% (split flow
+  // pre-rename). Treat any in-flight legacy session as a first half.
+  const rawType = session.metadata?.payment_type;
+  const tranche: "first_half" | "second_half" | "full" =
+    rawType === "split_50_second"
+      ? "second_half"
+      : rawType === "split_50_first" || rawType === "split_50"
+        ? "first_half"
+        : "full";
+
   const supabase = getSupabase();
 
-  // Idempotency: skip if already processed
+  // Idempotency: detect re-delivery of the same Stripe session per slot.
   const { data: existing } = await supabase
     .from("quote_requests")
-    .select("payment_status")
+    .select("payment_status, first_stripe_session_id, second_stripe_session_id, first_paid_amount")
     .eq("id", quoteRequestId)
     .single();
 
-  if (existing?.payment_status === "paid") {
-    return;
-  }
+  if (tranche === "second_half" && existing?.second_stripe_session_id === session.id) return;
+  if (tranche !== "second_half" && existing?.first_stripe_session_id === session.id) return;
+  if (tranche === "full" && existing?.payment_status === "paid") return;
 
-  // Update payment status
   const amountTotal = (session.amount_total || 0) / 100;
   const paymentIntentId = typeof session.payment_intent === "string"
     ? session.payment_intent
     : null;
 
-  // Comisión Stripe: la fee real solo se conoce tras el balance_transaction,
-  // así que la traemos aquí y persistimos para reconciliar contra el ingreso
-  // neto que llega al banco (BBVA recibe total − comisión ~3 días después).
+  // Comisión Stripe: la fee real solo se conoce tras el balance_transaction.
   let stripeFee: number | null = null;
   if (paymentIntentId) {
     const { getStripePaymentBreakdown } = await import("@/lib/finance/stripe-fees");
@@ -134,21 +141,55 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
     if (breakdown) stripeFee = breakdown.fee;
   }
 
-  await supabase
-    .from("quote_requests")
-    .update({
-      payment_status: "paid",
-      paid_at: new Date().toISOString(),
+  const nowIso = new Date().toISOString();
+
+  if (tranche === "second_half") {
+    // Sumamos cumulativo en los campos legacy para que cashflow/displays vean
+    // el total cobrado al final del flujo split.
+    const firstAmount = Number((existing as { first_paid_amount?: number | null })?.first_paid_amount ?? 0) || 0;
+    await supabase
+      .from("quote_requests")
+      .update({
+        second_paid_amount: amountTotal,
+        second_paid_at: nowIso,
+        second_stripe_session_id: session.id,
+        second_stripe_fee_amount: stripeFee,
+        payment_status: "paid",
+        paid_amount: firstAmount + amountTotal,
+        paid_at: nowIso,
+      })
+      .eq("id", quoteRequestId);
+  } else {
+    // first_half o full — escribimos slot legacy + slot first_*. payment_status
+    // payment_status solo pasa a 'paid' en full. En first_half el lead va a
+    // "Pagados" igual (lo decide onPaymentConfirmed), pero payment_status del
+    // QR queda null hasta que llegue también el segundo tramo.
+    const update: Record<string, unknown> = {
+      first_paid_amount: amountTotal,
+      first_paid_at: nowIso,
+      first_stripe_session_id: session.id,
+      first_stripe_fee_amount: stripeFee,
+      paid_at: nowIso,
       paid_amount: amountTotal,
       stripe_payment_intent_id: paymentIntentId,
       stripe_fee_amount: stripeFee,
-    })
-    .eq("id", quoteRequestId);
+    };
+    if (tranche === "full") {
+      update.payment_status = "paid";
+    }
+    await supabase.from("quote_requests").update(update).eq("id", quoteRequestId);
+  }
 
   // Get customer info for notification
   const customerEmail = session.customer_details?.email || session.customer_email || "Cliente";
+  const pushTitle =
+    tranche === "second_half"
+      ? "Segundo pago recibido"
+      : tranche === "first_half"
+        ? "Primer pago (50%) recibido"
+        : "Pago recibido";
   sendPushForEvent("payment_received", {
-    title: "Pago recibido",
+    title: pushTitle,
     body: `${customerEmail} ha pagado ${amountTotal.toFixed(2)} €`,
     url: "/dashboard/crm",
   });
@@ -156,7 +197,12 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
   // Trigger the auto-pipeline (invoice + project creation)
   try {
     const { onPaymentConfirmed } = await import("@/app/dashboard/crm/actions");
-    await onPaymentConfirmed(quoteRequestId, { useServiceRole: true });
+    await onPaymentConfirmed(quoteRequestId, {
+      useServiceRole: true,
+      tranche,
+      paymentAmount: amountTotal,
+      paymentIntentId,
+    });
   } catch (err) {
     console.error("[Stripe Webhook] onPaymentConfirmed failed:", err);
   }

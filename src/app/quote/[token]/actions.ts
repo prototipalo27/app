@@ -257,7 +257,7 @@ export async function submitBillingData(
       metadata: {
         lead_id: qr.lead_id,
         quote_request_id: qr.id,
-        payment_type: isSplit ? "split_50" : "full",
+        payment_type: isSplit ? "split_50_first" : "full",
       },
       success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/payment/cancel`,

@@ -3482,7 +3482,7 @@ export async function createStripeCheckout(
       price_data: { currency: "eur", product_data: { name: label }, unit_amount: chargeAmount },
       quantity: 1,
     }],
-    metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50" : "full" },
+    metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50_first" : "full" },
     success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/payment/cancel`,
   };
@@ -3508,11 +3508,277 @@ export async function createStripeCheckout(
   return { success: true, url: session.url! };
 }
 
+// ── Pickup in person flag ───────────────────────────────
+// Silencia la alerta de "falta dirección de envío" cuando el cliente recoge
+// el proyecto en mano. Aplica sobre el quote_request más reciente del lead.
+
+export async function setPickupInPerson(
+  leadId: string,
+  value: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({ pickup_in_person: value })
+    .eq("id", qr.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  revalidatePath("/dashboard/crm");
+  return { success: true };
+}
+
+// ── Request Second Payment (50/50 flow) ─────────────────
+// Cuando el cliente eligió "split" y ya pagó el primer 50%, este action
+// genera una proforma NUEVA en Holded para el segundo tramo (con su propio
+// docNumber → referencia de transferencia limpia para BBVA), crea una Stripe
+// Checkout Session con payment_type='split_50_second', y manda al cliente el
+// MISMO email que el primer pago (IBAN + datos de transferencia + botón
+// "Pagar con tarjeta" + PDF adjunto). Idempotente: si ya hay una proforma
+// segunda, reutiliza la URL de Stripe existente — siempre se puede reenviar.
+
+export async function requestSecondPayment(
+  leadId: string,
+): Promise<{ success: boolean; error?: string; url?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select(
+      "id, items, notes, payment_option, holded_contact_id, holded_proforma_doc_number, first_paid_amount, second_paid_at, second_holded_proforma_id, second_stripe_session_id, second_holded_proforma_doc_number, leads(id, full_name, email, payment_condition)",
+    )
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr) return { success: false, error: "No hay presupuesto" };
+  if (qr.payment_option !== "split") {
+    return { success: false, error: "Este presupuesto no es 50/50" };
+  }
+  if (qr.second_paid_at) {
+    return { success: false, error: "El segundo pago ya está cobrado" };
+  }
+  if (!qr.first_paid_amount) {
+    return { success: false, error: "Aún no se ha cobrado el primer 50%" };
+  }
+
+  const lead = qr.leads as unknown as { id: string; full_name: string; email: string | null };
+  if (!lead?.email) return { success: false, error: "Lead sin email" };
+
+  const items = (qr.items || []) as unknown as ProformaLineItem[];
+  if (items.length === 0) return { success: false, error: "Sin líneas de presupuesto" };
+
+  // Cálculo del segundo 50%. Split no aplica descuento del 5% — el precio es
+  // el de la lista original. Calculamos subtotal + IVA y guardamos en cents.
+  const subtotal = items.reduce((s, i) => s + i.price * i.units, 0);
+  const taxTotal = items.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
+  const grandTotal = subtotal + taxTotal;
+  const secondAmount = grandTotal * 0.5;
+  const chargeAmountCents = Math.round(secondAmount * 100);
+
+  // 1. Proforma nueva en Holded para el segundo tramo. Una sola línea con el
+  // 50% del subtotal (sin descuento) y el IVA medio de los items (asumimos
+  // homogéneo — en este negocio prácticamente todo va al 21%).
+  let secondProformaId = qr.second_holded_proforma_id ?? null;
+  let secondProformaDocNumber = qr.second_holded_proforma_doc_number ?? null;
+  const refToFirst = qr.holded_proforma_doc_number
+    ? ` (ref ${qr.holded_proforma_doc_number})`
+    : "";
+  const proformaConcept = `Segundo pago (50%) — Proyecto Prototipalo${refToFirst}`;
+  const avgTaxRate = items[0]?.tax ?? 21;
+  const proformaSubtotal = Math.round((subtotal * 0.5) * 100) / 100;
+
+  if (!secondProformaId && qr.holded_contact_id) {
+    try {
+      const proforma = await createProforma(qr.holded_contact_id, {
+        items: [{
+          name: proformaConcept,
+          units: 1,
+          subtotal: proformaSubtotal,
+          tax: avgTaxRate,
+        }],
+        notes: `Segundo 50% del proyecto. Referencia primer pago: ${qr.holded_proforma_doc_number ?? "—"}.`,
+      });
+      secondProformaId = proforma.id;
+      try {
+        const doc = await getDocument("proform", proforma.id);
+        secondProformaDocNumber = doc.docNumber || null;
+      } catch (e) {
+        console.error("[requestSecondPayment] failed to fetch second docNumber:", e);
+      }
+    } catch (e) {
+      console.error("[requestSecondPayment] Holded proforma creation failed:", e);
+      return { success: false, error: "Error al crear proforma" };
+    }
+  }
+
+  // 2. Stripe Checkout Session — payment_type='split_50_second'.
+  let stripeCheckoutUrl: string | null = null;
+  let stripeSessionId: string | null = qr.second_stripe_session_id ?? null;
+  try {
+    const Stripe = (await import("stripe")).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+    // Si ya hay una sesión guardada de un intento anterior, intentamos
+    // recuperarla en vez de crear otra (evita múltiples links activos).
+    if (stripeSessionId) {
+      try {
+        const existing = await stripe.checkout.sessions.retrieve(stripeSessionId);
+        if (existing.status === "open" && existing.url) {
+          stripeCheckoutUrl = existing.url;
+        }
+      } catch {
+        // Sesión expirada o inexistente — creamos una nueva.
+        stripeSessionId = null;
+      }
+    }
+
+    if (!stripeCheckoutUrl) {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+      const existingCust = await stripe.customers.list({ email: lead.email, limit: 1 });
+      const stripeCust = existingCust.data.length > 0
+        ? existingCust.data[0]
+        : await stripe.customers.create({ email: lead.email, name: lead.full_name });
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer: stripeCust.id,
+        line_items: [{
+          price_data: {
+            currency: "eur",
+            product_data: { name: "Segundo pago (50%) — Proyecto Prototipalo" },
+            unit_amount: chargeAmountCents,
+          },
+          quantity: 1,
+        }],
+        metadata: {
+          lead_id: leadId,
+          quote_request_id: qr.id,
+          payment_type: "split_50_second",
+        },
+        success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/payment/cancel`,
+      });
+      stripeCheckoutUrl = session.url;
+      stripeSessionId = session.id;
+    }
+  } catch (e) {
+    console.error("[requestSecondPayment] Stripe checkout failed:", e);
+  }
+
+  // 3. Persistir IDs antes de mandar email (si el email falla podemos
+  // reintentarlo más tarde sin perder la proforma/sesión).
+  await supabase
+    .from("quote_requests")
+    .update({
+      second_holded_proforma_id: secondProformaId,
+      second_holded_proforma_doc_number: secondProformaDocNumber,
+      second_stripe_session_id: stripeSessionId,
+      second_payment_requested_at: new Date().toISOString(),
+    })
+    .eq("id", qr.id);
+
+  // 4. Email — replica EXACTAMENTE el del primer pago (mismo layout y CTA).
+  if (secondProformaId) {
+    try {
+      const pdfBuffer = await getDocumentPdf("proform", secondProformaId);
+      const formattedAmount = secondAmount.toLocaleString("es-ES", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      const conceptoLine = secondProformaDocNumber
+        ? `${secondProformaDocNumber} – Prototipalo`
+        : "Prototipalo – Segundo pago";
+      const proformaRef = secondProformaDocNumber ? ` ${secondProformaDocNumber}` : "";
+      const onlinePayText = stripeCheckoutUrl
+        ? `\n\nTambien puedes completar el pago de forma rapida mediante tarjeta:\n${stripeCheckoutUrl}`
+        : "";
+
+      await sendEmail({
+        to: lead.email,
+        subject: `Segundo pago${proformaRef} — Prototipalo`,
+        signature: false,
+        text: `Hola ${lead.full_name},\n\nTu proyecto está casi listo para envío. Te adjuntamos la proforma del segundo 50% para completar el pago antes de la entrega.\n\nImporte: ${formattedAmount} €\nConcepto: ${conceptoLine}\n\nPuedes realizar el pago mediante transferencia bancaria utilizando la referencia indicada:\n\nBanco: BBVA\nTitular: Prototipalo\nIBAN: ES24 0182 4010 3502 0181 5556\nSWIFT/BIC: BBVAESMM${onlinePayText}\n\nEn cuanto recibamos el pago procedemos con el envío.\n\nQuedamos atentos a cualquier duda.`,
+        html: `
+          <p>Hola ${lead.full_name},</p>
+          <p>Tu proyecto está casi listo para envío. Te adjuntamos la proforma del <strong>segundo 50%</strong> para completar el pago antes de la entrega.</p>
+          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Importe</td><td style="padding:0;font-weight:600;">${formattedAmount} €</td></tr>
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Concepto</td><td style="padding:0;font-weight:600;">${conceptoLine}</td></tr>
+          </table>
+          <p>Puedes realizar el pago mediante <strong>transferencia bancaria</strong> utilizando la referencia indicada:</p>
+          <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 20px;font-size:14px;line-height:1.8;">
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Banco</td><td style="padding:0;font-weight:600;">BBVA</td></tr>
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">Titular</td><td style="padding:0;font-weight:600;">Prototipalo</td></tr>
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">IBAN</td><td style="padding:0;font-weight:600;">ES24 0182 4010 3502 0181 5556</td></tr>
+            <tr><td style="padding:0 16px 0 0;color:#71717a;white-space:nowrap;">SWIFT/BIC</td><td style="padding:0;font-weight:600;">BBVAESMM</td></tr>
+          </table>
+          ${stripeCheckoutUrl ? `<p>Tambien puedes completar el pago de forma rapida mediante tarjeta a traves del siguiente enlace:</p><p style="margin:16px 0;"><a href="${stripeCheckoutUrl}" style="display:inline-block;padding:14px 28px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Pagar con tarjeta</a></p>` : ""}
+          <p>En cuanto recibamos el pago procedemos con el envío.</p>
+          <p>Quedamos atentos a cualquier duda.</p>
+          <br>
+          <table cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#333333;line-height:1.6;">
+            <tr><td style="padding-bottom:10px;"><strong style="font-size:12px;color:#1a1a1a;">El equipo de Prototipalo</strong></td></tr>
+            <tr><td style="padding-bottom:2px;">Viriato 27 &bull; 28010 Madrid</td></tr>
+            <tr><td style="padding-bottom:11px;"><a href="https://prototipalo.com" style="color:#2563eb;text-decoration:underline;">Prototipalo.com</a></td></tr>
+            <tr><td style="padding-top:11px;"><a href="https://prototipalo.com" style="text-decoration:none;"><img src="https://rqqwvgdmbmgdbegpcvmz.supabase.co/storage/v1/object/public/assets/logo-email.png" alt="prototipalo — better in 3d" width="224" height="auto" style="display:block;" /></a></td></tr>
+          </table>
+        `,
+        attachments: pdfBuffer && pdfBuffer.length > 0
+          ? [{ filename: "Proforma-segundo-pago-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+          : undefined,
+      });
+    } catch (e) {
+      console.error("[requestSecondPayment] Email send failed:", e);
+    }
+  }
+
+  await supabase.from("lead_activities").insert({
+    lead_id: leadId,
+    activity_type: "email_sent",
+    content: `Recordatorio del segundo 50% enviado al cliente${secondProformaDocNumber ? ` (proforma ${secondProformaDocNumber})` : ""}.`,
+    metadata: {
+      second_proforma_id: secondProformaId,
+      second_proforma_doc_number: secondProformaDocNumber,
+      stripe_session_id: stripeSessionId,
+    },
+  });
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true, url: stripeCheckoutUrl ?? undefined };
+}
+
 // ── On Payment Confirmed (auto-pipeline) ────────────────
 
 export async function onPaymentConfirmed(
   quoteRequestId: string,
-  { useServiceRole = false }: { useServiceRole?: boolean } = {},
+  {
+    useServiceRole = false,
+    tranche = "full",
+    paymentAmount,
+    paymentIntentId,
+  }: {
+    useServiceRole?: boolean;
+    tranche?: "full" | "first_half" | "second_half";
+    paymentAmount?: number;
+    paymentIntentId?: string | null;
+  } = {},
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   const supabase = useServiceRole ? createServiceClient() : await createClient();
 
@@ -3525,42 +3791,39 @@ export async function onPaymentConfirmed(
 
   if (!qr) return { success: false, error: "Quote request not found" };
 
-  // Idempotency: check if a project already exists for this quote_request
-  const { data: existingProject } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("lead_id", (qr.leads as any).id)
-    .eq("holded_invoice_id", qr.holded_invoice_id ?? "")
-    .limit(1)
-    .maybeSingle();
-
-  // Broader check: any project linked to this lead with type "confirmed"
-  if (!existingProject) {
-    const { data: confirmedProject } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("lead_id", (qr.leads as any).id)
-      .eq("project_type", "confirmed")
-      .limit(1)
-      .maybeSingle();
-
-    if (confirmedProject) {
-      return { success: true, projectId: confirmedProject.id };
-    }
-  } else {
-    return { success: true, projectId: existingProject.id };
-  }
-
   const lead = qr.leads as unknown as {
     id: string; full_name: string; company: string | null;
     email: string | null; phone: string | null; attachments: string | null; message: string | null;
   };
 
+  // Project: en first_half y full lo creamos si no existe. En second_half no
+  // debe crearse uno nuevo — confiamos en el que se creó al cobrar el primer
+  // tramo. Si no existe (edge case legacy), lo creamos también.
+  const { data: existingProjectByInvoice } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("lead_id", lead.id)
+    .eq("holded_invoice_id", qr.holded_invoice_id ?? "")
+    .limit(1)
+    .maybeSingle();
+
+  const { data: existingConfirmedProject } = !existingProjectByInvoice
+    ? await supabase
+        .from("projects")
+        .select("id")
+        .eq("lead_id", lead.id)
+        .eq("project_type", "confirmed")
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
+  const existingProjectId =
+    existingProjectByInvoice?.id ?? existingConfirmedProject?.id ?? null;
+
   const items = (qr.items || []) as unknown as ProformaLineItem[];
 
-  // 1. Create invoice in Holded — mirror the proforma terms, including the 5% discount per line when applicable.
-  // Discount triggers: lead.payment_condition === "100-5" (proforma-flow re-acceptance)
-  // OR qr.payment_option === "full" (quote-flow accepted with 100% upfront, which bakes 5% into the proforma).
+  // 1. Crear factura en Holded si todavía no existe (puede pasar en
+  // first_half o full; en second_half normalmente ya existe).
   const leadPaymentCondition = (qr.leads as unknown as { payment_condition: string | null }).payment_condition;
   const applyDiscount = leadPaymentCondition === "100-5" || qr.payment_option === "full";
   let invoiceId = qr.holded_invoice_id;
@@ -3588,23 +3851,35 @@ export async function onPaymentConfirmed(
     }
   }
 
-  // 1.5. Si el pago vino por Stripe, registra el pago contra la factura
-  // en Holded. Así la factura queda definitiva y pagada (no como borrador
-  // pendiente) — el cliente recibe ya el PDF saldado con número de factura.
-  // Importante: la comisión Stripe es gasto interno; en Holded marcamos el
-  // total íntegro como pagado (el cliente pagó el total).
-  if (invoiceJustCreated && invoiceId && qr.stripe_payment_intent_id) {
+  // 1.5. Registrar el pago contra la factura en Holded.
+  // - full: pago íntegro del total de la factura
+  // - first_half: solo el 50% (paymentAmount) — la factura queda como
+  //   parcialmente pagada en Holded hasta que llegue el segundo tramo
+  // - second_half: el 50% restante (paymentAmount) — cierra la factura
+  if (invoiceId && (paymentIntentId ?? qr.stripe_payment_intent_id)) {
     try {
-      const docDetails = await getDocument("invoice", invoiceId);
-      const totalToPay = docDetails.total ?? Number(qr.paid_amount ?? 0);
+      let amountToRegister: number;
+      if (tranche === "full") {
+        // Mantén la lógica histórica: registra el total exacto de la factura
+        // (incluye IVA, redondeos de Holded, etc.).
+        const docDetails = await getDocument("invoice", invoiceId);
+        amountToRegister = docDetails.total ?? Number(paymentAmount ?? qr.paid_amount ?? 0);
+      } else {
+        amountToRegister = Number(paymentAmount ?? 0);
+      }
       const paidAtSec = qr.paid_at
         ? Math.floor(new Date(qr.paid_at).getTime() / 1000)
         : Math.floor(Date.now() / 1000);
-      if (totalToPay > 0) {
+      if (amountToRegister > 0 && (invoiceJustCreated || tranche !== "full")) {
+        const description = tranche === "second_half"
+          ? "Segundo pago Stripe (tarjeta)"
+          : tranche === "first_half"
+            ? "Primer pago Stripe (tarjeta) — 50%"
+            : "Pago Stripe (tarjeta)";
         const result = await payInvoice(invoiceId, {
-          amount: totalToPay,
+          amount: amountToRegister,
           date: paidAtSec,
-          description: "Pago Stripe (tarjeta)",
+          description,
         });
         if (!result.ok) {
           console.error("[onPaymentConfirmed] payInvoice failed:", result.error);
@@ -3615,8 +3890,12 @@ export async function onPaymentConfirmed(
     }
   }
 
-  // 2. Send invoice by email
-  if (invoiceId && lead.email) {
+  // 2. Email de la factura. Para split solo enviamos al primer tramo
+  // (la factura ya está creada y el cliente la recibe). En el segundo no
+  // re-enviamos PDF — solo se actualiza estado.
+  const shouldSendInvoiceEmail =
+    invoiceId && lead.email && (tranche === "full" || tranche === "first_half") && invoiceJustCreated;
+  if (shouldSendInvoiceEmail && invoiceId && lead.email) {
     try {
       const pdfBuffer = await getDocumentPdf("invoice", invoiceId);
       await sendEmailOrSchedule({
@@ -3633,61 +3912,74 @@ export async function onPaymentConfirmed(
     }
   }
 
-  // 3. Create project
-  const projectName = lead.company || lead.full_name;
-  const { data: newProject, error: projectError } = await supabase
-    .from("projects")
-    .insert({
-      name: projectName,
-      description: lead.message || null,
-      project_type: "confirmed",
-      status: "pending",
-      lead_id: lead.id,
-      holded_contact_id: qr.holded_contact_id,
-      holded_invoice_id: invoiceId,
-      client_name: lead.full_name,
-      client_email: lead.email,
-      deadline: (lead as { desired_delivery_date?: string | null }).desired_delivery_date ?? null,
-      payment_option: qr.payment_option ?? null,
-    })
-    .select("id")
-    .single();
+  // 3. Crear proyecto si no existe (first_half o full). En second_half
+  // reutilizamos el que ya hay.
+  let projectId = existingProjectId;
+  if (!projectId) {
+    const projectName = lead.company || lead.full_name;
+    const { data: newProject, error: projectError } = await supabase
+      .from("projects")
+      .insert({
+        name: projectName,
+        description: lead.message || null,
+        project_type: "confirmed",
+        status: "pending",
+        lead_id: lead.id,
+        holded_contact_id: qr.holded_contact_id,
+        holded_invoice_id: invoiceId,
+        client_name: lead.full_name,
+        client_email: lead.email,
+        deadline: (lead as { desired_delivery_date?: string | null }).desired_delivery_date ?? null,
+        payment_option: qr.payment_option ?? null,
+      })
+      .select("id")
+      .single();
 
-  if (projectError) {
-    console.error("[onPaymentConfirmed] Project creation failed:", projectError);
-    return { success: false, error: projectError.message };
+    if (projectError) {
+      console.error("[onPaymentConfirmed] Project creation failed:", projectError);
+      return { success: false, error: projectError.message };
+    }
+    projectId = newProject.id;
+
+    // 4. Copiar adjuntos del lead al briefing del proyecto recién creado.
+    if (lead.attachments) {
+      copyLeadAttachmentsToBriefing(lead.id, projectId, supabase).catch((err) => {
+        console.error("[onPaymentConfirmed] Attachment copy failed:", err);
+      });
+    }
   }
 
-  // 4. Copy lead attachments to Briefing (fire-and-forget)
-  if (lead.attachments && newProject) {
-    copyLeadAttachmentsToBriefing(lead.id, newProject.id, supabase).catch((err) => {
-      console.error("[onPaymentConfirmed] Attachment copy failed:", err);
-    });
-  }
-
-  // 5. Change lead to "paid"
+  // 5. Estado del lead → "paid" en cuanto entra cualquier pago. El detalle
+  // de si está al 50% o 100% se infiere de quote_requests (second_paid_at).
   await supabase
     .from("leads")
     .update({ status: "paid" })
     .eq("id", lead.id);
 
-  // 6. Log activity
+  // 6. Activity log.
+  const activityContent =
+    tranche === "first_half"
+      ? "Primer 50% recibido. Factura creada y proyecto iniciado. Pendiente segundo 50% antes del envio."
+      : tranche === "second_half"
+        ? "Segundo 50% recibido. Factura totalmente saldada."
+        : "Pago confirmado. Factura enviada y proyecto creado automaticamente.";
   await supabase.from("lead_activities").insert({
     lead_id: lead.id,
     activity_type: "status_change",
-    content: "Pago confirmado. Factura enviada y proyecto creado automaticamente.",
+    content: activityContent,
     metadata: {
       old_status: "won",
       new_status: "paid",
       auto: true,
-      project_id: newProject.id,
+      tranche,
+      project_id: projectId,
       holded_invoice_id: invoiceId,
     },
   });
 
   revalidatePath(`/dashboard/crm/${lead.id}`);
   revalidatePath("/dashboard");
-  return { success: true, projectId: newProject.id };
+  return { success: true, projectId: projectId ?? undefined };
 }
 
 // ── Mark as Paid (manual transfer) ──────────────────────
@@ -3695,13 +3987,16 @@ export async function onPaymentConfirmed(
 export async function markAsPaid(
   leadId: string,
   paidAt?: string,
+  tranche: "full" | "first_half" | "second_half" = "full",
 ): Promise<{ success: boolean; error?: string; projectId?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, items, payment_option")
+    .select(
+      "id, items, payment_option, first_paid_amount, second_paid_amount, paid_amount, first_paid_at",
+    )
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -3712,18 +4007,39 @@ export async function markAsPaid(
   const items = (qr.items || []) as unknown as ProformaLineItem[];
   const isFull = qr.payment_option === "full";
   const discountFactor = isFull ? 0.95 : 1;
-  const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+  const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
+  const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
+  const grandTotal = subtotal + taxTotal;
+  const nowIso = paidAt ?? new Date().toISOString();
 
-  await supabase
-    .from("quote_requests")
-    .update({
-      payment_status: "paid",
-      paid_at: paidAt ?? new Date().toISOString(),
-      paid_amount: total,
-    })
-    .eq("id", qr.id);
+  const update: Record<string, unknown> = {};
+  let paymentAmount = grandTotal;
 
-  const result = await onPaymentConfirmed(qr.id);
+  if (tranche === "first_half") {
+    paymentAmount = grandTotal * 0.5;
+    update.first_paid_amount = paymentAmount;
+    update.first_paid_at = nowIso;
+    update.paid_at = nowIso;
+    update.paid_amount = paymentAmount;
+  } else if (tranche === "second_half") {
+    paymentAmount = grandTotal * 0.5;
+    const firstPaid = Number(qr.first_paid_amount ?? paymentAmount);
+    update.second_paid_amount = paymentAmount;
+    update.second_paid_at = nowIso;
+    update.payment_status = "paid";
+    update.paid_amount = firstPaid + paymentAmount;
+    update.paid_at = nowIso;
+  } else {
+    update.payment_status = "paid";
+    update.paid_at = nowIso;
+    update.paid_amount = grandTotal;
+    update.first_paid_amount = grandTotal;
+    update.first_paid_at = nowIso;
+  }
+
+  await supabase.from("quote_requests").update(update).eq("id", qr.id);
+
+  const result = await onPaymentConfirmed(qr.id, { tranche, paymentAmount });
   return result;
 }
 

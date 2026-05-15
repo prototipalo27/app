@@ -59,14 +59,22 @@ export default async function CrmPage() {
   const supabase = createServiceClient();
   const { data: paidQuotes } = await supabase
     .from("quote_requests")
-    .select("lead_id, paid_at")
-    .eq("payment_status", "paid")
-    .not("paid_at", "is", null)
-    .order("paid_at", { ascending: false });
+    .select("lead_id, paid_at, shipping_address, first_paid_at, second_paid_at, payment_option, pickup_in_person")
+    .or("payment_status.eq.paid,first_paid_at.not.is.null")
+    .order("created_at", { ascending: false });
   const paidAtMap: Record<string, string> = {};
+  const shippingAddressMap: Record<string, string | null> = {};
+  const pickupMap: Record<string, boolean> = {};
+  const pendingSecondHalfMap: Record<string, boolean> = {};
   for (const q of paidQuotes || []) {
-    if (!q.lead_id || !q.paid_at) continue;
-    if (!paidAtMap[q.lead_id]) paidAtMap[q.lead_id] = q.paid_at;
+    if (!q.lead_id) continue;
+    if (q.paid_at && !paidAtMap[q.lead_id]) paidAtMap[q.lead_id] = q.paid_at;
+    if (!(q.lead_id in shippingAddressMap)) {
+      shippingAddressMap[q.lead_id] = q.shipping_address ?? null;
+      pickupMap[q.lead_id] = Boolean(q.pickup_in_person);
+      pendingSecondHalfMap[q.lead_id] =
+        q.payment_option === "split" && !!q.first_paid_at && !q.second_paid_at;
+    }
   }
 
   const leadsWithAssignee: LeadWithAssignee[] = leads.map((l) => ({
@@ -74,6 +82,9 @@ export default async function CrmPage() {
     assignee_email: l.assigned_to ? userEmailMap.get(l.assigned_to) || null : null,
     owner_email: l.owned_by ? userEmailMap.get(l.owned_by) || null : null,
     last_activity_at: lastActivityMap[l.id] || null,
+    shipping_address: shippingAddressMap[l.id] ?? null,
+    pickup_in_person: pickupMap[l.id] ?? false,
+    pending_second_half: pendingSecondHalfMap[l.id] ?? false,
   }));
 
   const activeLeadsCount = leads.filter((l) => l.status !== "lost").length;

@@ -13,7 +13,28 @@ export type LeadWithAssignee = Tables<"leads"> & {
   assignee_email?: string | null;
   owner_email?: string | null;
   last_activity_at?: string | null;
+  shipping_address?: string | null;
+  pickup_in_person?: boolean;
+  pending_second_half?: boolean;
 };
+
+/**
+ * Once a lead is paid (any tranche), production starts and we need to know
+ * where + when to ship. If either is missing, raise a visible alert.
+ * Recogida en persona silencia el check de dirección — el cliente viene a por él.
+ */
+export function deliveryRisk(lead: LeadWithAssignee): { missingShipping: boolean; missingDeliveryDate: boolean; isAtRisk: boolean } {
+  const isPaidPhase = lead.status === "paid";
+  const missingShipping =
+    !lead.pickup_in_person &&
+    (!lead.shipping_address || lead.shipping_address.trim().length === 0);
+  const missingDeliveryDate = !lead.desired_delivery_date;
+  return {
+    missingShipping,
+    missingDeliveryDate,
+    isAtRisk: isPaidPhase && (missingShipping || missingDeliveryDate),
+  };
+}
 
 interface CrmCardProps {
   lead: LeadWithAssignee;
@@ -94,6 +115,14 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
   const interactionDate = lead.last_activity_at || lead.created_at;
   const age = timeAgo(interactionDate);
   const hint = maturationHint(lead.status, interactionDate);
+  const risk = deliveryRisk(lead);
+  const riskMessage = risk.isAtRisk
+    ? risk.missingShipping && risk.missingDeliveryDate
+      ? "Falta dirección de envío y fecha de entrega"
+      : risk.missingShipping
+        ? "Falta dirección de envío"
+        : "Falta fecha de entrega"
+    : null;
 
   return (
     <div
@@ -101,10 +130,15 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
       onClick={() => {
         if (!isDragging) router.push(`/dashboard/crm/${lead.id}`);
       }}
+      title={riskMessage ?? undefined}
       className={`relative cursor-grab rounded-lg border bg-card p-3 shadow-sm transition select-none ${
         isDragging ? "z-50 cursor-grabbing scale-[1.02] opacity-75 shadow-lg" : ""
       } ${isDropTarget && !isDragging ? "ring-2 ring-brand ring-offset-1" : ""} ${
-        lead.is_pre_won ? "border-amber-400 dark:border-amber-500/70" : ""
+        risk.isAtRisk
+          ? "border-red-500 ring-2 ring-red-500/30 bg-red-50/40 dark:bg-red-950/20 dark:border-red-500"
+          : lead.is_pre_won
+            ? "border-amber-400 dark:border-amber-500/70"
+            : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -165,6 +199,15 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
         </p>
       )}
 
+      {riskMessage && (
+        <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-red-700 dark:text-red-400">
+          <svg className="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          {riskMessage}
+        </p>
+      )}
+
       <div className="mt-2 flex items-center gap-2">
         {lead.assignee_email && (
           <div className="flex items-center gap-1">
@@ -188,8 +231,17 @@ export function CrmCard({ lead, commissionRate, onTogglePreWon }: CrmCardProps) 
             {hint.text}
           </span>
         )}
+        {lead.pending_second_half && (
+          <Badge
+            variant="secondary"
+            className={`${hint ? "" : "ml-auto"} bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400`}
+            title="50% pagado — pendiente el segundo 50% antes del envío"
+          >
+            50%
+          </Badge>
+        )}
         {lead.estimated_value != null && (
-          <Badge variant="secondary" className={`${hint ? "" : "ml-auto"} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400`}>
+          <Badge variant="secondary" className={`${hint || lead.pending_second_half ? "" : "ml-auto"} bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400`}>
             {lead.estimated_value.toLocaleString("es-ES")} €
           </Badge>
         )}

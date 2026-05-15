@@ -2389,6 +2389,10 @@ export type Database = {
           billing_province: string | null
           cc_emails: Json | null
           created_at: string | null
+          first_paid_amount: number | null
+          first_paid_at: string | null
+          first_stripe_fee_amount: number | null
+          first_stripe_session_id: string | null
           holded_contact_id: string | null
           holded_estimate_id: string | null
           holded_invoice_id: string | null
@@ -2402,7 +2406,15 @@ export type Database = {
           paid_at: string | null
           payment_option: string | null
           payment_status: string | null
+          pickup_in_person: boolean
           proforma_accepted_at: string | null
+          second_holded_proforma_doc_number: string | null
+          second_holded_proforma_id: string | null
+          second_paid_amount: number | null
+          second_paid_at: string | null
+          second_payment_requested_at: string | null
+          second_stripe_fee_amount: number | null
+          second_stripe_session_id: string | null
           shipping_address: string | null
           shipping_city: string | null
           shipping_country: string | null
@@ -2427,6 +2439,10 @@ export type Database = {
           billing_province?: string | null
           cc_emails?: Json | null
           created_at?: string | null
+          first_paid_amount?: number | null
+          first_paid_at?: string | null
+          first_stripe_fee_amount?: number | null
+          first_stripe_session_id?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
           holded_invoice_id?: string | null
@@ -2440,7 +2456,15 @@ export type Database = {
           paid_at?: string | null
           payment_option?: string | null
           payment_status?: string | null
+          pickup_in_person?: boolean
           proforma_accepted_at?: string | null
+          second_holded_proforma_doc_number?: string | null
+          second_holded_proforma_id?: string | null
+          second_paid_amount?: number | null
+          second_paid_at?: string | null
+          second_payment_requested_at?: string | null
+          second_stripe_fee_amount?: number | null
+          second_stripe_session_id?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
@@ -2465,6 +2489,10 @@ export type Database = {
           billing_province?: string | null
           cc_emails?: Json | null
           created_at?: string | null
+          first_paid_amount?: number | null
+          first_paid_at?: string | null
+          first_stripe_fee_amount?: number | null
+          first_stripe_session_id?: string | null
           holded_contact_id?: string | null
           holded_estimate_id?: string | null
           holded_invoice_id?: string | null
@@ -2478,7 +2506,15 @@ export type Database = {
           paid_at?: string | null
           payment_option?: string | null
           payment_status?: string | null
+          pickup_in_person?: boolean
           proforma_accepted_at?: string | null
+          second_holded_proforma_doc_number?: string | null
+          second_holded_proforma_id?: string | null
+          second_paid_amount?: number | null
+          second_paid_at?: string | null
+          second_payment_requested_at?: string | null
+          second_stripe_fee_amount?: number | null
+          second_stripe_session_id?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
