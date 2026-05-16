@@ -7,12 +7,20 @@ import {
   updateClientAddress,
   deleteClientAddress,
 } from "../../projects/[id]/address-actions";
+import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
 
 type ClientAddress = Tables<"client_addresses">;
 
 interface LeadAddressesProps {
   holdedContactId: string | null;
   initialAddresses: ClientAddress[];
+  /** Datos del lead para prefill al crear una dirección nueva. El comercial
+   * confirma con el cliente y ajusta si el destinatario es distinto. */
+  defaultRecipient?: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  };
 }
 
 interface DraftAddress {
@@ -56,7 +64,7 @@ function addressToDraft(addr: ClientAddress): DraftAddress {
   };
 }
 
-export default function LeadAddresses({ holdedContactId, initialAddresses }: LeadAddressesProps) {
+export default function LeadAddresses({ holdedContactId, initialAddresses, defaultRecipient }: LeadAddressesProps) {
   const [addresses, setAddresses] = useState<ClientAddress[]>(initialAddresses);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<DraftAddress>(EMPTY_DRAFT);
@@ -78,7 +86,13 @@ export default function LeadAddresses({ holdedContactId, initialAddresses }: Lea
   }
 
   function startNew() {
-    setDraft({ ...EMPTY_DRAFT, isDefault: addresses.length === 0 });
+    setDraft({
+      ...EMPTY_DRAFT,
+      recipientName: defaultRecipient?.name ?? "",
+      recipientPhone: defaultRecipient?.phone ?? "",
+      recipientEmail: defaultRecipient?.email ?? "",
+      isDefault: addresses.length === 0,
+    });
     setEditingId("new");
     setError(null);
   }
@@ -337,14 +351,25 @@ function AddressForm({ draft, onPatch, onSave, onCancel, pending, error }: Addre
           onChange={(e) => onPatch("recipientEmail", e.target.value)}
           className={inputClass}
         />
-        <input
-          type="text"
-          placeholder="Calle y número"
-          value={draft.addressLine}
-          onChange={(e) => onPatch("addressLine", e.target.value)}
-          className={`${inputClass} col-span-2`}
-          required
-        />
+        <div className="col-span-2">
+          <AddressAutocomplete
+            name="address_line"
+            className={inputClass}
+            placeholder="Calle y número"
+            defaultValue={draft.addressLine}
+            onValueChange={(v) => onPatch("addressLine", v)}
+            onAddressSelect={(c: AddressComponents) => {
+              onPatch("addressLine", c.address);
+              if (c.city) onPatch("city", c.city);
+              if (c.postalCode) onPatch("postalCode", c.postalCode);
+              if (c.province) onPatch("province", c.province);
+              if (c.country?.toLowerCase() === "españa" || c.country?.toLowerCase() === "spain") {
+                onPatch("country", "ES");
+              }
+            }}
+            required
+          />
+        </div>
         <input
           type="text"
           placeholder="Ciudad"

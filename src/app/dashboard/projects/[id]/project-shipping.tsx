@@ -17,6 +17,7 @@ type ClientAddress = Tables<"client_addresses">;
 
 import { PackageListEditor, createEmptyPackage, type PackageItem } from "@/components/box-preset-selector";
 import { SENDER_ADDRESS } from "@/lib/packlink/sender";
+import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
 
 const MRW_SERVICES = [
   { id: "0110", name: "MRW Urgente 14", delivery: "Entrega antes de las 14:00", code: "0110" },
@@ -135,6 +136,14 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
           }`}>
             {isMrw ? "MRW" : isGls ? "GLS" : isCabify ? "Cabify" : "Packlink"}
           </span>
+          {(shipment.project_id == null || shipment.title) && (
+            <span
+              className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+              title="Envío standalone — sin proyecto asociado (típicamente una muestra previa)"
+            >
+              Muestra
+            </span>
+          )}
           <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">{dest || "—"}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -613,11 +622,27 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
               </div>
             </div>
 
-            {/* Address */}
+            {/* Address — Google Places autocomplete autorrellena CP/ciudad cuando eliges sugerencia */}
             <div>
               <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Destination address</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input type="text" placeholder="Street address" value={street} onChange={(e) => setStreet(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                <div className="sm:col-span-2">
+                  <AddressAutocomplete
+                    name="street"
+                    className={inputClass}
+                    placeholder="Street address"
+                    defaultValue={street}
+                    onAddressSelect={(c: AddressComponents) => {
+                      setStreet(c.address);
+                      if (c.city) setCity(c.city);
+                      if (c.postalCode) setPostalCode(c.postalCode);
+                      // Google devuelve país en idioma — pasamos a código ISO si es España.
+                      if (c.country?.toLowerCase() === "españa" || c.country?.toLowerCase() === "spain") {
+                        setCountry("ES");
+                      }
+                    }}
+                  />
+                </div>
                 <input type="text" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
                 <input type="text" placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} />
                 <input type="text" placeholder="Country code (ES, FR…)" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={2} className={inputClass} />

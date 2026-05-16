@@ -24,9 +24,6 @@ export default function AttachmentGallery({ attachments }: AttachmentGalleryProp
       ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
       : [url];
 
-  // Uploadcare thumbnail transform: resize to 400px wide, auto-format for smallest size
-  const thumbSuffix = "-/resize/400x/-/format/auto/-/quality/smart/";
-
   return (
     <>
       <div className="mt-4 rounded-lg bg-muted p-4">
@@ -42,7 +39,7 @@ export default function AttachmentGallery({ attachments }: AttachmentGalleryProp
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`${fileUrl}${thumbSuffix}`}
+                src={fileUrl}
                 alt={`Adjunto ${i + 1}`}
                 loading="lazy"
                 className="h-32 w-full object-cover transition group-hover:scale-105"

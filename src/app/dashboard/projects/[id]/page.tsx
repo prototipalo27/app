@@ -148,6 +148,21 @@ export default async function ProjectDetailPage({
     ? supabase.from("leads").select("id, full_name, email").eq("id", project.lead_id).single()
     : Promise.resolve({ data: null });
 
+  // Envíos huérfanos: muestras enviadas al lead ANTES de que existiera el
+  // proyecto se guardan como shipping_info con project_id=null (flujo
+  // /dashboard/shipments standalone). Los reasociamos en pantalla por
+  // recipient_email = lead.email para que aparezcan en la sección "Envíos".
+  const orphanShipmentsPromise = leadPromise.then(async ({ data: lead }) => {
+    const email = (lead as { email?: string | null } | null)?.email;
+    if (!email) return { data: null as typeof shipments };
+    return supabase
+      .from("shipping_info")
+      .select("*")
+      .is("project_id", null)
+      .eq("recipient_email", email)
+      .order("created_at", { ascending: false });
+  });
+
   const templatePromise = project.template_id
     ? supabase.from("project_templates").select("name").eq("id", project.template_id).single()
     : Promise.resolve({ data: null });
@@ -161,7 +176,7 @@ export default async function ProjectDetailPage({
         .order("created_at", { ascending: false })
     : Promise.resolve({ data: null });
 
-  const [jobsResult, driveFilesRaw, holdedContact, holdedDoc, leadResult, templateResult, savedAddressesResult] = await Promise.all([
+  const [jobsResult, driveFilesRaw, holdedContact, holdedDoc, leadResult, templateResult, savedAddressesResult, orphanShipmentsResult] = await Promise.all([
     printJobsPromise,
     driveFilesPromise,
     holdedContactPromise,
@@ -169,7 +184,14 @@ export default async function ProjectDetailPage({
     leadPromise,
     templatePromise,
     savedAddressesPromise,
+    orphanShipmentsPromise,
   ]);
+
+  // Concatenamos envíos del proyecto + envíos huérfanos del lead (muestras
+  // pre-proyecto). Ordenados por created_at descendente.
+  const allShipments = [...(shipments ?? []), ...(orphanShipmentsResult.data ?? [])].sort(
+    (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+  );
 
   // Process print jobs
   let printJobs: Array<{
@@ -415,7 +437,7 @@ export default async function ProjectDetailPage({
       <div className="mb-6">
         <ProjectShipping
           projectId={project.id}
-          shipments={shipments ?? []}
+          shipments={allShipments}
           holdedContact={holdedContact}
           holdedContactId={project.holded_contact_id}
           savedAddresses={savedAddressesResult.data ?? []}

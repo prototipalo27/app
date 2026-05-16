@@ -17,6 +17,10 @@ interface AddressAutocompleteProps {
   placeholder?: string;
   defaultValue?: string;
   onAddressSelect?: (components: AddressComponents) => void;
+  /** Se dispara en cada cambio del texto (typing y selección). Útil para
+   * sincronizar el estado controlado del parent y no perder lo tecleado si
+   * el usuario no llega a elegir una sugerencia. */
+  onValueChange?: (value: string) => void;
 }
 
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -111,6 +115,7 @@ export default function AddressAutocomplete({
   placeholder = "Calle Mayor, 1",
   defaultValue,
   onAddressSelect,
+  onValueChange,
 }: AddressAutocompleteProps) {
   const [value, setValue] = useState(defaultValue || "");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -131,6 +136,7 @@ export default function AddressAutocomplete({
 
   const handleChange = (input: string) => {
     setValue(input);
+    onValueChange?.(input);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (input.length < 3) {
@@ -157,6 +163,7 @@ export default function AddressAutocomplete({
     if (details) {
       const components = parseComponents(details);
       setValue(components.address);
+      onValueChange?.(components.address);
       onAddressSelect?.(components);
     }
   };

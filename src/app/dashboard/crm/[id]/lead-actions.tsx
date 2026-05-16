@@ -69,6 +69,22 @@ interface LeadActionsProps {
   ndaSignedAt?: string;
   ndaSignerName?: string;
   sampleRequest: SampleRequestStatus;
+  shipmentSummary?: {
+    hasProject: boolean;
+    projectId: string | null;
+    projectStatus: string | null;
+    pickupInPerson: boolean;
+    shipments: Array<{
+      id: string;
+      carrier: string | null;
+      tracking: string | null;
+      status: string | null;
+      shipped_at: string | null;
+      title: string | null;
+      is_orphan: boolean;
+      destination: string | null;
+    }>;
+  };
 }
 
 export default function LeadActions({
@@ -90,6 +106,7 @@ export default function LeadActions({
   ndaSignedAt,
   ndaSignerName,
   sampleRequest,
+  shipmentSummary,
 }: LeadActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -1182,6 +1199,86 @@ export default function LeadActions({
           </label>
         </div>
       )}
+
+      {/* Envío — read-only para comercial; Mery prepara los envíos */}
+      {quoteRequest && shipmentSummary && (() => {
+        const { hasProject, pickupInPerson, shipments } = shipmentSummary;
+        const carrierLabel = (c: string | null) => {
+          if (!c) return "Envío";
+          const u = c.toUpperCase();
+          if (u === "MRW" || u === "GLS") return u;
+          if (u.includes("CABIFY")) return "Cabify";
+          if (u.includes("PACKLINK")) return "Packlink";
+          return c;
+        };
+        const statusLabel = (s: string | null) => {
+          if (!s) return "—";
+          const l = s.toLowerCase();
+          if (l === "delivered") return "Entregado";
+          if (l.includes("transit") || l === "in_transit") return "En tránsito";
+          if (l === "pending") return "Pendiente";
+          return s;
+        };
+        const statusClass = (s: string | null) => {
+          const l = (s ?? "").toLowerCase();
+          if (l === "delivered") return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+          if (l.includes("transit") || l === "in_transit") return "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400";
+          return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+        };
+
+        return (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-card-foreground">Envío</h3>
+            {pickupInPerson ? (
+              <p className="text-xs text-muted-foreground">
+                Recogida en persona — el cliente lo recoge en mano. No hay envío que preparar.
+              </p>
+            ) : shipments.length === 0 ? (
+              <div className="rounded-md border border-dashed border-zinc-300 bg-muted/30 p-2.5 dark:border-zinc-700">
+                <p className="text-xs text-muted-foreground">
+                  {hasProject
+                    ? "Pendiente de preparar (lo hace Mery desde el proyecto)."
+                    : "Aún no hay proyecto creado. El envío se preparará cuando entre el pago."}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {shipments.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-card/50 px-2.5 py-1.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {carrierLabel(s.carrier)}
+                      </span>
+                      {s.is_orphan && (
+                        <span
+                          className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                          title="Envío sin proyecto vinculado — típicamente muestra previa"
+                        >
+                          Muestra
+                        </span>
+                      )}
+                      {s.tracking && (
+                        <span className="truncate font-mono text-[11px] text-muted-foreground">
+                          {s.tracking}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusClass(s.status)}`}>
+                      {statusLabel(s.status)}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-muted-foreground/70">
+                  Los envíos los prepara Mery desde el proyecto. Esto es solo informativo.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Link Holded invoice */}
       <div>

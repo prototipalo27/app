@@ -2,6 +2,24 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getSharedUserProfiles } from "@/lib/supabase/cached-queries";
 import type { Tables } from "@/lib/supabase/database.types";
+
+type ShipmentRow = Pick<
+  Tables<"shipping_info">,
+  | "id"
+  | "carrier"
+  | "shipment_status"
+  | "shipped_at"
+  | "mrw_albaran"
+  | "gls_barcode"
+  | "packlink_shipment_ref"
+  | "cabify_parcel_id"
+  | "tracking_number"
+  | "project_id"
+  | "title"
+  | "address_line"
+  | "city"
+  | "postal_code"
+>;
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getUserProfile, hasRole } from "@/lib/rbac";
@@ -395,6 +413,7 @@ async function ActionsSection({ leadId, lead }: { leadId: string; lead: any }) {
     commission,
     ndaStatusResult,
     sampleRequest,
+    { data: linkedProject },
   ] = await Promise.all([
     getSharedUserProfiles(),
     supabase.from("quote_requests").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -403,7 +422,55 @@ async function ActionsSection({ leadId, lead }: { leadId: string; lead: any }) {
     getCommissionSummary(leadId),
     getNdaStatus(leadId),
     getSampleRequestStatus(leadId),
+    supabase.from("projects").select("id, status, name").eq("lead_id", leadId).eq("project_type", "confirmed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+
+  // Envíos del proyecto vinculado + envíos huérfanos asociables al lead por
+  // email del destinatario (muestras pre-proyecto). Es lectura para Angel —
+  // ver "dónde y cuándo" sin tener que ir a Proyectos.
+  const projectShipmentsPromise = linkedProject
+    ? supabase
+        .from("shipping_info")
+        .select("id, carrier, shipment_status, shipped_at, mrw_albaran, gls_barcode, packlink_shipment_ref, cabify_parcel_id, tracking_number, project_id, title, address_line, city, postal_code")
+        .eq("project_id", linkedProject.id)
+        .order("created_at", { ascending: false })
+    : Promise.resolve({ data: null as null });
+
+  const orphanShipmentsPromise = lead.email
+    ? supabase
+        .from("shipping_info")
+        .select("id, carrier, shipment_status, shipped_at, mrw_albaran, gls_barcode, packlink_shipment_ref, cabify_parcel_id, tracking_number, project_id, title, address_line, city, postal_code")
+        .is("project_id", null)
+        .eq("recipient_email", lead.email)
+        .order("created_at", { ascending: false })
+    : Promise.resolve({ data: null as null });
+
+  const [projectShipmentsResult, orphanShipmentsResult] = await Promise.all([
+    projectShipmentsPromise,
+    orphanShipmentsPromise,
+  ]);
+
+  const shipmentSummary = {
+    hasProject: Boolean(linkedProject),
+    projectId: linkedProject?.id ?? null,
+    projectStatus: (linkedProject as { status?: string } | null)?.status ?? null,
+    pickupInPerson: Boolean((quoteRequest as { pickup_in_person?: boolean } | null)?.pickup_in_person),
+    shipments: [
+      ...((projectShipmentsResult.data ?? []) as ShipmentRow[]),
+      ...((orphanShipmentsResult.data ?? []) as ShipmentRow[]),
+    ]
+      .sort((a, b) => new Date(b.shipped_at || 0).getTime() - new Date(a.shipped_at || 0).getTime())
+      .map((s) => ({
+        id: s.id,
+        carrier: s.carrier,
+        tracking: s.mrw_albaran || s.gls_barcode || s.packlink_shipment_ref || s.cabify_parcel_id || s.tracking_number || null,
+        status: s.shipment_status,
+        shipped_at: s.shipped_at,
+        title: s.title,
+        is_orphan: s.project_id == null,
+        destination: [s.address_line, s.postal_code, s.city].filter(Boolean).join(", ") || null,
+      })),
+  };
 
   const managers = allProfiles
     .filter((p) => p.role === "manager" || p.role === "super_admin")
@@ -446,14 +513,22 @@ async function ActionsSection({ leadId, lead }: { leadId: string; lead: any }) {
             ndaSignedAt={ndaStatusResult.signed_at}
             ndaSignerName={ndaStatusResult.signer_name}
             sampleRequest={sampleRequest}
+            shipmentSummary={shipmentSummary}
           />
         </CardContent>
       </Card>
-      <Card>
+      {/* overflow-visible: el dropdown del autocomplete de Google se sale
+          del card naturalmente; sin esto queda clipped por overflow-hidden. */}
+      <Card className="overflow-visible">
         <CardContent>
           <LeadAddresses
             holdedContactId={holdedContactId}
             initialAddresses={addresses ?? []}
+            defaultRecipient={{
+              name: lead.full_name,
+              phone: lead.phone,
+              email: lead.email,
+            }}
           />
         </CardContent>
       </Card>
