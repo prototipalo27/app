@@ -542,6 +542,7 @@ async function TrackingContent({
               hasDriveFolder={!!project.google_drive_folder_id}
               isVerified={isVerified}
               designVisible={project.design_visible}
+              deliverableVisible={project.deliverable_visible}
               designApprovedAt={project.design_approved_at}
               deliverableApprovedAt={project.deliverable_approved_at}
               paymentConfirmedAt={project.payment_confirmed_at}

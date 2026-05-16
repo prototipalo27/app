@@ -24,6 +24,7 @@ interface ClientPortalProps {
   hasDriveFolder: boolean;
   isVerified: boolean;
   designVisible: boolean;
+  deliverableVisible: boolean;
   designApprovedAt: string | null;
   deliverableApprovedAt: string | null;
   paymentConfirmedAt: string | null;
@@ -33,10 +34,10 @@ type VerifyState = "locked" | "email-input" | "code-input" | "verified";
 
 export default function ClientPortal({
   token,
-  clientEmail,
   hasDriveFolder,
   isVerified: initialVerified,
   designVisible,
+  deliverableVisible,
   designApprovedAt: initialDesignApproved,
   deliverableApprovedAt: initialDeliverableApproved,
   paymentConfirmedAt: initialPaymentConfirmed,
@@ -51,13 +52,9 @@ export default function ClientPortal({
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Section data
-  const [briefingFiles, setBriefingFiles] = useState<FileItem[]>([]);
-  const [designFiles, setDesignFiles] = useState<FileItem[]>([]);
-  const [deliverableFiles, setDeliverableFiles] = useState<FileItem[]>([]);
-  const [briefingLoaded, setBriefingLoaded] = useState(false);
-  const [designLoaded, setDesignLoaded] = useState(false);
-  const [deliverableLoaded, setDeliverableLoaded] = useState(false);
+  // Files (unified — no more Briefing/Diseño/Entregable split)
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [filesLoaded, setFilesLoaded] = useState(false);
 
   // Approval state
   const [designApproved, setDesignApproved] = useState(!!initialDesignApproved);
@@ -70,7 +67,6 @@ export default function ClientPortal({
   const [approveDelivCheck, setApproveDelivCheck] = useState(false);
   const [confirmPayCheck, setConfirmPayCheck] = useState(false);
   const [lightboxId, setLightboxId] = useState<string | null>(null);
-  const [lightboxSection, setLightboxSection] = useState<string>("deliverable");
   const [lightboxFileName, setLightboxFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -129,22 +125,14 @@ export default function ClientPortal({
     }
   }, [token, code]);
 
-  // ── Fetch files for a section ──
-  const loadFiles = useCallback(async (section: "briefing" | "design" | "deliverable") => {
+  // ── Fetch all files for the project ──
+  const loadFiles = useCallback(async () => {
     try {
-      const res = await fetch(`/api/track/files?section=${section}`);
+      const res = await fetch(`/api/track/files`);
       if (!res.ok) return;
       const data = await res.json();
-      if (section === "briefing") {
-        setBriefingFiles(data.files);
-        setBriefingLoaded(true);
-      } else if (section === "design") {
-        setDesignFiles(data.files);
-        setDesignLoaded(true);
-      } else {
-        setDeliverableFiles(data.files);
-        setDeliverableLoaded(true);
-      }
+      setFiles(data.files);
+      setFilesLoaded(true);
     } catch {
       // silently fail
     }
@@ -154,12 +142,10 @@ export default function ClientPortal({
   const loadedRef = useRef(false);
   if (isVerified && !loadedRef.current) {
     loadedRef.current = true;
-    loadFiles("briefing");
-    if (designVisible) loadFiles("design");
-    loadFiles("deliverable");
+    loadFiles();
   }
 
-  // ── Upload to Briefing ──
+  // ── Upload to project folder ──
   const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
@@ -168,7 +154,7 @@ export default function ClientPortal({
       const res = await fetch("/api/track/upload", { method: "POST", body: formData });
       if (!res.ok) return;
       const data = await res.json();
-      setBriefingFiles((prev) => [...prev, data.file]);
+      setFiles((prev) => [...prev, data.file]);
     } finally {
       setUploading(false);
     }
@@ -299,21 +285,29 @@ export default function ClientPortal({
     );
   }
 
-  // ── Verified: show 3 sections ──
+  const showDesignApproval = designVisible && !designApproved;
+  const showDeliverableApproval = deliverableVisible && !deliverableApproved && files.length > 0;
+
+  // ── Verified: unified files section + approval banners ──
   return (
     <div className="space-y-6">
-      {/* ── Briefing ── */}
+      {/* ── Archivos ── */}
       <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
           <FolderIcon />
-          Briefing
+          Archivos del proyecto
+          {deliverableApproved && <ApprovedBadge label="Entregable aprobado" />}
+          {paymentConfirmed && <PaidBadge />}
         </h2>
 
-        {!briefingLoaded ? (
+        {!filesLoaded ? (
           <p className="text-sm text-zinc-400">Cargando...</p>
         ) : (
           <>
-            <FileList files={briefingFiles} section="briefing" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
+            <FileList
+              files={files}
+              onOpenLightbox={(id, name) => { setLightboxId(id); setLightboxFileName(name); }}
+            />
 
             <div className="mt-3">
               <input
@@ -341,70 +335,62 @@ export default function ClientPortal({
         )}
       </div>
 
-      {/* ── Diseño ── */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-          <PaletteIcon />
-          Diseño
-          {designApproved && <ApprovedBadge />}
-        </h2>
+      {/* ── Aprobar diseño ── */}
+      {showDesignApproval && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+            <PaletteIcon />
+            Aprobar diseño
+          </h2>
+          <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+            El equipo ha compartido los archivos de diseño. Cuando los hayas revisado, confirma la aprobación.
+          </p>
+          <button
+            onClick={() => handleApprove("design")}
+            disabled={approving}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
+          >
+            {approving ? "Confirmando..." : "Aprobar diseño"}
+          </button>
+        </div>
+      )}
 
-        {!designVisible ? (
-          <PendingCard label="El equipo aún no ha compartido los diseños." />
-        ) : !designLoaded ? (
-          <p className="text-sm text-zinc-400">Cargando...</p>
-        ) : (
-          <FileList files={designFiles} section="design" onOpenLightbox={(id, sec, name) => { setLightboxId(id); setLightboxSection(sec); setLightboxFileName(name); }} />
-        )}
-      </div>
-
-      {/* ── Entregable ── */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-          <PhotoIcon />
-          Entregable
-          {deliverableApproved && <ApprovedBadge />}
-          {paymentConfirmed && <PaidBadge />}
-        </h2>
-
-        {!deliverableLoaded ? (
-          <p className="text-sm text-zinc-400">Cargando...</p>
-        ) : (
-          <>
-            <PhotoGrid files={deliverableFiles} onOpenLightbox={(id, name) => { setLightboxId(id); setLightboxSection("deliverable"); setLightboxFileName(name); }} />
-
-            {!deliverableApproved && deliverableFiles.length > 0 && (
-              <div className="mt-4 space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={approveDelivCheck}
-                    onChange={(e) => setApproveDelivCheck(e.target.checked)}
-                    className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Apruebo el entregable y confirmo que las piezas son correctas</span>
-                </label>
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={confirmPayCheck}
-                    onChange={(e) => setConfirmPayCheck(e.target.checked)}
-                    className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
-                  />
-                  <span className="text-zinc-700 dark:text-zinc-300">Confirmo que he realizado la transferencia bancaria</span>
-                </label>
-                <button
-                  onClick={() => handleApprove("deliverable")}
-                  disabled={approving || !approveDelivCheck}
-                  className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
-                >
-                  {approving ? "Confirmando..." : "Confirmar"}
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {/* ── Aprobar entregable + pago ── */}
+      {showDeliverableApproval && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+            <PhotoIcon />
+            Aprobar entregable
+          </h2>
+          <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={approveDelivCheck}
+                onChange={(e) => setApproveDelivCheck(e.target.checked)}
+                className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <span className="text-zinc-700 dark:text-zinc-300">Apruebo el entregable y confirmo que las piezas son correctas</span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={confirmPayCheck}
+                onChange={(e) => setConfirmPayCheck(e.target.checked)}
+                className="mt-0.5 rounded border-zinc-300 text-brand focus:ring-brand dark:border-zinc-600 dark:bg-zinc-800"
+              />
+              <span className="text-zinc-700 dark:text-zinc-300">Confirmo que he realizado la transferencia bancaria</span>
+            </label>
+            <button
+              onClick={() => handleApprove("deliverable")}
+              disabled={approving || !approveDelivCheck}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:opacity-50"
+            >
+              {approving ? "Confirmando..." : "Confirmar"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox */}
       {lightboxId && (
@@ -423,14 +409,14 @@ export default function ClientPortal({
           {lightboxFileName && is3DFile(lightboxFileName) ? (
             <div onClick={(e) => e.stopPropagation()}>
               <ModelViewer
-                url={`/api/track/photos/${lightboxId}?section=${lightboxSection}`}
+                url={`/api/track/photos/${lightboxId}`}
                 fileName={lightboxFileName}
               />
             </div>
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              src={`/api/track/photos/${lightboxId}?section=${lightboxSection}`}
+              src={`/api/track/photos/${lightboxId}`}
               alt="Archivo ampliado"
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
               onClick={(e) => e.stopPropagation()}
@@ -446,15 +432,13 @@ export default function ClientPortal({
 
 function FileList({
   files,
-  section,
   onOpenLightbox,
 }: {
   files: FileItem[];
-  section: string;
-  onOpenLightbox: (id: string, section: string, fileName: string) => void;
+  onOpenLightbox: (id: string, fileName: string) => void;
 }) {
   if (files.length === 0) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay archivos.</p>;
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay archivos todavía.</p>;
   }
 
   return (
@@ -469,7 +453,7 @@ function FileList({
           >
             {isImage ? (
               <button
-                onClick={() => onOpenLightbox(f.id, section, f.name)}
+                onClick={() => onOpenLightbox(f.id, f.name)}
                 className="shrink-0 text-zinc-400 hover:text-brand"
                 title="Ver imagen"
               >
@@ -479,7 +463,7 @@ function FileList({
               </button>
             ) : is3D ? (
               <button
-                onClick={() => onOpenLightbox(f.id, section, f.name)}
+                onClick={() => onOpenLightbox(f.id, f.name)}
                 className="shrink-0 text-purple-400 hover:text-brand"
                 title="Ver modelo 3D"
               >
@@ -505,58 +489,13 @@ function FileList({
   );
 }
 
-function PhotoGrid({
-  files,
-  onOpenLightbox,
-}: {
-  files: FileItem[];
-  onOpenLightbox: (id: string, name: string) => void;
-}) {
-  const images = files.filter((f) => f.mimeType.startsWith("image/"));
-  if (images.length === 0) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay fotos.</p>;
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {images.map((photo) => (
-        <button
-          key={photo.id}
-          onClick={() => onOpenLightbox(photo.id, photo.name)}
-          className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/track/photos/${photo.id}?section=deliverable`}
-            alt={photo.name}
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PendingCard({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 py-6 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <svg className="h-8 w-8 text-zinc-300 dark:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{label}</p>
-    </div>
-  );
-}
-
-function ApprovedBadge() {
+function ApprovedBadge({ label = "Aprobado" }: { label?: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
       </svg>
-      Aprobado
+      {label}
     </span>
   );
 }

@@ -62,6 +62,13 @@ export interface ParsedEmail {
   date: string;
 }
 
+export interface EmailAttachmentRef {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+  size: number;
+}
+
 function getHeader(
   headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
   name: string,
@@ -108,6 +115,56 @@ function parseEmailAddress(raw: string): { email: string; name: string } {
     return { name: match[1].replace(/^["']|["']$/g, "").trim(), email: match[2].toLowerCase().trim() };
   }
   return { name: raw.split("@")[0], email: raw.toLowerCase().trim() };
+}
+
+function collectAttachments(
+  payload: gmail_v1.Schema$MessagePart | undefined,
+  out: EmailAttachmentRef[],
+): void {
+  if (!payload) return;
+
+  const filename = payload.filename;
+  const attachmentId = payload.body?.attachmentId;
+  if (filename && attachmentId) {
+    out.push({
+      filename,
+      mimeType: payload.mimeType || "application/octet-stream",
+      attachmentId,
+      size: payload.body?.size ?? 0,
+    });
+  }
+
+  for (const part of payload.parts ?? []) {
+    collectAttachments(part, out);
+  }
+}
+
+/**
+ * List file attachments in a Gmail message. Inline parts without a filename
+ * (e.g. embedded text/html) are ignored.
+ */
+export function extractAttachments(msg: gmail_v1.Schema$Message): EmailAttachmentRef[] {
+  const out: EmailAttachmentRef[] = [];
+  collectAttachments(msg.payload, out);
+  return out;
+}
+
+/**
+ * Download an attachment's binary content from Gmail.
+ */
+export async function downloadGmailAttachment(
+  gmail: gmail_v1.Gmail,
+  messageId: string,
+  attachmentId: string,
+): Promise<Buffer> {
+  const res = await gmail.users.messages.attachments.get({
+    userId: "me",
+    messageId,
+    id: attachmentId,
+  });
+  const data = res.data.data;
+  if (!data) throw new Error("Empty attachment payload");
+  return Buffer.from(data, "base64url");
 }
 
 export function parseMessage(msg: gmail_v1.Schema$Message): ParsedEmail {

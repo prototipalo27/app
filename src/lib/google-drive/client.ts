@@ -13,7 +13,6 @@ export interface DriveFile {
 }
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-const PROJECT_SUBFOLDERS = ["Briefing", "Diseño", "Entregable"];
 const STUDIO_SUBFOLDERS = ["Brief", "Patentes", "Entregables", "Reuniones"];
 
 /**
@@ -88,29 +87,12 @@ export async function getOrCreateClientFolder(
   return createFolder(drive, clientName, parentFolderId);
 }
 
-/**
- * Create the project folder structure inside a client folder:
- *   /{clientFolder}/{projectName}/
- *     ├── Briefing/
- *     ├── Indoor/
- *     └── Entregable/
- *
- * Returns the ID of the project folder.
- */
 export async function createProjectFolder(
   projectName: string,
   clientFolderId: string,
 ): Promise<string> {
   const drive = getDriveClient();
-
-  const projectId = await createFolder(drive, projectName, clientFolderId);
-
-  // Create sub-folders in parallel (Briefing, Diseño, Entregable)
-  await Promise.all(
-    PROJECT_SUBFOLDERS.map((name) => createFolder(drive, name, projectId)),
-  );
-
-  return projectId;
+  return createFolder(drive, projectName, clientFolderId);
 }
 
 /**
@@ -282,9 +264,9 @@ export async function downloadFile(
 
 /**
  * Resolve the Drive folder ID for a portal section.
- * - "briefing"     → Briefing/
- * - "design"       → Diseño/
- * - "deliverable"  → Entregable/
+ * Legacy projects have subfolders (Briefing/Diseño/Entregable); newer projects
+ * are flat — files live directly in the project folder. Fall back to the
+ * project root when no subfolder matches.
  */
 export async function resolveSectionFolder(
   projectDriveFolderId: string,
@@ -300,7 +282,7 @@ export async function resolveSectionFolder(
   const folder = projectFiles.find(
     (f) => f.mimeType === FOLDER_MIME && f.name === folderName,
   );
-  return folder?.id ?? null;
+  return folder?.id ?? projectDriveFolderId;
 }
 
 /**

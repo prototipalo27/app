@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
-import { resolveSectionFolder, uploadFile, getOrCreateSubfolder } from "@/lib/google-drive/client";
+import { uploadFile } from "@/lib/google-drive/client";
 
 const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -33,14 +33,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Archivo demasiado grande (máx 50MB)" }, { status: 400 });
   }
 
-  // Always upload to Briefing folder (hardcoded — not parameterized)
-  let briefingFolderId = await resolveSectionFolder(project.google_drive_folder_id, "briefing");
-  if (!briefingFolderId) {
-    briefingFolderId = await getOrCreateSubfolder(project.google_drive_folder_id, "Briefing");
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer());
-  const driveFile = await uploadFile(briefingFolderId, file.name, file.type || "application/octet-stream", buffer);
+  const driveFile = await uploadFile(
+    project.google_drive_folder_id,
+    file.name,
+    file.type || "application/octet-stream",
+    buffer,
+  );
 
   return NextResponse.json({
     file: {

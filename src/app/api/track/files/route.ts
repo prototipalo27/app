@@ -1,17 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getVerifiedSession } from "@/lib/client-auth";
 import { createServiceClient } from "@/lib/supabase/server";
-import { resolveSectionFolder, listFolderFiles } from "@/lib/google-drive/client";
+import { listFolderFiles } from "@/lib/google-drive/client";
 
-const VALID_SECTIONS = ["briefing", "design", "deliverable"] as const;
-type Section = (typeof VALID_SECTIONS)[number];
+const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-export async function GET(request: NextRequest) {
-  const section = request.nextUrl.searchParams.get("section") as Section | null;
-  if (!section || !VALID_SECTIONS.includes(section)) {
-    return NextResponse.json({ error: "Sección inválida" }, { status: 400 });
-  }
-
+/**
+ * Lists every file in the project's Drive folder, recursively flattening any
+ * legacy subfolders (Briefing/Diseño/Entregable) so the client sees a single
+ * unified list regardless of when the project was created.
+ */
+export async function GET() {
   const session = await getVerifiedSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -20,7 +19,7 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("google_drive_folder_id, design_visible, deliverable_visible")
+    .select("google_drive_folder_id")
     .eq("id", session.projectId)
     .single();
 
@@ -28,28 +27,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Proyecto sin carpeta de Drive" }, { status: 404 });
   }
 
-  // Check section permissions
-  if (section === "design" && !project.design_visible) {
-    return NextResponse.json({ error: "Sección no disponible" }, { status: 403 });
+  const rootFiles = await listFolderFiles(project.google_drive_folder_id);
+  const subfolders = rootFiles.filter((f) => f.mimeType === FOLDER_MIME);
+  const collected = rootFiles.filter((f) => f.mimeType !== FOLDER_MIME);
+
+  // Pull files out of legacy subfolders too (Briefing/Diseño/Entregable).
+  for (const sub of subfolders) {
+    try {
+      const children = await listFolderFiles(sub.id);
+      for (const child of children) {
+        if (child.mimeType !== FOLDER_MIME) collected.push(child);
+      }
+    } catch (err) {
+      console.error(`[track/files] Failed to list subfolder ${sub.name}:`, err);
+    }
   }
-  // Deliverable is always accessible to the client
 
-  const folderId = await resolveSectionFolder(project.google_drive_folder_id, section);
-  if (!folderId) {
-    return NextResponse.json({ files: [] });
-  }
+  const files = collected.map((f) => ({
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    size: f.size,
+    modifiedTime: f.modifiedTime,
+  }));
 
-  const files = await listFolderFiles(folderId);
-  const FOLDER_MIME = "application/vnd.google-apps.folder";
-  const filtered = files
-    .filter((f) => f.mimeType !== FOLDER_MIME)
-    .map((f) => ({
-      id: f.id,
-      name: f.name,
-      mimeType: f.mimeType,
-      size: f.size,
-      modifiedTime: f.modifiedTime,
-    }));
-
-  return NextResponse.json({ files: filtered });
+  return NextResponse.json({ files });
 }

@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getGmailClient, parseMessage } from "@/lib/gmail/client";
+import {
+  getGmailClient,
+  parseMessage,
+  extractAttachments,
+  downloadGmailAttachment,
+  type EmailAttachmentRef,
+} from "@/lib/gmail/client";
+import { uploadFile } from "@/lib/google-drive/client";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { checkSpam } from "@/lib/email-spam-filter";
 import { processInvoiceEmail } from "@/lib/invoice-processor";
+import type { gmail_v1 } from "googleapis";
 
 const GONZALO_USER_ID = "9a7664db-917a-424b-af30-87d0bc3725ff";
 const ACCEPTED_INBOXES = ["info@prototipalo.com"];
@@ -150,6 +158,7 @@ export async function POST(request: NextRequest) {
           supabase,
           { ...parsed, from: effective.from, from_name: effective.from_name },
           msg.data.threadId || undefined,
+          { gmail, messageId: msgId, attachments: extractAttachments(msg.data) },
         );
         processed++;
       } catch (msgErr) {
@@ -210,6 +219,11 @@ async function processEmailAsLead(
     date: string;
   },
   gmailThreadId?: string,
+  attachmentSource?: {
+    gmail: gmail_v1.Gmail;
+    messageId: string;
+    attachments: EmailAttachmentRef[];
+  },
 ) {
   const from = email.from;
 
@@ -343,6 +357,17 @@ async function processEmailAsLead(
     throw error;
   }
 
+  // Forward email attachments to the lead's project Drive folder (fire-and-forget)
+  if (attachmentSource && attachmentSource.attachments.length > 0) {
+    uploadEmailAttachmentsToProject(
+      supabase,
+      leadId,
+      attachmentSource.gmail,
+      attachmentSource.messageId,
+      attachmentSource.attachments,
+    ).catch((err) => console.error("[gmail-push] Attachment forwarding failed:", err));
+  }
+
   // Auto-detect project type tag
   if (isNewLead || !lead?.project_type_tag) {
     detectProjectTypeTag(email.body)
@@ -391,6 +416,38 @@ async function processEmailAsLead(
       body: email.subject.slice(0, 120) || "Nuevo lead por email",
       url: `/dashboard/crm/${leadId}`,
     }).catch((err) => console.error("Push notification error:", err));
+  }
+}
+
+// ── EMAIL ATTACHMENTS → PROJECT DRIVE FOLDER ───────────────────
+
+async function uploadEmailAttachmentsToProject(
+  supabase: ReturnType<typeof createServiceClient>,
+  leadId: string,
+  gmail: gmail_v1.Gmail,
+  messageId: string,
+  attachments: EmailAttachmentRef[],
+) {
+  // Find the project linked to this lead. If none, drop the attachments.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("google_drive_folder_id")
+    .eq("lead_id", leadId)
+    .not("google_drive_folder_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  const folderId = project?.google_drive_folder_id;
+  if (!folderId) return;
+
+  for (const att of attachments) {
+    try {
+      const buffer = await downloadGmailAttachment(gmail, messageId, att.attachmentId);
+      await uploadFile(folderId, att.filename, att.mimeType, buffer);
+    } catch (err) {
+      console.error(`[gmail-push] Failed to upload "${att.filename}":`, err);
+    }
   }
 }
 
