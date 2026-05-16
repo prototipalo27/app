@@ -34,7 +34,7 @@ export function DeliveryDateModal({
     return initialDate.slice(0, 10);
   });
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleSave = () => {
     if (!date) {
@@ -42,13 +42,13 @@ export function DeliveryDateModal({
       return;
     }
     setError(null);
+    onOpenChange(false);
     startTransition(async () => {
       const result = await updateDesiredDeliveryDate(leadId, date);
       if (result.success) {
-        onOpenChange(false);
         router.refresh();
       } else {
-        setError(result.error || "Error al guardar");
+        alert(`No se pudo guardar: ${result.error || "Error"}`);
       }
     });
   };
@@ -81,17 +81,15 @@ export function DeliveryDateModal({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            disabled={pending}
           >
             Cancelar
           </Button>
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={pending}
             className="bg-brand text-white hover:bg-brand-dark"
           >
-            {pending ? "Guardando..." : "Guardar fecha"}
+            Guardar fecha
           </Button>
         </div>
       </DialogContent>

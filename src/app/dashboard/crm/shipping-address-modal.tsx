@@ -48,7 +48,7 @@ export function ShippingAddressModal({
   const [recipientPhone, setRecipientPhone] = useState(defaultRecipientPhone || "");
   const [recipientEmail, setRecipientEmail] = useState(defaultRecipientEmail || "");
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleAddressSelect = (components: AddressComponents) => {
     setAddress(components.address);
@@ -60,38 +60,31 @@ export function ShippingAddressModal({
 
   const handleSave = () => {
     setError(null);
-    if (pickup) {
-      // Recogida en persona — no requiere dirección.
-      startTransition(async () => {
-        const result = await setPickupInPerson(leadId, true);
-        if (result.success) {
-          onOpenChange(false);
-          router.refresh();
-        } else {
-          setError(result.error || "Error al guardar");
-        }
-      });
-      return;
-    }
-    if (!address.trim()) {
+    if (!pickup && !address.trim()) {
       setError("Selecciona o escribe una dirección, o marca 'Recogida en persona'");
       return;
     }
+
+    // Cerramos optimistamente — el cambio en servidor se aplica en background
+    // y router.refresh() actualiza el kanban cuando termine. Si falla mostramos
+    // un alert (raro) en lugar de bloquear el popup esperando la respuesta.
+    onOpenChange(false);
     startTransition(async () => {
-      const result = await updateShippingAddress(leadId, {
-        address,
-        postalCode,
-        city,
-        province,
-        country,
-        recipientPhone,
-        recipientEmail,
-      });
+      const result = pickup
+        ? await setPickupInPerson(leadId, true)
+        : await updateShippingAddress(leadId, {
+            address,
+            postalCode,
+            city,
+            province,
+            country,
+            recipientPhone,
+            recipientEmail,
+          });
       if (result.success) {
-        onOpenChange(false);
         router.refresh();
       } else {
-        setError(result.error || "Error al guardar");
+        alert(`No se pudo guardar: ${result.error || "Error"}`);
       }
     });
   };
@@ -194,17 +187,15 @@ export function ShippingAddressModal({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
-            disabled={pending}
           >
             Cancelar
           </Button>
           <Button
             size="sm"
             onClick={handleSave}
-            disabled={pending}
             className="bg-brand text-white hover:bg-brand-dark"
           >
-            {pending ? "Guardando..." : pickup ? "Guardar (recogida)" : "Guardar dirección"}
+            {pickup ? "Guardar (recogida)" : "Guardar dirección"}
           </Button>
         </div>
       </DialogContent>
