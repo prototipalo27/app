@@ -939,6 +939,53 @@ export type Database = {
           },
         ]
       }
+      label_print_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          id: string
+          label_url: string
+          printed_at: string | null
+          printer_label: string | null
+          source_id: string | null
+          source_kind: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          label_url: string
+          printed_at?: string | null
+          printer_label?: string | null
+          source_id?: string | null
+          source_kind?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          label_url?: string
+          printed_at?: string | null
+          printer_label?: string | null
+          source_id?: string | null
+          source_kind?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "label_print_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           activity_type: string

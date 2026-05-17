@@ -1,0 +1,16 @@
+{
+  "name": "prototipalo-print-agent",
+  "version": "1.0.0",
+  "description": "Local agent: prints PDFs from the print_jobs Supabase queue.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
