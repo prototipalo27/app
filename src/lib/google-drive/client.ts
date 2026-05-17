@@ -367,3 +367,45 @@ export async function getFilePreviewUrl(
 
   return res.data.thumbnailLink ?? res.data.webContentLink ?? null;
 }
+
+/**
+ * Download Drive's auto-generated thumbnail for a file (the first page of a
+ * PDF, a downscaled image, etc.). Returns null when Drive hasn't generated
+ * one yet — large files can take a few seconds after upload.
+ *
+ * The `thumbnailLink` Drive returns is an authenticated URL: it requires a
+ * Bearer token from the same Service Account, which is why this can't be
+ * exposed to the browser directly.
+ */
+export async function downloadThumbnail(
+  fileId: string,
+  size = 400,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const drive = getDriveClient();
+  const meta = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: "thumbnailLink",
+  });
+
+  let link = meta.data.thumbnailLink;
+  if (!link) return null;
+
+  // Drive thumbnails come with `=s220` by default; bump for a sharper card.
+  link = link.replace(/=s\d+(-[a-z]+)?$/i, `=s${size}`);
+  if (!/=s\d+/.test(link)) link += `=s${size}`;
+
+  const auth = drive.context._options.auth;
+  if (!auth || typeof auth === "string") return null;
+  const tokenRes = await (auth as { getAccessToken: () => Promise<{ token?: string | null }> })
+    .getAccessToken();
+  const accessToken = tokenRes?.token;
+  if (!accessToken) return null;
+
+  const res = await fetch(link, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  const buf = Buffer.from(await res.arrayBuffer());
+  return { buffer: buf, mimeType: contentType };
+}

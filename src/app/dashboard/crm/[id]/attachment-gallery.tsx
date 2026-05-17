@@ -15,6 +15,8 @@ export interface AttachmentItem {
   viewUrl: string;
   /** URL the user opens in a new tab (Descargar) when there's no preview. */
   downloadUrl: string;
+  /** Optional preview image for the card (e.g. Drive's PDF first-page thumb). */
+  thumbnailUrl?: string | null;
 }
 
 interface AttachmentGalleryProps {
@@ -57,6 +59,14 @@ export default function AttachmentGallery({ items }: AttachmentGalleryProps) {
                     alt={item.name}
                     loading="lazy"
                     className="h-full w-full object-cover transition group-hover:scale-105"
+                  />
+                ) : item.thumbnailUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.name}
+                    loading="lazy"
+                    className="h-full w-full object-contain bg-white transition group-hover:scale-105"
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-1 text-muted-foreground">

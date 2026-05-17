@@ -791,11 +791,15 @@ async function resolveLeadAttachments(
       for (const f of files) {
         if (f.mimeType === "application/vnd.google-apps.folder") continue;
         const proxyUrl = `/api/crm/leads/${leadId}/attachment/${f.id}`;
+        const kind = inferAttachmentKind(f.name, f.mimeType);
         items.push({
           name: f.name,
-          kind: inferAttachmentKind(f.name, f.mimeType),
+          kind,
           viewUrl: proxyUrl,
           downloadUrl: proxyUrl,
+          // Drive auto-generates a first-page thumbnail for PDFs; we proxy
+          // it (Service Account auth) via the same endpoint with ?thumb=1.
+          thumbnailUrl: kind === "pdf" ? `${proxyUrl}?thumb=1` : null,
         });
       }
     } catch (err) {

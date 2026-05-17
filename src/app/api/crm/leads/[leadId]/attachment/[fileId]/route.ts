@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/rbac";
 import { createServiceClient } from "@/lib/supabase/server";
-import { listFolderFiles, downloadFile } from "@/lib/google-drive/client";
+import {
+  listFolderFiles,
+  downloadFile,
+  downloadThumbnail,
+} from "@/lib/google-drive/client";
 
 const MIME_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
@@ -28,12 +32,13 @@ function guessMimeFromName(name: string): string | null {
  * to a project — in the linked project's folder.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ leadId: string; fileId: string }> },
 ) {
   await requireRole("manager");
 
   const { leadId, fileId } = await params;
+  const wantsThumb = new URL(request.url).searchParams.get("thumb") === "1";
   const supabase = createServiceClient();
 
   // Resolve which Drive folder the file should live in: the lead's own
@@ -65,6 +70,19 @@ export async function GET(
   const files = await listFolderFiles(folderId);
   if (!files.some((f) => f.id === fileId)) {
     return NextResponse.json({ error: "Archivo no encontrado" }, { status: 404 });
+  }
+
+  if (wantsThumb) {
+    const thumb = await downloadThumbnail(fileId, 400);
+    if (!thumb) {
+      return NextResponse.json({ error: "Sin thumbnail" }, { status: 404 });
+    }
+    return new NextResponse(new Uint8Array(thumb.buffer), {
+      headers: {
+        "Content-Type": thumb.mimeType,
+        "Cache-Control": "private, max-age=86400",
+      },
+    });
   }
 
   const { buffer, mimeType, name } = await downloadFile(fileId);
