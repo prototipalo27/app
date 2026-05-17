@@ -107,6 +107,12 @@ export async function POST(request: NextRequest) {
     const attachments = findField(data, [
       "Archivos", "archivos", "files", "attachments", "archivo", "file",
     ]);
+    // New flow: the Webflow form uploads directly to Supabase Storage under
+    // pending/{token}/ and posts back this token. The old `attachments`
+    // field (Uploadcare URL) is kept as a fallback for any in-flight submit.
+    const attachmentToken = findField(data, [
+      "attachment_token", "attachmentToken", "attachment-token",
+    ]);
     const emailSubjectTag = findField(data, [
       "email_subject_tag", "emailSubjectTag",
     ]);
@@ -212,6 +218,13 @@ export async function POST(request: NextRequest) {
           if (utmErr) console.error("UTM upsert error (dup email):", utmErr);
         }
 
+        // Same as the new-lead path: drain any files uploaded during this submit.
+        if (attachmentToken) {
+          claimPendingAttachments(supabase, existingByEmail.id, attachmentToken).catch((err) =>
+            console.error("[crm/webhook] claimPendingAttachments (dup) failed:", err),
+          );
+        }
+
         return NextResponse.json({
           ok: true,
           duplicate: true,
@@ -265,6 +278,15 @@ export async function POST(request: NextRequest) {
       if (utmErr) console.error("UTM insert error:", utmErr);
     }
 
+    // Claim any files uploaded directly to Supabase Storage during the
+    // form session, and register them as lead_attachments rows so
+    // qualifyLead drains them into Drive at qualification time.
+    if (attachmentToken) {
+      claimPendingAttachments(supabase, lead.id, attachmentToken).catch((err) =>
+        console.error("[crm/webhook] claimPendingAttachments failed:", err),
+      );
+    }
+
     // Auto-detect project type tag
     detectProjectTypeTag(message?.trim() || null)
       .then(async (tag) => {
@@ -295,6 +317,47 @@ export async function POST(request: NextRequest) {
     console.error("CRM webhook error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * Move files uploaded via the public form (parked under `pending/{token}/`)
+ * into the lead's namespace and register them as lead_attachments rows.
+ * Idempotent: skips files that were already claimed.
+ */
+async function claimPendingAttachments(
+  supabase: ReturnType<typeof getSupabase>,
+  leadId: string,
+  token: string,
+) {
+  if (!/^[a-f0-9-]{36}$/i.test(token)) return;
+
+  const { data: listed, error: listErr } = await supabase.storage
+    .from("lead-attachments")
+    .list(`pending/${token}`, { limit: 100 });
+  if (listErr) throw listErr;
+  if (!listed || listed.length === 0) return;
+
+  for (const obj of listed) {
+    if (!obj.name) continue;
+    const fromPath = `pending/${token}/${obj.name}`;
+    const toPath = `${leadId}/${Date.now()}-${obj.name}`;
+
+    const { error: moveErr } = await supabase.storage
+      .from("lead-attachments")
+      .move(fromPath, toPath);
+    if (moveErr) {
+      console.error(`[claimPendingAttachments] move ${fromPath} failed:`, moveErr);
+      continue;
+    }
+
+    await supabase.from("lead_attachments").insert({
+      lead_id: leadId,
+      source: "webflow",
+      filename: obj.name,
+      mime_type: obj.metadata?.mimetype || "application/octet-stream",
+      storage_path: toPath,
+    });
   }
 }
 
