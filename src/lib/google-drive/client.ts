@@ -96,6 +96,50 @@ export async function createProjectFolder(
 }
 
 /**
+ * Get or create the `Leads/` root inside the global Drive parent. Lead
+ * folders live here until the lead converts to a project, at which point
+ * they are renamed and moved into the client folder.
+ */
+export async function getOrCreateLeadsRootFolder(
+  parentFolderId: string,
+): Promise<string> {
+  return getOrCreateSubfolder(parentFolderId, "Leads");
+}
+
+/**
+ * Create a per-lead Drive folder under `Leads/`. The name should be stable
+ * (e.g. `${name} - ${leadId.slice(0, 8)}`) so the folder is easy to find
+ * before the lead has a holded contact.
+ */
+export async function createLeadFolder(
+  leadFolderName: string,
+  leadsRootFolderId: string,
+): Promise<string> {
+  const drive = getDriveClient();
+  return createFolder(drive, leadFolderName, leadsRootFolderId);
+}
+
+/**
+ * Move + rename a folder in one Drive call. Used when promoting a lead's
+ * folder into the client folder on project conversion.
+ */
+export async function moveAndRenameFolder(
+  folderId: string,
+  newName: string,
+  addParentId: string,
+  removeParentId: string,
+): Promise<void> {
+  const drive = getDriveClient();
+  await drive.files.update({
+    fileId: folderId,
+    supportsAllDrives: true,
+    addParents: addParentId,
+    removeParents: removeParentId,
+    requestBody: { name: newName },
+  });
+}
+
+/**
  * Same as createProjectFolder but with the Studio sub-folder set
  * (Brief, Patentes, Entregables, Reuniones). Sits inside the same client
  * folder as regular projects so the cliente final lo ve todo junto.

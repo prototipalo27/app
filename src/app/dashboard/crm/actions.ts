@@ -556,10 +556,42 @@ export async function updateLeadStatus(
     created_by: profile.id,
   });
 
+  // First time the lead leaves status=new (and isn't lost outright) → create
+  // its Drive folder and drain any buffered attachments.
+  if (oldStatus === "new" && newStatus !== "new" && newStatus !== "lost") {
+    qualifyLead(id, supabase).catch((err) =>
+      console.error("[updateLeadStatus] qualifyLead failed:", err),
+    );
+  }
+
+  // Lost lead → discard any buffered attachments (Drive folder, if it exists,
+  // is left alone in case the lead is reopened).
+  if (newStatus === "lost") {
+    discardLeadBuffer(id, supabase).catch((err) =>
+      console.error("[updateLeadStatus] discardLeadBuffer failed:", err),
+    );
+  }
+
   revalidatePath(`/dashboard/crm/${id}`);
   revalidatePath("/dashboard/crm");
   updateTag("leads");
   return { success: true };
+}
+
+async function discardLeadBuffer(
+  leadId: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  const { data: rows } = await supabase
+    .from("lead_attachments")
+    .select("id, storage_path")
+    .eq("lead_id", leadId);
+
+  const paths = (rows ?? []).map((r) => r.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    await supabase.storage.from("lead-attachments").remove(paths);
+  }
+  await supabase.from("lead_attachments").delete().eq("lead_id", leadId);
 }
 
 // ── Assign Lead ──────────────────────────────────────────
@@ -1308,6 +1340,11 @@ export async function sendLeadEmail(
         metadata: { old_status: "new", new_status: "contacted", auto: true },
         created_by: profile.id,
       });
+
+      // First human touch → create the lead's Drive folder + drain buffer.
+      qualifyLead(id, supabase).catch((err) =>
+        console.error("[sendEmail auto-contact] qualifyLead failed:", err),
+      );
     } else if (!lead?.assigned_to) {
       // If not "new" but unassigned, still claim ownership
       await supabase
@@ -1340,9 +1377,9 @@ export async function linkLeadToProject(leadId: string, projectId: string): Prom
 
   if (error) return { success: false, error: error.message };
 
-  // Copy lead attachments to the project folder (fire-and-forget)
-  copyLeadAttachmentsToProject(leadId, projectId, supabase).catch((err) => {
-    console.error("[linkLeadToProject] Failed to copy attachments:", err);
+  // Promote the lead's Drive folder into the project (fire-and-forget)
+  promoteLeadFolderToProject(leadId, projectId, supabase).catch((err) => {
+    console.error("[linkLeadToProject] Failed to promote folder:", err);
   });
 
   revalidatePath(`/dashboard/crm/${leadId}`);
@@ -1351,55 +1388,183 @@ export async function linkLeadToProject(leadId: string, projectId: string): Prom
   return { success: true };
 }
 
-async function copyLeadAttachmentsToProject(
+/**
+ * Get-or-create the client Drive folder, using the holded_contact_id cache
+ * in `client_drive_folders` when present.
+ */
+async function resolveClientFolder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  holdedContactId: string | null,
+  clientName: string,
+  parentFolderId: string,
+): Promise<string> {
+  const { getOrCreateClientFolder } = await import("@/lib/google-drive/client");
+
+  if (holdedContactId) {
+    const { data: cached } = await supabase
+      .from("client_drive_folders")
+      .select("drive_folder_id")
+      .eq("holded_contact_id", holdedContactId)
+      .maybeSingle();
+    if (cached) return cached.drive_folder_id;
+
+    const folderId = await getOrCreateClientFolder(clientName, parentFolderId);
+    await supabase.from("client_drive_folders").insert({
+      holded_contact_id: holdedContactId,
+      client_name: clientName,
+      drive_folder_id: folderId,
+    });
+    return folderId;
+  }
+
+  return getOrCreateClientFolder(clientName, parentFolderId);
+}
+
+/** Parse Webflow's `…~N/` multi-file URL into individual file URLs. */
+function parseWebflowAttachmentUrls(attachmentsField: string): string[] {
+  const url = attachmentsField.trim();
+  const groupMatch = url.match(/~(\d+)\/?$/);
+  const fileCount = groupMatch ? parseInt(groupMatch[1]) : 0;
+  const baseUrl = url.replace(/\/$/, "");
+  return fileCount > 0
+    ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
+    : [url];
+}
+
+/**
+ * Create the lead's own Drive folder (under `Leads/`) and drain any buffered
+ * attachments — Webflow upload + Supabase-buffered email attachments — into
+ * it. Idempotent: returns the existing folder ID if already set.
+ */
+export async function qualifyLead(
+  leadId: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<string | null> {
+  const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+  if (!parentFolderId) {
+    console.error("[qualifyLead] GOOGLE_DRIVE_PARENT_FOLDER_ID not set");
+    return null;
+  }
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, full_name, attachments, google_drive_folder_id")
+    .eq("id", leadId)
+    .single();
+
+  if (!lead) return null;
+  if (lead.google_drive_folder_id) return lead.google_drive_folder_id;
+
+  const { getOrCreateLeadsRootFolder, createLeadFolder, uploadFile } =
+    await import("@/lib/google-drive/client");
+
+  const leadsRootId = await getOrCreateLeadsRootFolder(parentFolderId);
+  const folderName = `${lead.full_name || "Lead"} - ${leadId.slice(0, 8)}`;
+  const folderId = await createLeadFolder(folderName, leadsRootId);
+
+  await supabase
+    .from("leads")
+    .update({ google_drive_folder_id: folderId })
+    .eq("id", leadId);
+
+  // Drain Supabase-buffered email attachments.
+  const { data: buffered } = await supabase
+    .from("lead_attachments")
+    .select("id, filename, mime_type, storage_path")
+    .eq("lead_id", leadId);
+
+  for (const row of buffered ?? []) {
+    try {
+      const { data: blob, error } = await supabase.storage
+        .from("lead-attachments")
+        .download(row.storage_path);
+      if (error || !blob) throw error ?? new Error("empty download");
+      const buf = Buffer.from(await blob.arrayBuffer());
+      await uploadFile(folderId, row.filename, row.mime_type, buf);
+      await supabase.storage.from("lead-attachments").remove([row.storage_path]);
+      await supabase.from("lead_attachments").delete().eq("id", row.id);
+    } catch (err) {
+      console.error(`[qualifyLead] Failed to flush ${row.storage_path}:`, err);
+    }
+  }
+
+  // Pull Webflow form attachments (if any).
+  if (lead.attachments) {
+    const urls = parseWebflowAttachmentUrls(lead.attachments);
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        const res = await fetch(urls[i]);
+        if (!res.ok) continue;
+        const contentType = res.headers.get("content-type") || "image/jpeg";
+        const buf = Buffer.from(await res.arrayBuffer());
+        const ext = contentType.includes("png") ? "png" :
+                    contentType.includes("webp") ? "webp" : "jpg";
+        await uploadFile(folderId, `adjunto-formulario-${i + 1}.${ext}`, contentType, buf);
+      } catch (err) {
+        console.error(`[qualifyLead] Failed to pull Webflow file ${i}:`, err);
+      }
+    }
+  }
+
+  return folderId;
+}
+
+/**
+ * Wire the lead's folder into the project. If the lead already has a Drive
+ * folder (qualified path), rename + move it into the client folder — no
+ * re-download. Otherwise, qualify on the fly so a folder exists.
+ */
+async function promoteLeadFolderToProject(
   leadId: string,
   projectId: string,
   supabase: Awaited<ReturnType<typeof createClient>>,
 ) {
-  const { uploadFile } = await import("@/lib/google-drive/client");
+  const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+  if (!parentFolderId) return;
 
-  const { data: lead } = await supabase
-    .from("leads")
-    .select("attachments")
-    .eq("id", leadId)
-    .single();
-
-  if (!lead?.attachments) return;
+  // Make sure the lead has a folder (creates one and drains buffer if not).
+  const leadFolderId = await qualifyLead(leadId, supabase);
+  if (!leadFolderId) return;
 
   const { data: project } = await supabase
     .from("projects")
-    .select("google_drive_folder_id")
+    .select("name, client_name, holded_contact_id, google_drive_folder_id")
     .eq("id", projectId)
     .single();
 
-  if (!project?.google_drive_folder_id) return;
+  if (!project || project.google_drive_folder_id) return;
 
-  const url = lead.attachments.trim();
-  const groupMatch = url.match(/~(\d+)\/?$/);
-  const fileCount = groupMatch ? parseInt(groupMatch[1]) : 0;
-  const baseUrl = url.replace(/\/$/, "");
+  const { moveAndRenameFolder, getFileParents } = await import(
+    "@/lib/google-drive/client"
+  );
 
-  const fileUrls =
-    fileCount > 0
-      ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
-      : [url];
+  const clientFolderId = await resolveClientFolder(
+    supabase,
+    project.holded_contact_id ?? null,
+    project.client_name ?? "Sin cliente",
+    parentFolderId,
+  );
 
-  for (let i = 0; i < fileUrls.length; i++) {
-    try {
-      const res = await fetch(fileUrls[i]);
-      if (!res.ok) continue;
-      const contentType = res.headers.get("content-type") || "image/jpeg";
-      const arrayBuffer = await res.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-      const fileName = `adjunto-lead-${i + 1}.${ext}`;
-
-      await uploadFile(project.google_drive_folder_id, fileName, contentType, buffer);
-    } catch (err) {
-      console.error(`[copyLeadAttachmentsToProject] Failed to copy file ${i}:`, err);
-    }
+  const parents = await getFileParents(leadFolderId);
+  const currentParent = parents[0];
+  if (!currentParent) {
+    console.error(`[promoteLeadFolderToProject] Lead folder ${leadFolderId} has no parent`);
+    return;
   }
+
+  await moveAndRenameFolder(leadFolderId, project.name, clientFolderId, currentParent);
+
+  await supabase
+    .from("projects")
+    .update({ google_drive_folder_id: leadFolderId })
+    .eq("id", projectId);
+
+  // The folder is no longer a "lead folder"; clear the reference so later
+  // emails route to the project folder via the same column lookup.
+  await supabase
+    .from("leads")
+    .update({ google_drive_folder_id: null })
+    .eq("id", leadId);
 }
 
 // ── Save Quote Items (presupuesto) ──────────────────────
@@ -3997,12 +4162,10 @@ export async function onPaymentConfirmed(
     }
     projectId = newProject.id;
 
-    // 4. Copiar adjuntos del lead a la carpeta del proyecto recién creado.
-    if (lead.attachments) {
-      copyLeadAttachmentsToProject(lead.id, projectId, supabase).catch((err) => {
-        console.error("[onPaymentConfirmed] Attachment copy failed:", err);
-      });
-    }
+    // 4. Heredar la carpeta del lead (o crearla si no existe) y vincularla al proyecto.
+    promoteLeadFolderToProject(lead.id, projectId, supabase).catch((err) => {
+      console.error("[onPaymentConfirmed] Folder promotion failed:", err);
+    });
   }
 
   // 5. Estado del lead → "paid" en cuanto entra cualquier pago. El detalle

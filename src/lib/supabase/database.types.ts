@@ -987,6 +987,47 @@ export type Database = {
           },
         ]
       }
+      lead_attachments: {
+        Row: {
+          created_at: string
+          filename: string
+          gmail_message_id: string | null
+          id: string
+          lead_id: string
+          mime_type: string
+          source: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          filename: string
+          gmail_message_id?: string | null
+          id?: string
+          lead_id: string
+          mime_type: string
+          source: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          filename?: string
+          gmail_message_id?: string | null
+          id?: string
+          lead_id?: string
+          mime_type?: string
+          source?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_attachments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_follow_ups: {
         Row: {
           action_type: string
@@ -1167,6 +1208,7 @@ export type Database = {
           estimated_urgency: string | null
           estimated_value: number | null
           full_name: string
+          google_drive_folder_id: string | null
           id: string
           instagram_username: string | null
           is_pre_won: boolean
@@ -1201,6 +1243,7 @@ export type Database = {
           estimated_urgency?: string | null
           estimated_value?: number | null
           full_name: string
+          google_drive_folder_id?: string | null
           id?: string
           instagram_username?: string | null
           is_pre_won?: boolean
@@ -1235,6 +1278,7 @@ export type Database = {
           estimated_urgency?: string | null
           estimated_value?: number | null
           full_name?: string
+          google_drive_folder_id?: string | null
           id?: string
           instagram_username?: string | null
           is_pre_won?: boolean
@@ -4445,4 +4489,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

@@ -357,9 +357,10 @@ async function processEmailAsLead(
     throw error;
   }
 
-  // Forward email attachments to the lead's project Drive folder (fire-and-forget)
+  // Forward attachments to Drive if a folder exists, otherwise buffer them in
+  // Supabase Storage until the lead is qualified (fire-and-forget).
   if (attachmentSource && attachmentSource.attachments.length > 0) {
-    uploadEmailAttachmentsToProject(
+    handleIncomingAttachments(
       supabase,
       leadId,
       attachmentSource.gmail,
@@ -419,34 +420,66 @@ async function processEmailAsLead(
   }
 }
 
-// ── EMAIL ATTACHMENTS → PROJECT DRIVE FOLDER ───────────────────
+// ── EMAIL ATTACHMENTS → DRIVE (if folder) / SUPABASE BUFFER (otherwise) ─
 
-async function uploadEmailAttachmentsToProject(
+async function handleIncomingAttachments(
   supabase: ReturnType<typeof createServiceClient>,
   leadId: string,
   gmail: gmail_v1.Gmail,
   messageId: string,
   attachments: EmailAttachmentRef[],
 ) {
-  // Find the project linked to this lead. If none, drop the attachments.
-  const { data: project } = await supabase
-    .from("projects")
+  // Prefer the lead's own Drive folder (set on qualification). Fall back to
+  // the linked project's folder for legacy leads that never had one.
+  const { data: lead } = await supabase
+    .from("leads")
     .select("google_drive_folder_id")
-    .eq("lead_id", leadId)
-    .not("google_drive_folder_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .eq("id", leadId)
     .single();
 
-  const folderId = project?.google_drive_folder_id;
-  if (!folderId) return;
+  let folderId = lead?.google_drive_folder_id ?? null;
+
+  if (!folderId) {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("google_drive_folder_id")
+      .eq("lead_id", leadId)
+      .not("google_drive_folder_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    folderId = project?.google_drive_folder_id ?? null;
+  }
 
   for (const att of attachments) {
     try {
       const buffer = await downloadGmailAttachment(gmail, messageId, att.attachmentId);
-      await uploadFile(folderId, att.filename, att.mimeType, buffer);
+
+      if (folderId) {
+        await uploadFile(folderId, att.filename, att.mimeType, buffer);
+      } else {
+        // No folder yet — park the file in Supabase Storage. qualifyLead()
+        // will drain the bucket into Drive when the lead leaves status=new.
+        const storagePath = `${leadId}/${messageId}-${att.attachmentId}-${att.filename}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("lead-attachments")
+          .upload(storagePath, buffer, {
+            contentType: att.mimeType,
+            upsert: true,
+          });
+        if (uploadErr) throw uploadErr;
+
+        await supabase.from("lead_attachments").insert({
+          lead_id: leadId,
+          source: "email",
+          filename: att.filename,
+          mime_type: att.mimeType,
+          storage_path: storagePath,
+          gmail_message_id: messageId,
+        });
+      }
     } catch (err) {
-      console.error(`[gmail-push] Failed to upload "${att.filename}":`, err);
+      console.error(`[gmail-push] Failed to handle "${att.filename}":`, err);
     }
   }
 }
