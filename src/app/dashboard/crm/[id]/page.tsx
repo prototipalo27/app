@@ -28,7 +28,7 @@ import LeadAddresses from "./lead-addresses";
 import LeadNav from "./lead-nav";
 import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
-import AttachmentGallery from "./attachment-gallery";
+import AttachmentGallery, { type AttachmentItem } from "./attachment-gallery";
 import EditableContactInfo from "./editable-contact-info";
 import InlineAssignSelect from "./inline-assign-select";
 import { FollowUpSection } from "./follow-up-section";
@@ -559,6 +559,8 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase.from("leads").select("*").eq("id", id).single();
   if (!lead) notFound();
 
+  const attachments = await resolveLeadAttachments(supabase, lead.id, lead.google_drive_folder_id, lead.attachments);
+
   // Fast parallel: nav + profiles (used for both userMap and managers, via service client so RLS doesn't hide non-super_admins)
   const [{ data: prevLeads }, { data: nextLeads }, allProfiles] = await Promise.all([
     supabase.from("leads").select("id").not("status", "in", "(won,paid,lost)").gt("created_at", lead.created_at).order("created_at", { ascending: true }).limit(1),
@@ -688,7 +690,7 @@ export default async function LeadDetailPage({
                 </div>
               )}
 
-              {lead.attachments && <AttachmentGallery attachments={lead.attachments} />}
+              {attachments.length > 0 && <AttachmentGallery items={attachments} />}
 
               {lead.lost_reason && (
                 <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
@@ -743,4 +745,83 @@ export default async function LeadDetailPage({
       </div>
     </div>
   );
+}
+
+/**
+ * Resolve every attachment a lead might have, from any of the storage
+ * backends we've used over time:
+ *   - Drive (post-qualification): files live in the lead's google_drive_folder_id
+ *   - Supabase Storage (pre-qualification): rows in lead_attachments
+ *   - Legacy Uploadcare URL (very old leads): leads.attachments
+ *
+ * The Drive proxy needs auth, so files are routed through
+ * /api/crm/leads/[leadId]/attachment/[fileId]. Supabase paths use
+ * short-lived signed URLs.
+ */
+async function resolveLeadAttachments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  leadId: string,
+  driveFolderId: string | null,
+  legacyUploadcareUrl: string | null,
+): Promise<AttachmentItem[]> {
+  const items: AttachmentItem[] = [];
+
+  if (driveFolderId) {
+    try {
+      const { listFolderFiles } = await import("@/lib/google-drive/client");
+      const files = await listFolderFiles(driveFolderId);
+      for (const f of files) {
+        if (f.mimeType === "application/vnd.google-apps.folder") continue;
+        const proxyUrl = `/api/crm/leads/${leadId}/attachment/${f.id}`;
+        items.push({
+          name: f.name,
+          isImage: f.mimeType.startsWith("image/"),
+          viewUrl: proxyUrl,
+          downloadUrl: proxyUrl,
+        });
+      }
+    } catch (err) {
+      console.error("[lead page] Failed to list lead Drive folder:", err);
+    }
+  } else {
+    const { data: rows } = await supabase
+      .from("lead_attachments")
+      .select("filename, mime_type, storage_path")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: true });
+
+    for (const r of rows ?? []) {
+      const { data: signed } = await supabase.storage
+        .from("lead-attachments")
+        .createSignedUrl(r.storage_path, 3600);
+      if (!signed) continue;
+      items.push({
+        name: r.filename,
+        isImage: (r.mime_type || "").startsWith("image/"),
+        viewUrl: signed.signedUrl,
+        downloadUrl: signed.signedUrl,
+      });
+    }
+  }
+
+  // Fallback to legacy Uploadcare URL only when we couldn't find anything new.
+  if (items.length === 0 && legacyUploadcareUrl) {
+    const url = legacyUploadcareUrl.trim();
+    const groupMatch = url.match(/~(\d+)\/?$/);
+    const fileCount = groupMatch ? parseInt(groupMatch[1]) : 0;
+    const baseUrl = url.replace(/\/$/, "");
+    const urls = fileCount > 0
+      ? Array.from({ length: fileCount }, (_, i) => `${baseUrl}/nth/${i}/`)
+      : [url];
+    for (let i = 0; i < urls.length; i++) {
+      items.push({
+        name: `Adjunto ${i + 1}`,
+        isImage: true,
+        viewUrl: urls[i],
+        downloadUrl: urls[i],
+      });
+    }
+  }
+
+  return items;
 }
