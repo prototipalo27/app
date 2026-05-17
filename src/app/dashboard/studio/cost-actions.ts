@@ -8,6 +8,12 @@ function strOrNull(v: FormDataEntryValue | null): string | null {
   return s ? s : null;
 }
 
+type TimeEntryKind = "engineering" | "print";
+
+function parseKind(v: FormDataEntryValue | null): TimeEntryKind {
+  return v === "print" ? "print" : "engineering";
+}
+
 // ─── Gastos ──────────────────────────────────────────────
 
 export async function addStudioExpense(formData: FormData) {
@@ -116,6 +122,7 @@ export async function addStudioTimeEntry(formData: FormData) {
     user_id: userId,
     user_label: userLabel,
     hours: parseFloat(hoursRaw),
+    kind: parseKind(formData.get("kind")),
     work_date: strOrNull(formData.get("work_date")) ?? new Date().toISOString().slice(0, 10),
     description: strOrNull(formData.get("description")),
     created_by: userData.user.id,
@@ -156,6 +163,7 @@ export async function updateStudioTimeEntry(formData: FormData) {
       user_id: userId,
       user_label: userLabel,
       hours: hoursRaw ? parseFloat(hoursRaw) : undefined,
+      kind: parseKind(formData.get("kind")),
       work_date: strOrNull(formData.get("work_date")) ?? undefined,
       description: strOrNull(formData.get("description")),
     })

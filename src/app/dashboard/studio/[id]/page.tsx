@@ -1430,6 +1430,8 @@ type Expense = {
   created_at: string;
 };
 
+type TimeEntryKind = "engineering" | "print";
+
 type TimeEntry = {
   id: string;
   studio_project_id: string;
@@ -1437,9 +1439,14 @@ type TimeEntry = {
   user_label: string | null;
   work_date: string;
   hours: number;
+  kind: string;
   description: string | null;
   created_at: string;
 };
+
+function normalizeKind(k: string | null | undefined): TimeEntryKind {
+  return k === "print" ? "print" : "engineering";
+}
 
 function CostesTab({
   projectId,
@@ -1458,17 +1465,25 @@ function CostesTab({
     "block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500";
 
   const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
-  const totalHours = timeEntries.reduce((acc, t) => acc + Number(t.hours), 0);
-  const horasCoste = totalHours * HOURLY_RATE_EUR;
+  const engineeringHours = timeEntries
+    .filter((t) => normalizeKind(t.kind) === "engineering")
+    .reduce((acc, t) => acc + Number(t.hours), 0);
+  const printHours = timeEntries
+    .filter((t) => normalizeKind(t.kind) === "print")
+    .reduce((acc, t) => acc + Number(t.hours), 0);
+  const totalHours = engineeringHours + printHours;
+  const horasCoste = engineeringHours * HOURLY_RATE_EUR;
   const margen = cobrado - totalExpenses - horasCoste;
   const margenPct = cobrado > 0 ? Math.round((margen / cobrado) * 100) : null;
+  const formatHours = (h: number) =>
+    h.toLocaleString("es-ES", { maximumFractionDigits: 1 });
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
       {/* Resumen interno */}
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
           <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
@@ -1479,11 +1494,19 @@ function CostesTab({
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Horas ({HOURLY_RATE_EUR}€/h)
+            Ingeniería
           </p>
           <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">
-            {totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h
+            {formatHours(engineeringHours)}h
             <span className="ml-2 text-xs font-normal text-zinc-500">{formatEur(horasCoste)}</span>
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Impresión
+          </p>
+          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">
+            {formatHours(printHours)}h
           </p>
         </div>
         <div
@@ -1625,7 +1648,16 @@ function CostesTab({
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-            Horas imputadas{timeEntries.length > 0 ? ` (${totalHours.toLocaleString("es-ES", { maximumFractionDigits: 1 })}h)` : ""}
+            Horas imputadas
+            {timeEntries.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                {formatHours(totalHours)}h
+                <span className="mx-1">·</span>
+                ing {formatHours(engineeringHours)}h
+                <span className="mx-1">·</span>
+                impr {formatHours(printHours)}h
+              </span>
+            )}
           </h3>
         </div>
         {timeEntries.length === 0 ? (
@@ -1645,6 +1677,14 @@ function CostesTab({
                     defaultValue={t.work_date}
                     className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                   />
+                  <select
+                    name="kind"
+                    defaultValue={normalizeKind(t.kind)}
+                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  >
+                    <option value="engineering">Ingeniería</option>
+                    <option value="print">Impresión</option>
+                  </select>
                   <select
                     name="user_id"
                     defaultValue={t.user_id ?? ""}
@@ -1702,13 +1742,21 @@ function CostesTab({
       >
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Imputar horas</h3>
         <input type="hidden" name="studio_project_id" value={projectId} />
-        <div className="grid gap-3 sm:grid-cols-[auto_auto_auto_1fr_auto]">
+        <div className="grid gap-3 sm:grid-cols-[auto_auto_auto_auto_1fr_auto]">
           <input
             type="date"
             name="work_date"
             defaultValue={todayIso}
             className={inputClass}
           />
+          <select
+            name="kind"
+            defaultValue="engineering"
+            className={`${inputClass} sm:w-32`}
+          >
+            <option value="engineering">Ingeniería</option>
+            <option value="print">Impresión</option>
+          </select>
           <select
             name="user_id"
             required

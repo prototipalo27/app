@@ -3438,6 +3438,7 @@ export type Database = {
           description: string | null
           hours: number
           id: string
+          kind: string
           studio_project_id: string
           user_id: string | null
           user_label: string | null
@@ -3449,6 +3450,7 @@ export type Database = {
           description?: string | null
           hours: number
           id?: string
+          kind?: string
           studio_project_id: string
           user_id?: string | null
           user_label?: string | null
@@ -3460,6 +3462,7 @@ export type Database = {
           description?: string | null
           hours?: number
           id?: string
+          kind?: string
           studio_project_id?: string
           user_id?: string | null
           user_label?: string | null
