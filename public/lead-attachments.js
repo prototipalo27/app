@@ -29,7 +29,7 @@
   function injectStyles() {
     if (document.getElementById("la-widget-styles")) return;
     var css = [
-      ".la-widget { display:flex; flex-direction:column; gap:10px; }",
+      ".la-widget { display:flex; flex-direction:column; gap:10px; margin:24px 0; }",
       ".la-dropzone { border:2px dashed #d1d5db; border-radius:10px; padding:22px 18px; text-align:center; cursor:pointer; transition:border-color .15s ease, background .15s ease; background:#fafafa; }",
       ".la-dropzone:hover { border-color:#9ca3af; background:#f3f4f6; }",
       ".la-dropzone.is-dragover { border-color:#2563eb; background:#eff6ff; }",
