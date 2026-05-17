@@ -320,6 +320,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  avif: "image/avif",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function guessMimeFromName(name: string): string {
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  return MIME_BY_EXT[ext] || "application/octet-stream";
+}
+
 /**
  * Move files uploaded via the public form (parked under `pending/{token}/`)
  * into the lead's namespace and register them as lead_attachments rows.
@@ -351,11 +373,19 @@ async function claimPendingAttachments(
       continue;
     }
 
+    // Supabase Storage's list() doesn't always expose mimetype, so fall back
+    // to the filename extension — that's what the gallery uses to pick the
+    // right preview, and what we forward to Drive on qualification.
+    const reportedMime = obj.metadata?.mimetype;
+    const mime = reportedMime && reportedMime !== "application/octet-stream"
+      ? reportedMime
+      : guessMimeFromName(obj.name);
+
     await supabase.from("lead_attachments").insert({
       lead_id: leadId,
       source: "webflow",
       filename: obj.name,
-      mime_type: obj.metadata?.mimetype || "application/octet-stream",
+      mime_type: mime,
       storage_path: toPath,
     });
   }

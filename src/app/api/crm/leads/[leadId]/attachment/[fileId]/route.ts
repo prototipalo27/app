@@ -3,6 +3,24 @@ import { requireRole } from "@/lib/rbac";
 import { createServiceClient } from "@/lib/supabase/server";
 import { listFolderFiles, downloadFile } from "@/lib/google-drive/client";
 
+const MIME_BY_EXT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  avif: "image/avif",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+};
+
+function guessMimeFromName(name: string): string | null {
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  return MIME_BY_EXT[ext] ?? null;
+}
+
 /**
  * Authenticated proxy for a Drive file that belongs to a lead's folder.
  * The CRM gallery hits this when displaying images that live in the lead's
@@ -51,9 +69,17 @@ export async function GET(
 
   const { buffer, mimeType, name } = await downloadFile(fileId);
 
+  // Drive sometimes stores octet-stream for files we uploaded before we
+  // started inferring the MIME from the filename; override here so <img>
+  // and PDF iframes render properly regardless.
+  const finalMime =
+    mimeType && mimeType !== "application/octet-stream"
+      ? mimeType
+      : (guessMimeFromName(name) ?? mimeType);
+
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      "Content-Type": mimeType,
+      "Content-Type": finalMime,
       "Content-Disposition": `inline; filename="${encodeURIComponent(name)}"`,
       "Cache-Control": "private, max-age=3600",
     },

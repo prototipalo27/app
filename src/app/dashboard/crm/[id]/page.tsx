@@ -28,7 +28,10 @@ import LeadAddresses from "./lead-addresses";
 import LeadNav from "./lead-nav";
 import LinkClient from "./link-client";
 import EmailPanel from "./email-panel";
-import AttachmentGallery, { type AttachmentItem } from "./attachment-gallery";
+import AttachmentGallery, {
+  type AttachmentItem,
+  type AttachmentKind,
+} from "./attachment-gallery";
 import EditableContactInfo from "./editable-contact-info";
 import InlineAssignSelect from "./inline-assign-select";
 import { FollowUpSection } from "./follow-up-section";
@@ -747,6 +750,21 @@ export default async function LeadDetailPage({
   );
 }
 
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "avif", "bmp", "svg"]);
+
+/** Decide how the gallery should render a file based on name + MIME. */
+function inferAttachmentKind(name: string, mimeType: string | null | undefined): AttachmentKind {
+  const mime = (mimeType || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  // Fallback to filename extension — Supabase Storage often loses the MIME
+  // when the listing comes back, and WhatsApp images upload with .jpeg.
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  if (IMAGE_EXTS.has(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  return "other";
+}
+
 /**
  * Resolve every attachment a lead might have, from any of the storage
  * backends we've used over time:
@@ -775,7 +793,7 @@ async function resolveLeadAttachments(
         const proxyUrl = `/api/crm/leads/${leadId}/attachment/${f.id}`;
         items.push({
           name: f.name,
-          isImage: f.mimeType.startsWith("image/"),
+          kind: inferAttachmentKind(f.name, f.mimeType),
           viewUrl: proxyUrl,
           downloadUrl: proxyUrl,
         });
@@ -797,7 +815,7 @@ async function resolveLeadAttachments(
       if (!signed) continue;
       items.push({
         name: r.filename,
-        isImage: (r.mime_type || "").startsWith("image/"),
+        kind: inferAttachmentKind(r.filename, r.mime_type),
         viewUrl: signed.signedUrl,
         downloadUrl: signed.signedUrl,
       });
@@ -816,7 +834,7 @@ async function resolveLeadAttachments(
     for (let i = 0; i < urls.length; i++) {
       items.push({
         name: `Adjunto ${i + 1}`,
-        isImage: true,
+        kind: "image",
         viewUrl: urls[i],
         downloadUrl: urls[i],
       });
