@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Tables } from "@/lib/supabase/database.types";
 import type { PacklinkService, PacklinkTrackingEvent } from "@/lib/packlink/types";
 import { saveClientAddress } from "./address-actions";
+import { enqueueShipmentPrint } from "./print-label-action";
 
 interface GlsTrackingEvent {
   date: string;
@@ -64,6 +65,8 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
   const [open, setOpen] = useState(false);
   const [tracking, setTracking] = useState<TrackingEvent[]>([]);
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [printState, setPrintState] = useState<"idle" | "sending" | "queued" | "error">("idle");
+  const [printError, setPrintError] = useState<string | null>(null);
 
   const isMrw = shipment.carrier === "MRW";
   const isGls = shipment.carrier === "GLS";
@@ -115,6 +118,31 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
         .catch(() => {});
     }
   }
+
+  async function printLabel() {
+    if (!ref || !shipment.carrier) return;
+    setPrintState("sending");
+    setPrintError(null);
+    try {
+      const result = await enqueueShipmentPrint({
+        shipmentId: shipment.id,
+        carrier: shipment.carrier,
+        ref,
+      });
+      if (result.ok) {
+        setPrintState("queued");
+        setTimeout(() => setPrintState("idle"), 4000);
+      } else {
+        setPrintState("error");
+        setPrintError(result.error);
+      }
+    } catch (err) {
+      setPrintState("error");
+      setPrintError(err instanceof Error ? err.message : "Error desconocido");
+    }
+  }
+
+  const canPrint = isMrw || isGls;
 
   const effectiveStatus = liveStatus ?? shipment.shipment_status ?? "pending";
   const statusClass = STATUS_BADGE[effectiveStatus] ?? STATUS_BADGE.pending;
@@ -197,7 +225,7 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
             )}
           </div>
 
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={downloadLabel}
               disabled={!ref}
@@ -205,6 +233,21 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
             >
               Download label
             </button>
+            {canPrint && (
+              <button
+                onClick={printLabel}
+                disabled={!ref || printState === "sending"}
+                className="rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
+              >
+                {printState === "sending"
+                  ? "Enviando…"
+                  : printState === "queued"
+                    ? "Encolada ✓"
+                    : printState === "error"
+                      ? "Reintentar impresión"
+                      : "Print label"}
+              </button>
+            )}
             <button
               onClick={fetchTracking}
               disabled={!ref}
@@ -213,6 +256,9 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
               Refresh tracking
             </button>
           </div>
+          {printError && (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{printError}</p>
+          )}
 
           {isCabify && shipment.tracking_number && (
             <div className="mt-4">
