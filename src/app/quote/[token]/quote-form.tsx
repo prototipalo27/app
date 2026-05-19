@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { submitBillingData } from "./actions";
 import AddressAutocomplete, { type AddressComponents } from "@/components/address-autocomplete";
+import { DISCOUNT_THRESHOLD_EUR } from "@/app/proforma/[token]/constants";
 
 interface QuoteItem {
   concept: string;
@@ -110,8 +111,9 @@ export default function QuoteForm({
   }
 
   // Quote items calculations
-  const discountFactor = paymentOption === "full" ? 0.95 : 1;
   const subtotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
+  const canChoose = subtotal >= DISCOUNT_THRESHOLD_EUR;
+  const discountFactor = canChoose && paymentOption === "full" ? 0.95 : 1;
   const discountedSubtotal = Math.round(subtotal * discountFactor * 100) / 100;
   const taxBreakdown = items.reduce<Record<number, number>>((acc, i) => {
     const lineSubtotal = i.price * i.units * discountFactor;
@@ -171,36 +173,45 @@ export default function QuoteForm({
           {/* Payment option */}
           <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <p className="mb-3 text-sm font-medium text-zinc-900 dark:text-white">Forma de pago</p>
-            <div className="space-y-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
-                <input
-                  type="radio"
-                  name="payment_option"
-                  value="full"
-                  checked={paymentOption === "full"}
-                  onChange={() => setPaymentOption("full")}
-                  className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
-                />
-                <div>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago único — 5% de descuento</span>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Paga el 100% ahora y recibe un 5% de descuento sobre el total.</p>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
-                <input
-                  type="radio"
-                  name="payment_option"
-                  value="split"
-                  checked={paymentOption === "split"}
-                  onChange={() => setPaymentOption("split")}
-                  className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
-                />
-                <div>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago 50% — 50%</span>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">50% al aceptar el presupuesto, 50% a la entrega del proyecto.</p>
-                </div>
-              </label>
-            </div>
+            {canChoose ? (
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
+                  <input
+                    type="radio"
+                    name="payment_option"
+                    value="full"
+                    checked={paymentOption === "full"}
+                    onChange={() => setPaymentOption("full")}
+                    className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago único — 5% de descuento</span>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Paga el 100% ahora y recibe un 5% de descuento sobre el total.</p>
+                  </div>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand/5 dark:border-zinc-700 dark:has-[:checked]:border-brand">
+                  <input
+                    type="radio"
+                    name="payment_option"
+                    value="split"
+                    checked={paymentOption === "split"}
+                    onChange={() => setPaymentOption("split")}
+                    className="mt-0.5 h-4 w-4 text-brand focus:ring-brand"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago 50% — 50%</span>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">50% al aceptar el presupuesto, 50% a la entrega del proyecto.</p>
+                  </div>
+                </label>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <span className="text-sm font-medium text-zinc-900 dark:text-white">Pago único del total</span>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  En proyectos por debajo de {DISCOUNT_THRESHOLD_EUR}€ (sin IVA) el pago se realiza en una sola entrega.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Totals */}
@@ -209,7 +220,7 @@ export default function QuoteForm({
               <span>Subtotal</span>
               <span className="tabular-nums">{subtotal.toFixed(2)} €</span>
             </div>
-            {paymentOption === "full" && (
+            {canChoose && paymentOption === "full" && (
               <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                 <span>Descuento 5%</span>
                 <span className="tabular-nums">-{(subtotal * 0.05).toFixed(2)} €</span>

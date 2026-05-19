@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { searchContacts, createContact, updateContact, createProforma, getDocument, getDocumentPdf } from "@/lib/holded/api";
 import { sendEmail } from "@/lib/email";
+import { DISCOUNT_THRESHOLD_EUR } from "@/app/proforma/[token]/constants";
 
 interface BillingData {
   billing_name: string;
@@ -149,11 +150,17 @@ export async function submitBillingData(
       }))
     : originalItems;
 
-  const isFullPayment = data.payment_option === "full";
+  // Base imponible sin IVA — define si el cliente puede elegir descuento/aplazado
+  const rawSubtotal = items.reduce((s, i) => s + i.price * i.units, 0);
+  const canChoose = rawSubtotal >= DISCOUNT_THRESHOLD_EUR;
+  // Si el proyecto está por debajo del umbral, se fuerza pago único sin descuento
+  const isFullPayment = !canChoose || data.payment_option === "full";
+  const applyDiscount = canChoose && data.payment_option === "full";
+
   const proformaItems = items.map((item) => ({
     name: item.concept,
     units: item.units,
-    subtotal: isFullPayment
+    subtotal: applyDiscount
       ? Math.round(item.price * 0.95 * 100) / 100
       : item.price,
     tax: item.tax,
@@ -161,9 +168,11 @@ export async function submitBillingData(
 
   const proformaNotes = [
     qr.notes || "",
-    isFullPayment
+    applyDiscount
       ? "Pago único — 5% de descuento aplicado."
-      : "Pago 50% a la aceptación, 50% a la entrega.",
+      : isFullPayment
+        ? "Pago único del total."
+        : "Pago 50% a la aceptación, 50% a la entrega.",
   ].filter(Boolean).join("\n");
 
   if (holdedContactId && proformaItems.length > 0) {
@@ -208,7 +217,7 @@ export async function submitBillingData(
     .single();
 
   const leadUpdate: Record<string, unknown> = {
-    payment_condition: isFullPayment ? "100-5" : "50-50",
+    payment_condition: applyDiscount ? "100-5" : isFullPayment ? "100-0" : "50-50",
   };
   if (currentLead && currentLead.status !== "won" && currentLead.status !== "paid") {
     leadUpdate.status = "won";
@@ -232,8 +241,8 @@ export async function submitBillingData(
     const Stripe = (await import("stripe")).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-    const isSplit = data.payment_option === "split";
-    const discountFactor = isFullPayment ? 0.95 : 1;
+    const isSplit = !isFullPayment;
+    const discountFactor = applyDiscount ? 0.95 : 1;
     const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
     const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
     const total = subtotal + taxTotal;

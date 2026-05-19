@@ -214,9 +214,9 @@ export async function getRecurringClients(): Promise<RecurringClient[]> {
     });
   }
 
-  // Merge Holded contacts
+  // Merge Holded contacts (exclude only suppliers/leads — empty type ≈ client)
   for (const hc of holdedContacts) {
-    if (hc.type !== "client") continue;
+    if (hc.type === "supplier" || hc.type === "lead") continue;
     const key = hc.email?.toLowerCase() || `holded_${hc.id}`;
 
     const existing = clientMap.get(key);
