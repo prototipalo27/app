@@ -23,6 +23,7 @@ export default function QuoteForm({
 }) {
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsShipping, setNeedsShipping] = useState(false);
   const [items, setItems] = useState<QuoteItem[]>(initialItems);
@@ -85,6 +86,7 @@ export default function QuoteForm({
       });
 
       if (result.success) {
+        setCheckoutUrl(result.checkoutUrl || null);
         setDone(true);
       } else {
         setError(result.error || "Error al enviar los datos");
@@ -103,9 +105,23 @@ export default function QuoteForm({
         <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
           Datos enviados correctamente
         </h2>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Gracias. Recibirás la proforma por email en breve para proceder con el pago.
-        </p>
+        {checkoutUrl ? (
+          <>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Puedes pagar ahora con tarjeta o esperar la proforma por email para transferencia.
+            </p>
+            <a
+              href={checkoutUrl}
+              className="mt-5 inline-block rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand/90"
+            >
+              Pagar con tarjeta ahora
+            </a>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            Gracias. Recibirás la proforma por email en breve para proceder con el pago.
+          </p>
+        )}
       </div>
     );
   }

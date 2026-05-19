@@ -36,7 +36,7 @@ interface QuoteItem {
 export async function submitBillingData(
   token: string,
   data: BillingData,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; checkoutUrl?: string | null }> {
   const supabase = createServiceClient();
 
   // 1. Validate token exists and is pending/quote_sent
@@ -378,5 +378,5 @@ export async function submitBillingData(
     console.error("[submitBillingData] Cannot send email — holdedProformaId:", holdedProformaId, "email:", lead?.email);
   }
 
-  return { success: true };
+  return { success: true, checkoutUrl: stripeCheckoutUrl };
 }
