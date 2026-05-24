@@ -167,13 +167,14 @@ export default async function StudioProjectDetailPage({
           .eq("studio_project_id", id)
           .order("expense_date", { ascending: false })
       : Promise.resolve({ data: null }),
-    canDelete
-      ? supabase
-          .from("studio_time_entries")
-          .select("*")
-          .eq("studio_project_id", id)
-          .order("work_date", { ascending: false })
-      : Promise.resolve({ data: null }),
+    // Las horas son visibles para los miembros del proyecto también, no
+    // solo managers, así que las pedimos siempre. La pestaña Costes filtra
+    // qué se renderiza según permisos.
+    supabase
+      .from("studio_time_entries")
+      .select("*")
+      .eq("studio_project_id", id)
+      .order("work_date", { ascending: false }),
   ]);
 
   // Si el proyecto tiene miembros configurados, los pickers (PM, asistentes,
@@ -185,6 +186,11 @@ export default async function StudioProjectDetailPage({
   const baseTeam = memberUserIds.size > 0
     ? allUsers.filter((u) => memberUserIds.has(u.id))
     : allUsers;
+
+  // Costes: los managers ven todo (gastos, horas, margen). Los miembros
+  // del proyecto pueden ver/editar horas pero no gastos ni cifras €.
+  const isProjectMember = memberUserIds.has(profile.id);
+  const canViewCosts = canDelete || isProjectMember;
   // El PM actual debe seguir apareciendo en el dropdown aunque no esté en el equipo
   // (ej. proyectos antiguos donde el PM se fijó antes de configurar miembros).
   const projectTeam = project.project_manager_id && !baseTeam.some((u) => u.id === project.project_manager_id)
@@ -269,7 +275,7 @@ export default async function StudioProjectDetailPage({
             current={tab}
             label={`Reuniones${meetings && meetings.length > 0 ? ` (${meetings.length})` : ""}`}
           />
-          {canDelete && (
+          {canViewCosts && (
             <TabLink id={project.id} tab="costes" current={tab} label="Costes" />
           )}
           <TabLink
@@ -359,13 +365,15 @@ export default async function StudioProjectDetailPage({
         />
       )}
 
-      {tab === "costes" && canDelete && (
+      {tab === "costes" && canViewCosts && (
         <CostesTab
           projectId={project.id}
           expenses={expenses ?? []}
           timeEntries={timeEntries ?? []}
           team={projectTeam}
           cobrado={cobrado}
+          canFullCosts={canDelete}
+          currentUserId={profile.id}
         />
       )}
 
@@ -1454,12 +1462,16 @@ function CostesTab({
   timeEntries,
   team,
   cobrado,
+  canFullCosts,
+  currentUserId,
 }: {
   projectId: string;
   expenses: Expense[];
   timeEntries: TimeEntry[];
   team: { id: string; full_name: string | null; nickname: string | null; email: string }[];
   cobrado: number;
+  canFullCosts: boolean;
+  currentUserId: string;
 }) {
   const inputClass =
     "block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500";
@@ -1483,22 +1495,28 @@ function CostesTab({
   return (
     <div className="space-y-6">
       {/* Resumen interno */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
-          <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Gastos</p>
-          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(totalExpenses)}</p>
-        </div>
+      <div className={`grid gap-3 ${canFullCosts ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-2"}`}>
+        {canFullCosts && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Cobrado</p>
+            <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">{formatEur(cobrado)}</p>
+          </div>
+        )}
+        {canFullCosts && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Gastos</p>
+            <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">{formatEur(totalExpenses)}</p>
+          </div>
+        )}
         <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Ingeniería
           </p>
           <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-white">
             {formatHours(engineeringHours)}h
-            <span className="ml-2 text-xs font-normal text-zinc-500">{formatEur(horasCoste)}</span>
+            {canFullCosts && (
+              <span className="ml-2 text-xs font-normal text-zinc-500">{formatEur(horasCoste)}</span>
+            )}
           </p>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
@@ -1509,24 +1527,28 @@ function CostesTab({
             {formatHours(printHours)}h
           </p>
         </div>
-        <div
-          className={`rounded-xl border p-3 ${
-            margen >= 0
-              ? "border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-900/10"
-              : "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-900/10"
-          }`}
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Margen</p>
-          <p className={`mt-1 text-lg font-bold ${margen >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
-            {formatEur(margen)}
-            {margenPct !== null && (
-              <span className="ml-2 text-xs font-normal opacity-80">{margenPct}%</span>
-            )}
-          </p>
-        </div>
+        {canFullCosts && (
+          <div
+            className={`rounded-xl border p-3 ${
+              margen >= 0
+                ? "border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-900/10"
+                : "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-900/10"
+            }`}
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600 dark:text-zinc-300">Margen</p>
+            <p className={`mt-1 text-lg font-bold ${margen >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
+              {formatEur(margen)}
+              {margenPct !== null && (
+                <span className="ml-2 text-xs font-normal opacity-80">{margenPct}%</span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Gastos */}
+      {/* Gastos (solo managers) */}
+      {canFullCosts && (
+      <>
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
@@ -1643,6 +1665,8 @@ function CostesTab({
           </button>
         </div>
       </form>
+      </>
+      )}
 
       {/* Horas imputadas */}
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -1666,7 +1690,35 @@ function CostesTab({
           </p>
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {timeEntries.map((t) => (
+            {timeEntries.map((t) => {
+              const isOwner = t.user_id === currentUserId;
+              const canEdit = canFullCosts || isOwner;
+              if (!canEdit) {
+                return (
+                  <li key={t.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{t.work_date}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      normalizeKind(t.kind) === "print"
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    }`}>
+                      {normalizeKind(t.kind) === "print" ? "Impresión" : "Ingeniería"}
+                    </span>
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                      {t.user_label ?? "Sin asignar"}
+                    </span>
+                    <span className="font-semibold text-zinc-900 dark:text-white">
+                      {Number(t.hours).toLocaleString("es-ES", { maximumFractionDigits: 2 })}h
+                    </span>
+                    {t.description && (
+                      <span className="min-w-0 flex-1 truncate text-zinc-500 dark:text-zinc-400">
+                        {t.description}
+                      </span>
+                    )}
+                  </li>
+                );
+              }
+              return (
               <li key={t.id} className="px-5 py-3">
                 <form action={updateStudioTimeEntry} className="flex flex-wrap items-center gap-2">
                   <input type="hidden" name="id" value={t.id} />
@@ -1685,18 +1737,27 @@ function CostesTab({
                     <option value="engineering">Ingeniería</option>
                     <option value="print">Impresión</option>
                   </select>
-                  <select
-                    name="user_id"
-                    defaultValue={t.user_id ?? ""}
-                    className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                  >
-                    <option value="">{t.user_label ?? "Sin asignar"}</option>
-                    {team.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nickname || u.full_name || u.email.split("@")[0]}
-                      </option>
-                    ))}
-                  </select>
+                  {canFullCosts ? (
+                    <select
+                      name="user_id"
+                      defaultValue={t.user_id ?? ""}
+                      className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    >
+                      <option value="">{t.user_label ?? "Sin asignar"}</option>
+                      {team.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nickname || u.full_name || u.email.split("@")[0]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input type="hidden" name="user_id" value={t.user_id ?? ""} />
+                      <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {t.user_label ?? "Yo"}
+                      </span>
+                    </>
+                  )}
                   <input
                     type="number"
                     name="hours"
@@ -1731,7 +1792,8 @@ function CostesTab({
                   </button>
                 </form>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
@@ -1742,7 +1804,10 @@ function CostesTab({
       >
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Imputar horas</h3>
         <input type="hidden" name="studio_project_id" value={projectId} />
-        <div className="grid gap-3 sm:grid-cols-[auto_auto_auto_auto_1fr_auto]">
+        {!canFullCosts && (
+          <input type="hidden" name="user_id" value={currentUserId} />
+        )}
+        <div className={`grid gap-3 ${canFullCosts ? "sm:grid-cols-[auto_auto_auto_auto_1fr_auto]" : "sm:grid-cols-[auto_auto_auto_1fr_auto]"}`}>
           <input
             type="date"
             name="work_date"
@@ -1757,19 +1822,21 @@ function CostesTab({
             <option value="engineering">Ingeniería</option>
             <option value="print">Impresión</option>
           </select>
-          <select
-            name="user_id"
-            required
-            defaultValue=""
-            className={`${inputClass} sm:w-40`}
-          >
-            <option value="" disabled>Quién</option>
-            {team.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nickname || u.full_name || u.email.split("@")[0]}
-              </option>
-            ))}
-          </select>
+          {canFullCosts && (
+            <select
+              name="user_id"
+              required
+              defaultValue=""
+              className={`${inputClass} sm:w-40`}
+            >
+              <option value="" disabled>Quién</option>
+              {team.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nickname || u.full_name || u.email.split("@")[0]}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="number"
             name="hours"

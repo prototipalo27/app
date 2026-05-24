@@ -195,12 +195,23 @@ export async function updateProjectDeadline(projectId: string, deadline: string 
     throw new Error("Unauthorized");
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("projects")
     .update({ deadline })
-    .eq("id", projectId);
+    .eq("id", projectId)
+    .select("lead_id")
+    .single();
 
   if (error) throw new Error(error.message);
+
+  // Propagar al lead vinculado para que ambas vistas queden sincronizadas
+  if (updated?.lead_id) {
+    await supabase
+      .from("leads")
+      .update({ desired_delivery_date: deadline })
+      .eq("id", updated.lead_id);
+    revalidatePath(`/dashboard/crm/${updated.lead_id}`);
+  }
 
   // Fire-and-forget sync al calendario compartido
   syncProjectDeliveryEvents(projectId).catch(() => {});

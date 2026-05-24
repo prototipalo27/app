@@ -18,6 +18,7 @@ interface KanbanBoardProps {
   invoiceDocNumbers?: Record<string, string>;
   pmNames?: Record<string, string>;
   cityByProject?: Record<string, string>;
+  pickupByProject?: Record<string, boolean>;
 }
 
 function normalize(str: string): string {
@@ -75,7 +76,7 @@ function StudioDropZone({ pending }: { pending: boolean }) {
   );
 }
 
-export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {}, pmNames = {}, cityByProject = {} }: KanbanBoardProps) {
+export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDocNumbers = {}, pmNames = {}, cityByProject = {}, pickupByProject = {} }: KanbanBoardProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [dragging, setDragging] = useState(false);
   const [search, setSearch] = useState("");
@@ -280,6 +281,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
                   invoiceDocNumbers={invoiceDocNumbers}
                   pmNames={pmNames}
                   cityByProject={cityByProject}
+                  pickupByProject={pickupByProject}
                 />
                 <KanbanColumn
                   className="min-h-0 overflow-hidden"
@@ -287,6 +289,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
                   projects={getColumnProjects(stackedColumn.id)}
                   responsibles={zoneResponsibles[stackedColumn.id]}
                   pmNames={pmNames}
+                  pickupByProject={pickupByProject}
                 />
               </div>
             );
@@ -300,6 +303,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
               responsibles={zoneResponsibles[column.id]}
               pmNames={pmNames}
               cityByProject={cityByProject}
+              pickupByProject={pickupByProject}
             />
           );
         })}

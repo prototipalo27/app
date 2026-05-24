@@ -17,6 +17,7 @@ interface KanbanCardProps {
   invoiceDocNumber?: string;
   projectManagerName?: string;
   city?: string;
+  pickup?: boolean;
 }
 
 function getDeadlineInfo(deadline: string | null): { label: string; days: number | null; colorClass: string } {
@@ -36,7 +37,7 @@ function getDeadlineInfo(deadline: string | null): { label: string; days: number
   return { label, days: diff, colorClass: "bg-blue-500/20 text-blue-400 border-blue-500/30" };
 }
 
-export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city }: KanbanCardProps) {
+export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city, pickup }: KanbanCardProps) {
   const router = useRouter();
   const [showTooltip, setShowTooltip] = useState(false);
   const { ref, isDragging } = useDraggable({
@@ -72,14 +73,21 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city
           </span>
         )}
       </div>
-      {city && (
+      {pickup ? (
+        <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+          <svg className="h-2.5 w-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18l-2 5H5L3 7zM3 7l-1-3M8 21a1 1 0 100-2 1 1 0 000 2zm9 0a1 1 0 100-2 1 1 0 000 2z" />
+          </svg>
+          <span>Local · recogida</span>
+        </div>
+      ) : city ? (
         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
           <svg className="h-2.5 w-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <span className="truncate">{city}</span>
         </div>
-      )}
+      ) : null}
 
       {/* Hover tooltip with full info */}
       {showTooltip && !isDragging && (

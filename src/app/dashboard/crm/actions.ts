@@ -2181,7 +2181,7 @@ export async function updateDesiredDeliveryDate(
       .from("projects")
       .update({ deadline: newDeadline })
       .eq("lead_id", id)
-      .eq("project_type", "confirmed")
+      .in("project_type", ["confirmed", "upcoming"])
       .neq("status", "delivered")
       .select("id");
 

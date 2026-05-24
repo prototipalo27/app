@@ -95,6 +95,32 @@ export default async function DashboardPage() {
     }
   }
 
+  // pickup_in_person flag per project (via lead_id → quote_requests)
+  const leadIds = Array.from(
+    new Set(
+      (confirmedProjects ?? [])
+        .map((p) => p.lead_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const pickupByProject: Record<string, boolean> = {};
+  if (leadIds.length > 0) {
+    const { data: quoteRequests } = await supabase
+      .from("quote_requests")
+      .select("lead_id, pickup_in_person")
+      .in("lead_id", leadIds);
+
+    const pickupByLead = new Map<string, boolean>();
+    for (const qr of quoteRequests ?? []) {
+      if (qr.pickup_in_person) pickupByLead.set(qr.lead_id, true);
+    }
+    for (const p of confirmedProjects ?? []) {
+      if (p.lead_id && pickupByLead.get(p.lead_id)) {
+        pickupByProject[p.id] = true;
+      }
+    }
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
       <AutoSync lastSyncAt={syncMeta?.value ?? null} />
@@ -128,7 +154,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} pmNames={pmNames} cityByProject={cityByProject} />
+          <KanbanBoard initialProjects={confirmedProjects} zoneResponsibles={zoneResponsibles} invoiceDocNumbers={invoiceDocNumbers} pmNames={pmNames} cityByProject={cityByProject} pickupByProject={pickupByProject} />
         </div>
       )}
     </div>

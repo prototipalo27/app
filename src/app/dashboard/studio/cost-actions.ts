@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUserProfile, hasRole } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 
 function strOrNull(v: FormDataEntryValue | null): string | null {
@@ -12,6 +13,29 @@ type TimeEntryKind = "engineering" | "print";
 
 function parseKind(v: FormDataEntryValue | null): TimeEntryKind {
   return v === "print" ? "print" : "engineering";
+}
+
+// Devuelve { isManager, isMember } para un usuario en un proyecto Studio.
+// Usado por las acciones de horas: los managers pueden hacer cualquier
+// imputación; los miembros del proyecto solo las suyas.
+async function getProjectAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  projectId: string,
+): Promise<{ isManager: boolean; isMember: boolean }> {
+  const profile = await getUserProfile();
+  const isManager = profile ? hasRole(profile.role, "manager") : false;
+
+  if (isManager) return { isManager: true, isMember: true };
+
+  const { data } = await supabase
+    .from("studio_project_members")
+    .select("id")
+    .eq("studio_project_id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return { isManager: false, isMember: !!data };
 }
 
 // ─── Gastos ──────────────────────────────────────────────
@@ -102,7 +126,15 @@ export async function addStudioTimeEntry(formData: FormData) {
   const hoursRaw = strOrNull(formData.get("hours"));
   if (!projectId || !hoursRaw) throw new Error("Falta proyecto u horas");
 
-  const userId = strOrNull(formData.get("user_id"));
+  const access = await getProjectAccess(supabase, userData.user.id, projectId);
+  if (!access.isManager && !access.isMember) {
+    throw new Error("Solo los miembros del proyecto pueden imputar horas.");
+  }
+
+  // Los empleados solo pueden imputar SUS propias horas. Los managers
+  // pueden imputar en nombre de cualquiera del equipo.
+  const formUserId = strOrNull(formData.get("user_id"));
+  const userId = access.isManager ? formUserId : userData.user.id;
   let userLabel = strOrNull(formData.get("user_label"));
 
   // Si no nos pasan label pero sí user_id, intentamos sacarlo del perfil.
@@ -138,12 +170,30 @@ export async function addStudioTimeEntry(formData: FormData) {
 
 export async function updateStudioTimeEntry(formData: FormData) {
   const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Not authenticated");
+
   const id = strOrNull(formData.get("id"));
   const projectId = strOrNull(formData.get("studio_project_id"));
   if (!id || !projectId) throw new Error("Falta id o proyecto");
 
+  const access = await getProjectAccess(supabase, userData.user.id, projectId);
+  if (!access.isManager) {
+    // Si no es manager, solo puede editar imputaciones suyas.
+    const { data: existing } = await supabase
+      .from("studio_time_entries")
+      .select("user_id")
+      .eq("id", id)
+      .single();
+    if (!existing || existing.user_id !== userData.user.id) {
+      throw new Error("Solo puedes editar tus propias horas.");
+    }
+  }
+
   const hoursRaw = strOrNull(formData.get("hours"));
-  const userId = strOrNull(formData.get("user_id"));
+  const formUserId = strOrNull(formData.get("user_id"));
+  // Empleados no pueden re-asignar la imputación a otro usuario.
+  const userId = access.isManager ? formUserId : userData.user.id;
   let userLabel = strOrNull(formData.get("user_label"));
 
   if (userId && !userLabel) {
@@ -179,9 +229,24 @@ export async function updateStudioTimeEntry(formData: FormData) {
 
 export async function deleteStudioTimeEntry(formData: FormData) {
   const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Not authenticated");
+
   const id = strOrNull(formData.get("id"));
   const projectId = strOrNull(formData.get("studio_project_id"));
   if (!id || !projectId) throw new Error("Falta id o proyecto");
+
+  const access = await getProjectAccess(supabase, userData.user.id, projectId);
+  if (!access.isManager) {
+    const { data: existing } = await supabase
+      .from("studio_time_entries")
+      .select("user_id")
+      .eq("id", id)
+      .single();
+    if (!existing || existing.user_id !== userData.user.id) {
+      throw new Error("Solo puedes borrar tus propias horas.");
+    }
+  }
 
   const { error } = await supabase
     .from("studio_time_entries")
