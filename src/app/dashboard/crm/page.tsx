@@ -77,13 +77,17 @@ export default async function CrmPage() {
     }
   }
 
-  // Fallback: if a paid lead has no shipping_address in quote_requests, look it
-  // up in client_addresses via the linked project's holded_contact_id. Sales
-  // teams often add the address from the project page, which only writes to
-  // client_addresses — without this fallback the lead card would stay red.
-  const leadsMissingAddress = Object.entries(shippingAddressMap)
-    .filter(([, v]) => !v || !String(v).trim())
-    .map(([leadId]) => leadId);
+  // Fallback: any paid lead without a shipping_address from quote_requests
+  // (either filtered out by payment_status or never written) should still
+  // resolve via client_addresses — otherwise the kanban "falta dirección"
+  // alert stays red even when the address is set from the project page.
+  const leadsMissingAddress = leads
+    .filter((l) => l.status === "paid")
+    .map((l) => l.id)
+    .filter((id) => {
+      const v = shippingAddressMap[id];
+      return !v || !String(v).trim();
+    });
   if (leadsMissingAddress.length > 0) {
     const { data: projectsForLeads } = await supabase
       .from("projects")
