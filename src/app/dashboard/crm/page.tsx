@@ -77,6 +77,49 @@ export default async function CrmPage() {
     }
   }
 
+  // Fallback: if a paid lead has no shipping_address in quote_requests, look it
+  // up in client_addresses via the linked project's holded_contact_id. Sales
+  // teams often add the address from the project page, which only writes to
+  // client_addresses — without this fallback the lead card would stay red.
+  const leadsMissingAddress = Object.entries(shippingAddressMap)
+    .filter(([, v]) => !v || !String(v).trim())
+    .map(([leadId]) => leadId);
+  if (leadsMissingAddress.length > 0) {
+    const { data: projectsForLeads } = await supabase
+      .from("projects")
+      .select("lead_id, holded_contact_id")
+      .in("lead_id", leadsMissingAddress)
+      .not("holded_contact_id", "is", null);
+
+    const contactIds = Array.from(
+      new Set((projectsForLeads ?? []).map((p) => p.holded_contact_id).filter((id): id is string => !!id)),
+    );
+
+    if (contactIds.length > 0) {
+      const { data: defaultAddresses } = await supabase
+        .from("client_addresses")
+        .select("holded_contact_id, address_line, is_default, created_at")
+        .in("holded_contact_id", contactIds)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      const addressByContact = new Map<string, string>();
+      for (const a of defaultAddresses ?? []) {
+        if (a.address_line && !addressByContact.has(a.holded_contact_id)) {
+          addressByContact.set(a.holded_contact_id, a.address_line);
+        }
+      }
+
+      for (const p of projectsForLeads ?? []) {
+        if (!p.lead_id || !p.holded_contact_id) continue;
+        const addr = addressByContact.get(p.holded_contact_id);
+        if (addr && !shippingAddressMap[p.lead_id]) {
+          shippingAddressMap[p.lead_id] = addr;
+        }
+      }
+    }
+  }
+
   const leadsWithAssignee: LeadWithAssignee[] = leads.map((l) => ({
     ...l,
     assignee_email: l.assigned_to ? userEmailMap.get(l.assigned_to) || null : null,

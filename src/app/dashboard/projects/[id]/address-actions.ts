@@ -2,6 +2,56 @@
 
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Push the chosen default shipping address into the paid quote_requests for
+ * every lead that belongs to the same Holded contact, so the CRM kanban's
+ * "falta dirección" alert clears as soon as someone fills it in from the
+ * project page. Best-effort — never blocks the original save.
+ */
+async function syncDefaultAddressToQuoteRequests(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  holdedContactId: string,
+  addr: {
+    addressLine?: string | null;
+    city?: string | null;
+    postalCode?: string | null;
+    province?: string | null;
+    country?: string | null;
+    recipientName?: string | null;
+    recipientPhone?: string | null;
+    recipientEmail?: string | null;
+  },
+) {
+  const line = (addr.addressLine || "").trim();
+  if (!line) return;
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("lead_id")
+    .eq("holded_contact_id", holdedContactId)
+    .not("lead_id", "is", null);
+
+  const leadIds = Array.from(
+    new Set((projects ?? []).map((p) => p.lead_id).filter((id): id is string => !!id)),
+  );
+  if (leadIds.length === 0) return;
+
+  await supabase
+    .from("quote_requests")
+    .update({
+      shipping_address: line,
+      shipping_postal_code: addr.postalCode?.trim() || null,
+      shipping_city: addr.city?.trim() || null,
+      shipping_province: addr.province?.trim() || null,
+      shipping_country: addr.country?.trim() || null,
+      shipping_recipient_name: addr.recipientName?.trim() || null,
+      shipping_recipient_phone: addr.recipientPhone?.trim() || null,
+      shipping_recipient_email: addr.recipientEmail?.trim() || null,
+      pickup_in_person: false,
+    })
+    .in("lead_id", leadIds);
+}
+
 export async function getClientAddresses(holdedContactId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -60,6 +110,20 @@ export async function saveClientAddress(input: {
     .single();
 
   if (error) return { success: false as const, error: error.message };
+
+  if (input.isDefault) {
+    await syncDefaultAddressToQuoteRequests(supabase, input.holdedContactId, {
+      addressLine: input.addressLine,
+      city: input.city,
+      postalCode: input.postalCode,
+      province: input.province,
+      country: input.country,
+      recipientName: input.recipientName,
+      recipientPhone: input.recipientPhone,
+      recipientEmail: input.recipientEmail,
+    });
+  }
+
   return { success: true as const, data };
 }
 
@@ -113,6 +177,27 @@ export async function updateClientAddress(
     .eq("id", id);
 
   if (error) return { success: false as const, error: error.message };
+
+  if (input.isDefault) {
+    const { data: addr } = await supabase
+      .from("client_addresses")
+      .select("holded_contact_id")
+      .eq("id", id)
+      .single();
+    if (addr?.holded_contact_id) {
+      await syncDefaultAddressToQuoteRequests(supabase, addr.holded_contact_id, {
+        addressLine: input.addressLine,
+        city: input.city,
+        postalCode: input.postalCode,
+        province: input.province,
+        country: input.country,
+        recipientName: input.recipientName,
+        recipientPhone: input.recipientPhone,
+        recipientEmail: input.recipientEmail,
+      });
+    }
+  }
+
   return { success: true as const };
 }
 
