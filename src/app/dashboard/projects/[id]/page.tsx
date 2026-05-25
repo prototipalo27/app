@@ -20,6 +20,7 @@ import ProjectChecklist from "./project-checklist";
 import ApplyTemplate from "./apply-template";
 import PmSelector from "./pm-selector";
 import { NegotiationBriefing } from "./negotiation-briefing";
+import LeadRemarksReadonly, { type LeadRemarkSummary } from "./lead-remarks-readonly";
 import { formatDateTime } from "@/lib/dates";
 
 const STATUSES = [
@@ -247,6 +248,9 @@ export default async function ProjectDetailPage({
     created_by: string | null;
   }> = [];
 
+  let leadRemarks: LeadRemarkSummary[] = [];
+  let leadRemarksUserMap: Record<string, string> = {};
+
   if (linkedLead) {
     const { data: activities } = await supabase
       .from("lead_activities")
@@ -256,6 +260,33 @@ export default async function ProjectDetailPage({
       .order("created_at", { ascending: false });
 
     leadActivities = activities || [];
+
+    const { data: remarks } = await supabase
+      .from("lead_remarks")
+      .select("id, content, photo_paths, created_at, created_by")
+      .eq("lead_id", linkedLead.id)
+      .order("created_at", { ascending: false });
+
+    leadRemarks = (remarks || []).map((r) => ({
+      id: r.id,
+      content: r.content,
+      photo_paths: r.photo_paths || [],
+      created_at: r.created_at,
+      created_by: r.created_by,
+    }));
+
+    const creatorIds = [
+      ...new Set(leadRemarks.map((r) => r.created_by).filter((id): id is string => !!id)),
+    ];
+    if (creatorIds.length > 0) {
+      const { data: users } = await supabase
+        .from("user_profiles")
+        .select("id, email")
+        .in("id", creatorIds);
+      users?.forEach((u) => {
+        leadRemarksUserMap[u.id] = u.email.split("@")[0];
+      });
+    }
   }
 
   const clientEmail = linkedLead?.email || project.client_email || null;
@@ -337,6 +368,13 @@ export default async function ProjectDetailPage({
       {project.lead_id && (
         <div className="mb-6">
           <NegotiationBriefing leadId={project.lead_id} />
+        </div>
+      )}
+
+      {/* Notas comerciales heredadas del lead (read-only) */}
+      {leadRemarks.length > 0 && (
+        <div className="mb-6">
+          <LeadRemarksReadonly remarks={leadRemarks} userMap={leadRemarksUserMap} />
         </div>
       )}
 
