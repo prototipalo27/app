@@ -12,6 +12,12 @@ import { createProforma, createEstimate, createInvoice, createContact, getContac
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
+import {
+  getDesignerAvailability,
+  getDefaultDesignerCalendarId,
+  getDefaultDesignerName,
+  generateKickoffToken,
+} from "@/lib/google-calendar/kickoff";
 // AI estimation is now handled by Postgres trigger auto_estimate_lead
 
 // ── Base Prices ──────────────────────────────────────────
@@ -3987,6 +3993,23 @@ export async function requestSecondPayment(
 
 // ── On Payment Confirmed (auto-pipeline) ────────────────
 
+/** Formatea un ISO timestamp para el email del kickoff (zona horaria de Madrid). */
+function formatSlotForEmail(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat("es-ES", {
+      timeZone: "Europe/Madrid",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+
 export async function onPaymentConfirmed(
   quoteRequestId: string,
   {
@@ -4060,6 +4083,9 @@ export async function onPaymentConfirmed(
           ...(applyDiscount ? { discount: 5 } : {}),
         })),
         notes: qr.notes || undefined,
+        // Pago 100% en un solo tramo: emitir la factura ya con número.
+        // En 50/50 se deja como borrador hasta que llegue el segundo pago.
+        approveDoc: tranche === "full",
       });
       invoiceId = invoice.id;
       invoiceJustCreated = true;
@@ -4111,30 +4137,9 @@ export async function onPaymentConfirmed(
     }
   }
 
-  // 2. Email de la factura. Para split solo enviamos al primer tramo
-  // (la factura ya está creada y el cliente la recibe). En el segundo no
-  // re-enviamos PDF — solo se actualiza estado.
-  const shouldSendInvoiceEmail =
-    invoiceId && lead.email && (tranche === "full" || tranche === "first_half") && invoiceJustCreated;
-  if (shouldSendInvoiceEmail && invoiceId && lead.email) {
-    try {
-      const pdfBuffer = await getDocumentPdf("invoice", invoiceId);
-      await sendEmailOrSchedule({
-        to: lead.email,
-        subject: "Factura — Prototipalo",
-        text: `Hola ${lead.full_name},\n\nTe adjuntamos la factura correspondiente a tu proyecto.\n\nGracias,\nEl equipo de Prototipalo`,
-        html: `<p>Hola ${lead.full_name},</p><p>Te adjuntamos la factura correspondiente a tu proyecto.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-        attachments: pdfBuffer && pdfBuffer.length > 0
-          ? [{ filename: "Factura-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
-          : undefined,
-      });
-    } catch (e) {
-      console.error("[onPaymentConfirmed] Invoice email failed:", e);
-    }
-  }
-
-  // 3. Crear proyecto si no existe (first_half o full). En second_half
-  // reutilizamos el que ya hay.
+  // 2. Crear proyecto si no existe (first_half o full). En second_half
+  // reutilizamos el que ya hay. Lo hacemos antes del email porque el email
+  // de pago completo lleva el link de kickoff, y necesitamos el project_id.
   let projectId = existingProjectId;
   if (!projectId) {
     const projectName = lead.company || lead.full_name;
@@ -4162,10 +4167,118 @@ export async function onPaymentConfirmed(
     }
     projectId = newProject.id;
 
-    // 4. Heredar la carpeta del lead (o crearla si no existe) y vincularla al proyecto.
+    // Heredar la carpeta del lead (o crearla si no existe) y vincularla al proyecto.
     promoteLeadFolderToProject(lead.id, projectId, supabase).catch((err) => {
       console.error("[onPaymentConfirmed] Folder promotion failed:", err);
     });
+  }
+
+  // 3. Kickoff: cuando el pago cierra la factura (full o second_half), pedimos
+  // 3 huecos a Isabella y generamos un token único. El email luego incluirá
+  // los botones para que el cliente elija slot. Si ya hay token (re-delivery
+  // del webhook, etc.), no regeneramos.
+  let kickoffToken: string | null = null;
+  let kickoffSlots: string[] = [];
+  const designerCalendarId = getDefaultDesignerCalendarId();
+  const designerName = getDefaultDesignerName();
+  // Por ahora sólo en pago completo (full). Split-payments (first/second half)
+  // mantienen el flujo actual sin kickoff.
+  const shouldKickoff = tranche === "full";
+
+  if (shouldKickoff && projectId && designerCalendarId) {
+    const { data: existingKickoff } = await supabase
+      .from("projects")
+      .select("kickoff_token, kickoff_proposed_slots, kickoff_confirmed_at")
+      .eq("id", projectId)
+      .single();
+
+    if (existingKickoff?.kickoff_token) {
+      kickoffToken = existingKickoff.kickoff_token;
+      kickoffSlots = Array.isArray(existingKickoff.kickoff_proposed_slots)
+        ? (existingKickoff.kickoff_proposed_slots as string[])
+        : [];
+    } else {
+      try {
+        kickoffSlots = await getDesignerAvailability(designerCalendarId);
+        if (kickoffSlots.length > 0) {
+          kickoffToken = generateKickoffToken();
+          const { error: kickoffErr } = await supabase
+            .from("projects")
+            .update({
+              kickoff_token: kickoffToken,
+              kickoff_proposed_slots: kickoffSlots,
+            })
+            .eq("id", projectId);
+          if (kickoffErr) {
+            console.error("[onPaymentConfirmed] Kickoff persist failed:", kickoffErr);
+            kickoffToken = null;
+            kickoffSlots = [];
+          }
+        }
+      } catch (e) {
+        console.error("[onPaymentConfirmed] Kickoff availability failed:", e);
+      }
+    }
+  }
+
+  // 4. Email de la factura. Para split solo enviamos al primer tramo
+  // (la factura ya está creada y el cliente la recibe). En el segundo no
+  // re-enviamos PDF — solo se actualiza estado.
+  const shouldSendInvoiceEmail =
+    invoiceId && lead.email && (tranche === "full" || tranche === "first_half") && invoiceJustCreated;
+  if (shouldSendInvoiceEmail && invoiceId && lead.email) {
+    try {
+      const pdfBuffer = await getDocumentPdf("invoice", invoiceId);
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
+      const hasKickoff = kickoffToken && kickoffSlots.length > 0;
+      const kickoffUrl = hasKickoff ? `${baseUrl}/kickoff/${kickoffToken}` : null;
+
+      const slotsText = hasKickoff
+        ? kickoffSlots
+            .map((iso, idx) => `${idx + 1}. ${formatSlotForEmail(iso)} → ${kickoffUrl}?slot=${encodeURIComponent(iso)}`)
+            .join("\n")
+        : "";
+
+      const slotsHtml = hasKickoff
+        ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:12px 0 8px;">${kickoffSlots
+            .map(
+              (iso) => `<tr><td style="padding:6px 0;"><a href="${kickoffUrl}?slot=${encodeURIComponent(iso)}" style="display:inline-block;padding:12px 22px;background:#111;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">${formatSlotForEmail(iso)}</a></td></tr>`,
+            )
+            .join("")}</table>`
+        : "";
+
+      const introText = shouldKickoff
+        ? `Muchas gracias por confirmar tu proyecto con nosotros, ya tenemos todo listo.\n\nLa diseñadora asignada ha sido ${designerName}.`
+        : `Te adjuntamos la factura correspondiente a tu proyecto.`;
+
+      const slotsBlock = hasKickoff
+        ? `\n\nEstos son sus huecos disponibles los próximos días, elige el que mejor te venga:\n${slotsText}\n\nO entra a ${kickoffUrl} para verlos todos.`
+        : "";
+
+      const text = `Hola ${lead.full_name},\n\n${introText}${slotsBlock}\n\nGracias,\nEl equipo de Prototipalo`;
+
+      const introHtml = shouldKickoff
+        ? `<p>Muchas gracias por confirmar tu proyecto con nosotros, ya tenemos todo listo.</p><p>La diseñadora asignada ha sido <strong>${designerName}</strong>.</p>`
+        : `<p>Te adjuntamos la factura correspondiente a tu proyecto.</p>`;
+
+      const slotsBlockHtml = hasKickoff
+        ? `<p>Estos son sus huecos disponibles los próximos días — elige el que mejor te venga:</p>${slotsHtml}<p style="font-size:13px;color:#71717a;">¿No te encaja ninguno? Responde a este email y te buscamos otro hueco.</p>`
+        : "";
+
+      const html = `<p>Hola ${lead.full_name},</p>${introHtml}${slotsBlockHtml}<p>Gracias,<br>El equipo de Prototipalo</p>`;
+
+      await sendEmailOrSchedule({
+        to: lead.email,
+        subject: shouldKickoff ? "Tu proyecto está en marcha — reúnete con tu diseñadora" : "Factura — Prototipalo",
+        text,
+        html,
+        attachments: pdfBuffer && pdfBuffer.length > 0
+          ? [{ filename: "Factura-Prototipalo.pdf", content: pdfBuffer, contentType: "application/pdf" }]
+          : undefined,
+      });
+    } catch (e) {
+      console.error("[onPaymentConfirmed] Invoice email failed:", e);
+    }
   }
 
   // 5. Estado del lead → "paid" en cuanto entra cualquier pago. El detalle

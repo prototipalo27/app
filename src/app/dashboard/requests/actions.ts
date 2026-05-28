@@ -22,10 +22,31 @@ export async function createRequest(formData: FormData) {
     redirect("/dashboard/requests/new");
   }
 
+  const trimmedTitle = title.trim();
+
+  // Dedupe: si el mismo usuario envió una solicitud con el mismo título en
+  // los últimos 30s, reutilizamos esa fila en vez de crear otra. Protege
+  // contra doble-submits (doble click, retry de red, etc).
+  const cutoff = new Date(Date.now() - 30_000).toISOString();
+  const { data: recent } = await supabase
+    .from("improvement_requests")
+    .select("id")
+    .eq("requested_by", profile.id)
+    .eq("title", trimmedTitle)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recent) {
+    revalidatePath("/dashboard/requests");
+    redirect(`/dashboard/requests/${recent.id}`);
+  }
+
   const { data, error } = await supabase
     .from("improvement_requests")
     .insert({
-      title: title.trim(),
+      title: trimmedTitle,
       description: description.trim(),
       request_type: requestType,
       requested_by: profile.id,

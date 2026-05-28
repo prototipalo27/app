@@ -2,6 +2,7 @@ import { createRequest } from "../actions";
 import Link from "next/link";
 import { getUserProfile } from "@/lib/rbac";
 import { redirect } from "next/navigation";
+import { SubmitButton } from "./submit-button";
 
 export default async function NewRequestPage() {
   const profile = await getUserProfile();
@@ -85,12 +86,7 @@ export default async function NewRequestPage() {
           >
             Cancelar
           </Link>
-          <button
-            type="submit"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-zinc-900"
-          >
-            Enviar solicitud
-          </button>
+          <SubmitButton />
         </div>
       </form>
     </div>
