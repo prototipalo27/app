@@ -4,6 +4,9 @@ import type { Metadata } from "next";
 import { getDefaultDesignerName } from "@/lib/google-calendar/kickoff";
 import { SlotButtons } from "./slot-buttons";
 
+// Página pública con token único — siempre dinámica, no prerender.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Reserva tu reunión — Prototipalo",
   robots: { index: false, follow: false },
