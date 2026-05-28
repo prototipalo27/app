@@ -336,6 +336,8 @@ export async function createInvoice(
       discount?: number;
     }>;
     notes?: string;
+    /** Si true, la factura se emite (no queda como borrador) y recibe docNumber. */
+    approveDoc?: boolean;
   },
 ): Promise<{ id: string }> {
   const paymentMethodId = await getTransferPaymentMethodId();
@@ -344,6 +346,7 @@ export async function createInvoice(
     contactId,
     date: Math.floor(Date.now() / 1000),
     ...(paymentMethodId && { paymentMethodId }),
+    ...(options?.approveDoc ? { approveDoc: true } : {}),
   };
 
   if (options?.items && options.items.length > 0) {

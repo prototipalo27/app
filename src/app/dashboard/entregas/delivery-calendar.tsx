@@ -18,9 +18,17 @@ interface Holiday {
   name: string;
 }
 
+interface Vacation {
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  name: string;
+}
+
 interface Props {
   projects: DeliveryProject[];
   holidays: Holiday[];
+  vacations: Vacation[];
   leadHours: number;
   isManager: boolean;
 }
@@ -40,7 +48,7 @@ function formatDateStr(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHours, isManager }: Props) {
+export function DeliveryCalendar({ projects, holidays, vacations, leadHours: initialLeadHours, isManager }: Props) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [leadHours, setLeadHours] = useState(initialLeadHours);
@@ -82,6 +90,23 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
     }
     return map;
   }, [projects, leadHours, holidaySet]);
+
+  // Expandir vacaciones (rangos) a un map fecha → [nombres].
+  const vacationsByDate = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const v of vacations) {
+      if (!v.start_date || !v.end_date) continue;
+      const start = new Date(`${v.start_date}T00:00:00`);
+      const end = new Date(`${v.end_date}T00:00:00`);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = formatDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+        const arr = map.get(key) ?? [];
+        arr.push(v.name);
+        map.set(key, arr);
+      }
+    }
+    return map;
+  }, [vacations]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -284,6 +309,7 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
           const isWeekend = i % 7 >= 5;
           const isToday = dateStr === todayStr;
           const events = eventsByDate.get(dateStr);
+          const vacationNames = vacationsByDate.get(dateStr);
 
           return (
             <div
@@ -296,7 +322,7 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
                     : "bg-white dark:bg-zinc-900"
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-1">
                 <span
                   className={`text-[11px] font-medium ${
                     isToday
@@ -310,6 +336,19 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
                 >
                   {day}
                 </span>
+                {vacationNames && vacationNames.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-0.5">
+                    {vacationNames.map((name, idx) => (
+                      <span
+                        key={`vac-${idx}`}
+                        className="inline-flex h-3.5 items-center justify-center rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                        title={`Fuera: ${name}`}
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {holidayName && (
                 <p className="mt-0.5 truncate text-[8px] font-medium text-red-500 dark:text-red-400" title={holidayName}>
@@ -364,6 +403,10 @@ export function DeliveryCalendar({ projects, holidays, leadHours: initialLeadHou
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded-full bg-red-400" />
           <span className="text-zinc-500 dark:text-zinc-400">Festivo</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded bg-sky-400" />
+          <span className="text-zinc-500 dark:text-zinc-400">Vacaciones</span>
         </span>
       </div>
     </div>

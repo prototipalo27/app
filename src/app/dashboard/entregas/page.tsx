@@ -15,6 +15,8 @@ export default async function DeliveriesCalendarPage() {
     { data: projects },
     { data: holidays },
     { data: leadMeta },
+    { data: timeOff },
+    { data: teamUsers },
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -32,10 +34,33 @@ export default async function DeliveriesCalendarPage() {
       .select("value")
       .eq("key", "delivery_lead_hours")
       .single(),
+    supabase
+      .from("time_off_requests")
+      .select("user_id, start_date, end_date")
+      .eq("status", "approved")
+      .gte("end_date", `${year}-01-01`)
+      .lte("start_date", `${year + 1}-12-31`),
+    supabase
+      .from("user_profiles")
+      .select("id, nickname, full_name, email")
+      .eq("is_active", true),
   ]);
 
   const leadHours = Number(leadMeta?.value ?? 48) || 48;
   const isManager = hasRole(profile.role, "manager");
+
+  const nameById = new Map(
+    (teamUsers ?? []).map((u) => [
+      u.id,
+      u.nickname || u.full_name || u.email?.split("@")[0] || "—",
+    ])
+  );
+  const vacations = (timeOff ?? []).map((r) => ({
+    user_id: r.user_id,
+    start_date: r.start_date,
+    end_date: r.end_date,
+    name: nameById.get(r.user_id) ?? "—",
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,6 +76,7 @@ export default async function DeliveriesCalendarPage() {
       <DeliveryCalendar
         projects={projects ?? []}
         holidays={holidays ?? []}
+        vacations={vacations}
         leadHours={leadHours}
         isManager={isManager}
       />
