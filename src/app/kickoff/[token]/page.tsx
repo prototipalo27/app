@@ -1,30 +1,33 @@
+import { Suspense } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getDefaultDesignerName } from "@/lib/google-calendar/kickoff";
 import { SlotButtons } from "./slot-buttons";
 
-// Página pública con token único — siempre dinámica, no prerender.
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Reserva tu reunión — Prototipalo",
   robots: { index: false, follow: false },
 };
 
-interface SearchParams {
-  slot?: string;
-}
-
 export default async function KickoffPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<SearchParams>;
+}) {
+  return (
+    <Suspense fallback={<Shell><div className="h-40" /></Shell>}>
+      <KickoffContent params={params} />
+    </Suspense>
+  );
+}
+
+async function KickoffContent({
+  params,
+}: {
+  params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  await searchParams; // soportamos ?slot=... como deep-link futuro, no hace falta usarlo ya
 
   const supabase = createServiceClient();
   const { data: project } = await supabase
