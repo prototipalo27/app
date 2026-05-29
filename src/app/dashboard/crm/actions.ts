@@ -1100,55 +1100,49 @@ export async function addNote(id: string, content: string): Promise<{ success: b
 const REMARK_PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 const REMARK_PHOTO_MAX_FILES = 12;
 
+/**
+ * Crea una nota comercial.
+ *
+ * Las fotos se suben desde el navegador directamente a Supabase Storage para
+ * esquivar el límite de payload de las server actions (~1 MB). Este endpoint
+ * recibe únicamente las rutas resultantes y las persiste tras validar que
+ * apuntan a la carpeta del lead correcto.
+ */
 export async function createLeadRemark(
   leadId: string,
-  formData: FormData,
+  payload: { content: string; photo_paths: string[] },
 ): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
 
-  const content = ((formData.get("content") as string) || "").trim();
-  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  const content = (payload.content || "").trim();
+  const photoPaths = Array.isArray(payload.photo_paths) ? payload.photo_paths : [];
 
-  if (!content && files.length === 0) {
+  if (!content && photoPaths.length === 0) {
     return { success: false, error: "Escribe una nota o adjunta una foto" };
   }
-  if (files.length > REMARK_PHOTO_MAX_FILES) {
+  if (photoPaths.length > REMARK_PHOTO_MAX_FILES) {
     return { success: false, error: `Máximo ${REMARK_PHOTO_MAX_FILES} fotos por nota` };
   }
-  for (const f of files) {
-    if (f.size > REMARK_PHOTO_MAX_BYTES) {
-      return { success: false, error: `"${f.name}" supera 10 MB` };
+  // Cada ruta debe vivir dentro del propio lead para evitar que un cliente
+  // malicioso reclame ficheros de otra ficha.
+  const prefix = `${leadId}/`;
+  for (const path of photoPaths) {
+    if (typeof path !== "string" || !path.startsWith(prefix) || path.includes("..")) {
+      return { success: false, error: "Ruta de foto inválida" };
     }
-  }
-
-  const uploadedPaths: string[] = [];
-  for (const file of files) {
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const path = `${leadId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("lead-remarks")
-      .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
-    if (uploadError) {
-      // Limpiar lo subido hasta ahora
-      if (uploadedPaths.length > 0) {
-        await supabase.storage.from("lead-remarks").remove(uploadedPaths);
-      }
-      return { success: false, error: uploadError.message };
-    }
-    uploadedPaths.push(path);
   }
 
   const { error: insertError } = await supabase.from("lead_remarks").insert({
     lead_id: leadId,
     content: content || null,
-    photo_paths: uploadedPaths,
+    photo_paths: photoPaths,
     created_by: profile.id,
   });
 
   if (insertError) {
-    if (uploadedPaths.length > 0) {
-      await supabase.storage.from("lead-remarks").remove(uploadedPaths);
+    if (photoPaths.length > 0) {
+      await supabase.storage.from("lead-remarks").remove(photoPaths);
     }
     return { success: false, error: insertError.message };
   }

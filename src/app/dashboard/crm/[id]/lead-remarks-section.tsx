@@ -6,6 +6,10 @@ import { createLeadRemark, deleteLeadRemark } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { formatDayMonthTime } from "@/lib/dates";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+
+const REMARK_PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const REMARK_PHOTO_MAX_FILES = 12;
 
 export interface LeadRemark {
   id: string;
@@ -112,12 +116,50 @@ export default function LeadRemarksSection({ leadId, remarks, userMap }: Props) 
       setError("Escribe una nota o adjunta una foto");
       return;
     }
-    const fd = new FormData();
-    fd.set("content", content);
-    files.forEach((f) => fd.append("photos", f));
+    if (files.length > REMARK_PHOTO_MAX_FILES) {
+      setError(`Máximo ${REMARK_PHOTO_MAX_FILES} fotos por nota`);
+      return;
+    }
+    for (const f of files) {
+      if (f.size > REMARK_PHOTO_MAX_BYTES) {
+        setError(`"${f.name}" supera 10 MB`);
+        return;
+      }
+    }
+
     startTransition(async () => {
-      const res = await createLeadRemark(leadId, fd);
+      // Subimos las fotos directamente al bucket desde el navegador para
+      // esquivar el límite de payload de las server actions (~1 MB).
+      const supabase = createBrowserSupabase();
+      const uploadedPaths: string[] = [];
+      try {
+        for (const file of files) {
+          const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+          const path = `${leadId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("lead-remarks")
+            .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+          if (uploadError) {
+            throw new Error(`Error subiendo "${file.name}": ${uploadError.message}`);
+          }
+          uploadedPaths.push(path);
+        }
+      } catch (e) {
+        if (uploadedPaths.length > 0) {
+          await supabase.storage.from("lead-remarks").remove(uploadedPaths);
+        }
+        setError(e instanceof Error ? e.message : "Error subiendo fotos");
+        return;
+      }
+
+      const res = await createLeadRemark(leadId, {
+        content,
+        photo_paths: uploadedPaths,
+      });
       if (!res.success) {
+        if (uploadedPaths.length > 0) {
+          await supabase.storage.from("lead-remarks").remove(uploadedPaths);
+        }
         setError(res.error || "Error al guardar");
         return;
       }
