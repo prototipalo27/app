@@ -2,8 +2,6 @@ import Link from "next/link";
 import { getPayoutsWithCharges } from "./actions";
 import PayoutsList from "./payouts-list";
 
-export const dynamic = "force-dynamic";
-
 function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", {
     style: "currency",
