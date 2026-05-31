@@ -11,6 +11,7 @@ import EmployeeCommissions from "./employee-commissions";
 import EmployeeFixedExpenses from "./employee-fixed-expenses";
 import EmployeeOvertime from "./employee-overtime";
 import EmployeeCalendar from "./employee-calendar";
+import ImprovementNotes, { type ImprovementNote } from "./improvement-notes";
 import NotificationSettingsClient from "../../settings/notifications/notification-settings-client";
 import {
   getNotificationEvents,
@@ -43,6 +44,7 @@ export default async function EmployeeDetailPage({
     { data: overtimeRaw },
     { data: timeOffRaw },
     { data: holidaysRaw },
+    { data: improvementNotesRaw },
   ] = await Promise.all([
     supabase
       .from("user_profiles")
@@ -82,6 +84,13 @@ export default async function EmployeeDetailPage({
       .select("id, date, name, scope")
       .eq("year", currentYear)
       .order("date"),
+    isManager
+      ? supabase
+          .from("employee_improvement_notes")
+          .select("id, content, created_at, created_by, resolved_at, resolved_by")
+          .eq("user_id", id)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!employee) notFound();
@@ -97,6 +106,25 @@ export default async function EmployeeDetailPage({
   );
   const timeOffRequests = timeOffRaw ?? [];
   const holidays = holidaysRaw ?? [];
+
+  const improvementNotes: ImprovementNote[] = improvementNotesRaw ?? [];
+  const noteAuthorIds = Array.from(
+    new Set(
+      improvementNotes
+        .flatMap((n) => [n.created_by, n.resolved_by])
+        .filter((v): v is string => !!v),
+    ),
+  );
+  const noteUserMap: Record<string, string> = {};
+  if (noteAuthorIds.length > 0) {
+    const { data: noteAuthors } = await supabase
+      .from("user_profiles")
+      .select("id, nickname, email")
+      .in("id", noteAuthorIds);
+    for (const u of noteAuthors ?? []) {
+      noteUserMap[u.id] = u.nickname || u.email.split("@")[0];
+    }
+  }
 
   // Only load notification settings for the user's own profile
   let notifEvents: any[] = [];
@@ -210,6 +238,23 @@ export default async function EmployeeDetailPage({
             />
           )}
         </section>
+
+        {/* Section 2.5: Improvement notes / 1-on-1 prep (managers only) */}
+        {isManager && (
+          <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Puntos de mejora
+            </h2>
+            <p className="mb-4 text-xs text-zinc-400 dark:text-zinc-500">
+              Para tratar en la próxima 1-on-1.
+            </p>
+            <ImprovementNotes
+              userId={employee.id}
+              notes={improvementNotes}
+              userMap={noteUserMap}
+            />
+          </section>
+        )}
 
         {/* Section 3: Commissions (managers only) */}
         {isManager && (

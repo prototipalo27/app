@@ -127,3 +127,79 @@ export async function deleteEmployeeDocument(docId: string, userId: string) {
   revalidatePath(`/dashboard/equipo/${userId}`);
   return { success: true, error: null };
 }
+
+// ── Improvement notes (puntos de mejora para 1-on-1s) ────────────────
+
+export async function createImprovementNote(
+  userId: string,
+  content: string,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const trimmed = content.trim();
+  if (!trimmed) return { success: false, error: "Escribe algo" };
+
+  const { error } = await supabase.from("employee_improvement_notes").insert({
+    user_id: userId,
+    content: trimmed,
+    created_by: profile.id,
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/equipo/${userId}`);
+  return { success: true };
+}
+
+export async function resolveImprovementNote(
+  noteId: string,
+  resolved: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const profile = await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: note } = await supabase
+    .from("employee_improvement_notes")
+    .select("user_id")
+    .eq("id", noteId)
+    .single();
+  if (!note) return { success: false, error: "Nota no encontrada" };
+
+  const { error } = await supabase
+    .from("employee_improvement_notes")
+    .update({
+      resolved_at: resolved ? new Date().toISOString() : null,
+      resolved_by: resolved ? profile.id : null,
+    })
+    .eq("id", noteId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/equipo/${note.user_id}`);
+  return { success: true };
+}
+
+export async function deleteImprovementNote(
+  noteId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: note } = await supabase
+    .from("employee_improvement_notes")
+    .select("user_id")
+    .eq("id", noteId)
+    .single();
+  if (!note) return { success: false, error: "Nota no encontrada" };
+
+  const { error } = await supabase
+    .from("employee_improvement_notes")
+    .delete()
+    .eq("id", noteId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/equipo/${note.user_id}`);
+  return { success: true };
+}
