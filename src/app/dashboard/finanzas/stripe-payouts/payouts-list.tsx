@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { setPayoutReconciled, type PayoutRow } from "./actions";
 
@@ -35,21 +34,44 @@ interface Props {
 }
 
 export default function PayoutsList({ payouts }: Props) {
-  const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showReconciled, setShowReconciled] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  // Override local: { [payoutId]: true|false } se aplica encima del prop
+  // para evitar tener que re-tirar de Stripe + Holded en cada click.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+
+  // Si el server nos manda datos frescos donde el estado ya coincide con
+  // nuestro override, podemos limpiarlo. Si difiere, el server gana.
+  useEffect(() => {
+    setOverrides((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const [id, value] of Object.entries(prev)) {
+        const serverRow = payouts.find((p) => p.id === id);
+        if (serverRow && serverRow.reconciled !== value) {
+          next[id] = value;
+        }
+      }
+      return next;
+    });
+  }, [payouts]);
+
+  const effective = useMemo(() => {
+    return payouts.map((p) => ({
+      ...p,
+      reconciled: overrides[p.id] ?? p.reconciled,
+    }));
+  }, [payouts, overrides]);
 
   const { pending, reconciled } = useMemo(() => {
     const pending: PayoutRow[] = [];
     const reconciled: PayoutRow[] = [];
-    for (const p of payouts) {
+    for (const p of effective) {
       if (p.reconciled) reconciled.push(p);
       else pending.push(p);
     }
     return { pending, reconciled };
-  }, [payouts]);
+  }, [effective]);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -61,11 +83,24 @@ export default function PayoutsList({ payouts }: Props) {
   };
 
   const toggleReconciled = (id: string, currently: boolean) => {
-    setPendingId(id);
-    startTransition(async () => {
-      await setPayoutReconciled(id, !currently);
-      router.refresh();
-      setPendingId(null);
+    const target = !currently;
+    // Optimistic: pintamos el cambio ya y persistimos en segundo plano.
+    setOverrides((prev) => ({ ...prev, [id]: target }));
+    setSavingIds((prev) => new Set(prev).add(id));
+    setPayoutReconciled(id, target).then((res) => {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (!res.success) {
+        // Rollback en error.
+        setOverrides((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }
     });
   };
 
@@ -88,8 +123,7 @@ export default function PayoutsList({ payouts }: Props) {
         expanded={expanded}
         toggleExpand={toggleExpand}
         toggleReconciled={toggleReconciled}
-        isPending={isPending}
-        pendingId={pendingId}
+        savingIds={savingIds}
       />
 
       <div>
@@ -125,12 +159,11 @@ interface SectionProps {
   expanded: Set<string>;
   toggleExpand: (id: string) => void;
   toggleReconciled: (id: string, currently: boolean) => void;
-  isPending: boolean;
-  pendingId: string | null;
+  savingIds: Set<string>;
   dimmed?: boolean;
 }
 
-function Section({ title, payouts, emptyText, expanded, toggleExpand, toggleReconciled, isPending, pendingId, dimmed }: SectionProps) {
+function Section({ title, payouts, emptyText, expanded, toggleExpand, toggleReconciled, savingIds, dimmed }: SectionProps) {
   return (
     <div>
       {title && (
@@ -189,7 +222,7 @@ function Section({ title, payouts, emptyText, expanded, toggleExpand, toggleReco
                       type="checkbox"
                       checked={p.reconciled}
                       onChange={() => toggleReconciled(p.id, p.reconciled)}
-                      disabled={isPending && pendingId === p.id}
+                      disabled={savingIds.has(p.id)}
                       className="h-3.5 w-3.5"
                     />
                     {p.reconciled ? "Conciliado" : "Conciliar"}
