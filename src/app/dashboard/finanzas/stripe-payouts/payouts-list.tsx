@@ -142,8 +142,7 @@ export default function PayoutsList({ payouts }: Props) {
             expanded={expanded}
             toggleExpand={toggleExpand}
             toggleReconciled={toggleReconciled}
-            isPending={isPending}
-            pendingId={pendingId}
+            savingIds={savingIds}
             dimmed
           />
         )}
