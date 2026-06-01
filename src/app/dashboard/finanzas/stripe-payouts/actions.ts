@@ -145,13 +145,14 @@ export async function getPayoutsWithCharges(daysBack = 60): Promise<PayoutRow[]>
     const supabase = await createClient();
     const { data: qrs } = await supabase
       .from("quote_requests")
-      .select("id, lead_id, stripe_payment_intent_id, holded_invoice_id, leads(full_name, email, company)")
+      .select("id, lead_id, stripe_payment_intent_id, holded_invoice_id, invoice_doc_number, leads(full_name, email, company)")
       .in("stripe_payment_intent_id", intentArr);
 
     const byIntent = new Map<string, {
       qrId: string;
       leadId: string | null;
       holdedInvoiceId: string | null;
+      invoiceDocNumber: string | null;
       customerName: string | null;
       customerEmail: string | null;
     }>();
@@ -163,6 +164,7 @@ export async function getPayoutsWithCharges(daysBack = 60): Promise<PayoutRow[]>
         qrId: qr.id,
         leadId: qr.lead_id,
         holdedInvoiceId: qr.holded_invoice_id,
+        invoiceDocNumber: qr.invoice_doc_number,
         customerName: lead?.company || lead?.full_name || null,
         customerEmail: lead?.email ?? null,
       });
@@ -176,19 +178,25 @@ export async function getPayoutsWithCharges(daysBack = 60): Promise<PayoutRow[]>
         c.quoteRequestId = match.qrId;
         c.leadId = match.leadId;
         c.holdedInvoiceId = match.holdedInvoiceId;
+        c.invoiceDocNumber = match.invoiceDocNumber;
         if (match.customerName) c.customerName = match.customerName;
         if (match.customerEmail) c.customerEmail = match.customerEmail;
       }
     }
   }
 
-  // 4. Fetch Holded invoice numbers + totals (deduped). Best-effort: if Holded
-  //    falls over we still return the page, just without the number column.
-  const invoiceIds = Array.from(new Set(
-    payoutRows.flatMap((r) => r.charges.map((c) => c.holdedInvoiceId).filter((id): id is string => !!id)),
+  // 4. Para los charges con factura pero sin docNumber persistido (legacy o
+  //    fallos puntuales), caer en Holded. Si la factura nació con número via
+  //    onPaymentConfirmed, ya viene de DB y nos saltamos la llamada.
+  const invoiceIdsToFetch = Array.from(new Set(
+    payoutRows.flatMap((r) =>
+      r.charges
+        .filter((c) => c.holdedInvoiceId && !c.invoiceDocNumber)
+        .map((c) => c.holdedInvoiceId!)
+    ),
   ));
   const invoiceCache = new Map<string, { docNumber: string | null; total: number | null }>();
-  await Promise.all(invoiceIds.map(async (id) => {
+  await Promise.all(invoiceIdsToFetch.map(async (id) => {
     try {
       const doc = await getDocument("invoice", id);
       invoiceCache.set(id, {
@@ -203,9 +211,10 @@ export async function getPayoutsWithCharges(daysBack = 60): Promise<PayoutRow[]>
     for (const c of row.charges) {
       if (!c.holdedInvoiceId) continue;
       const inv = invoiceCache.get(c.holdedInvoiceId);
-      if (!inv) continue;
-      c.invoiceDocNumber = inv.docNumber;
-      c.invoiceTotal = inv.total;
+      if (inv) {
+        if (!c.invoiceDocNumber) c.invoiceDocNumber = inv.docNumber;
+        c.invoiceTotal = inv.total;
+      }
     }
   }
 

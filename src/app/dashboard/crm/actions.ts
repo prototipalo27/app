@@ -4077,15 +4077,31 @@ export async function onPaymentConfirmed(
           ...(applyDiscount ? { discount: 5 } : {}),
         })),
         notes: qr.notes || undefined,
-        // Pago 100% en un solo tramo: emitir la factura ya con número.
-        // En 50/50 se deja como borrador hasta que llegue el segundo pago.
-        approveDoc: tranche === "full",
+        // Toda factura nace numerada — incluso en 50/50 el primer pago
+        // emite una factura real (anticipo legal en España). El segundo
+        // pago la saldará via payInvoice. "Si hay pago Stripe, hay factura
+        // con número" es la invariante que queremos mantener.
+        approveDoc: true,
       });
       invoiceId = invoice.id;
       invoiceJustCreated = true;
+
+      // Fetch docNumber para persistirlo — así futuras vistas (conciliación,
+      // listados) no tienen que volver a llamar a Holded.
+      let docNumber: string | null = null;
+      try {
+        const doc = await getDocument("invoice", invoiceId);
+        docNumber = doc.docNumber || null;
+      } catch (e) {
+        console.error("[onPaymentConfirmed] getDocument for docNumber failed:", e);
+      }
+
       await supabase
         .from("quote_requests")
-        .update({ holded_invoice_id: invoiceId })
+        .update({
+          holded_invoice_id: invoiceId,
+          invoice_doc_number: docNumber,
+        })
         .eq("id", qr.id);
     } catch (e) {
       console.error("[onPaymentConfirmed] Invoice creation failed:", e);
