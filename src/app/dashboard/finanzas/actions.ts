@@ -538,6 +538,176 @@ export async function getCashFlowPipeline(): Promise<{ stages: CashFlowStage[] }
   return { stages };
 }
 
+// ── Money Funnel (Facturado → Cobrado → Producido → Entregado) ──
+
+export type FunnelProject = {
+  id: string;
+  name: string;
+  client_name: string | null;
+  amount: number;
+  doc_number: string | null;
+};
+
+export type MoneyFunnel = {
+  // Totales de los 4 estados sobre proyectos abiertos (en el aire)
+  facturado: number;
+  cobrado: number;
+  producido: number;
+  entregado: number;
+  projectCount: number;
+  holdedOk: boolean;
+  // Saldos "en el aire" con detalle de proyectos
+  buckets: {
+    // Facturado pero no cobrado → dinero que viene
+    pendienteCobro: { total: number; projects: FunnelProject[] };
+    // Producido (shipping+) pero aún no entregado → en tránsito / listo
+    produciendoSinEntregar: { total: number; projects: FunnelProject[] };
+    // Entregado pero no cobrado al 100% → riesgo de impago
+    entregadoSinCobrar: { total: number; projects: FunnelProject[] };
+    // Cobrado por adelantado pero no entregado → debes trabajo (anticipo)
+    cobradoSinEntregar: { total: number; projects: FunnelProject[] };
+    // Cobrado pero SIN calendarizar (sin fecha de entrega) → riesgo de olvido
+    cobradoSinCalendarizar: { total: number; projects: FunnelProject[] };
+  };
+};
+
+export async function getMoneyFunnel(): Promise<MoneyFunnel> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select(
+      "id, name, client_name, price, status, holded_invoice_id, invoice_date, invoice_doc_number, deadline, kickoff_confirmed_at"
+    )
+    .eq("project_type", "confirmed");
+
+  // Holded: estado e importe realmente cobrado por factura
+  // status: 0=sin pagar, 1=pagada, 2=parcial
+  const invoiceMap = new Map<
+    string,
+    { status: number; total: number; paid: number; docNumber: string | null }
+  >();
+  let holdedOk = false;
+  try {
+    const invoices = await listDocuments("invoice");
+    for (const inv of invoices) {
+      invoiceMap.set(inv.id, {
+        status: inv.status,
+        total: inv.total || 0,
+        paid: inv.paymentsTotal || 0,
+        docNumber: inv.docNumber || null,
+      });
+    }
+    holdedOk = true;
+  } catch {
+    // Holded caído → cobrado se queda en 0, el resto del embudo sigue funcionando
+  }
+
+  let facturado = 0;
+  let cobrado = 0;
+  let producido = 0;
+  let entregado = 0;
+  let projectCount = 0;
+
+  const pendienteCobro: FunnelProject[] = [];
+  const produciendoSinEntregar: FunnelProject[] = [];
+  const entregadoSinCobrar: FunnelProject[] = [];
+  const cobradoSinEntregar: FunnelProject[] = [];
+  const cobradoSinCalendarizar: FunnelProject[] = [];
+
+  for (const p of projects ?? []) {
+    const price = p.price ?? 0;
+    if (price === 0) continue;
+
+    const invoice = p.holded_invoice_id ? invoiceMap.get(p.holded_invoice_id) : null;
+    const status = invoice?.status ?? null;
+    const isInvoiced = !!p.holded_invoice_id || !!p.invoice_date;
+    const isProduced = p.status === "shipping" || p.status === "delivered";
+    const isDelivered = p.status === "delivered";
+
+    // Cobrado en unidades de "price" (precio del proyecto), proporcional al pago real.
+    // Una factura pagada por Stripe llega ~5% corta (comisión) y Holded la deja
+    // como "parcial" hasta que se concilia la comisión a mano. Si lo que falta es
+    // solo esa comisión (~Stripe) o un descuento pronto pago (<8%+1€), la tratamos
+    // como cobrada al 100% — no es un cobro pendiente real, es un gasto bancario.
+    let paid = 0;
+    if (status === 1) {
+      paid = price; // pagada al 100%
+    } else if (status === 2) {
+      if (invoice && invoice.total > 0) {
+        const residual = invoice.total - invoice.paid;
+        const isFeeResidual = residual < invoice.total * 0.08 + 1;
+        paid = isFeeResidual
+          ? price
+          : Math.min(price, price * (invoice.paid / invoice.total));
+      } else {
+        paid = price * 0.5; // parcial sin total fiable → asumir 50% (modelo 50/50)
+      }
+    }
+    paid = Math.round(paid);
+
+    const isFullyPaid = paid >= price - 1; // ±1€ por redondeo
+    const isClosed = isDelivered && isFullyPaid;
+    if (isClosed) continue; // proyecto cerrado → ya no está "en el aire"
+
+    projectCount++;
+    const fp = (amount: number): FunnelProject => ({
+      id: p.id,
+      name: p.name,
+      client_name: p.client_name,
+      amount,
+      doc_number: invoice?.docNumber ?? p.invoice_doc_number ?? null,
+    });
+
+    if (isInvoiced) facturado += price;
+    cobrado += paid;
+    if (isProduced) producido += price;
+    if (isDelivered) entregado += price;
+
+    // Saldos en el aire
+    if (isInvoiced && paid < price - 1) {
+      pendienteCobro.push(fp(price - paid));
+    }
+    if (isProduced && !isDelivered) {
+      produciendoSinEntregar.push(fp(price));
+    }
+    if (isDelivered && paid < price - 1) {
+      entregadoSinCobrar.push(fp(price - paid));
+    }
+    if (paid > 0 && !isDelivered) {
+      cobradoSinEntregar.push(fp(paid));
+    }
+    // Cobrado pero sin calendarizar: pagado algo, no entregado y sin fecha ni
+    // kickoff confirmado → es el que se puede quedar olvidado
+    const isScheduled = !!p.deadline || !!p.kickoff_confirmed_at;
+    if (paid > 0 && !isDelivered && !isScheduled) {
+      cobradoSinCalendarizar.push(fp(price));
+    }
+  }
+
+  const bucket = (projects: FunnelProject[]) => ({
+    total: projects.reduce((s, p) => s + p.amount, 0),
+    projects: projects.sort((a, b) => b.amount - a.amount),
+  });
+
+  return {
+    facturado,
+    cobrado,
+    producido,
+    entregado,
+    projectCount,
+    holdedOk,
+    buckets: {
+      pendienteCobro: bucket(pendienteCobro),
+      produciendoSinEntregar: bucket(produciendoSinEntregar),
+      entregadoSinCobrar: bucket(entregadoSinCobrar),
+      cobradoSinEntregar: bucket(cobradoSinEntregar),
+      cobradoSinCalendarizar: bucket(cobradoSinCalendarizar),
+    },
+  };
+}
+
 // ── Debts (Checklist de deudas) ──
 
 export async function getDebts() {

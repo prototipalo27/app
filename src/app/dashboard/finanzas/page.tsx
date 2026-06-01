@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getFixedExpenses, getTaxPayments, getFinancings, getCashFlowPipeline, getDebts } from "./actions";
+import { getFixedExpenses, getTaxPayments, getFinancings, getCashFlowPipeline, getDebts, getMoneyFunnel } from "./actions";
 import { getPendingReceivables } from "@/lib/holded/api";
 import { getNextTaxDeadline, getModelName } from "@/lib/finance/tax-calendar";
 import FixedExpensesSection from "./fixed-expenses-section";
 import FinancingsSection from "./financings-section";
 import TaxCalendarSection from "./tax-calendar-section";
 import CashFlowPipeline from "./cash-flow-pipeline";
+import MoneyFunnel from "./money-funnel";
 import PaymentCalendarSection from "./payment-calendar-section";
 import ReportDownloadButton from "./report-download-button";
 import DebtsSection from "./debts-section";
@@ -60,6 +61,7 @@ export default async function FinanzasPage() {
     financings,
     cashFlowData,
     debts,
+    moneyFunnel,
     { data: projects },
     { data: purchaseItems },
     { data: shipments },
@@ -72,6 +74,7 @@ export default async function FinanzasPage() {
     getFinancings(),
     getCashFlowPipeline(),
     getDebts(),
+    getMoneyFunnel(),
     supabase
       .from("projects")
       .select("id, name, price, invoice_date, status, project_type"),
@@ -240,6 +243,9 @@ export default async function FinanzasPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
         <ReportDownloadButton />
       </div>
+
+      {/* ── Dinero en el aire (embudo facturado → cobrado → producido → entregado) ── */}
+      <MoneyFunnel data={moneyFunnel} />
 
       {/* ── A. KPIs ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
