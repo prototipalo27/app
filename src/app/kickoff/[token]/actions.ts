@@ -7,6 +7,22 @@ import {
   getDefaultDesignerCalendarId,
   getDefaultDesignerName,
 } from "@/lib/google-calendar/kickoff";
+import { sendEmailOrSchedule } from "@/lib/email";
+
+function formatSlotForDesignerEmail(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("es-ES", {
+      timeZone: "Europe/Madrid",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
 export async function confirmKickoffSlot(
   token: string,
@@ -73,6 +89,32 @@ export async function confirmKickoffSlot(
         kickoff_meeting_link: meetingLink,
       })
       .eq("id", project.id);
+
+    // Aviso a Isabella: el invite oficial de Calendar va al cliente, pero
+    // ella es la organizadora y por defecto no recibe nada. Le mandamos
+    // un correo simple para que vea la reserva sin tener que abrir Calendar.
+    try {
+      const when = formatSlotForDesignerEmail(slotIso);
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        "https://app.prototipalo.es";
+      const projectUrl = `${baseUrl}/dashboard/projects/${project.id}`;
+      const designerName = getDefaultDesignerName();
+      const safeClientName = clientName ?? "Cliente";
+      const meetingBlock = meetingLink
+        ? `<p><strong>Google Meet:</strong> <a href="${meetingLink}">${meetingLink}</a></p>`
+        : "";
+      const meetingText = meetingLink ? `\nGoogle Meet: ${meetingLink}` : "";
+      await sendEmailOrSchedule({
+        to: calendarId,
+        subject: `Nueva reunión de kickoff — ${safeClientName} (${when})`,
+        text: `Hola ${designerName},\n\n${safeClientName} ha reservado un hueco contigo:\n\n${when}${meetingText}\n\nProyecto: ${project.name}\nFicha interna: ${projectUrl}\n\nYa lo tienes en tu calendario.`,
+        html: `<p>Hola ${designerName},</p><p><strong>${safeClientName}</strong> ha reservado un hueco contigo:</p><p style="font-size:16px;font-weight:600;">${when}</p>${meetingBlock}<p>Proyecto: ${project.name}<br>Ficha interna: <a href="${projectUrl}">${projectUrl}</a></p><p style="color:#71717a;font-size:13px;">Ya lo tienes en tu calendario.</p>`,
+      });
+    } catch (notifyErr) {
+      console.error("[confirmKickoffSlot] designer notify failed:", notifyErr);
+    }
 
     redirect(`/kickoff/${token}`);
   } catch (err) {
