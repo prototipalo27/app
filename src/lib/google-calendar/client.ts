@@ -35,13 +35,14 @@ export function getDeliveriesCalendarConfig(): { calendarId: string } | null {
   return { calendarId };
 }
 
-export function getCalendarClient(): calendar_v3.Calendar {
+export function getCalendarClient(options?: { impersonate?: string }): calendar_v3.Calendar {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!;
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!;
   const auth = new google.auth.JWT({
     email,
     key: formatPrivateKey(privateKey),
     scopes: [CALENDAR_SCOPE],
+    subject: options?.impersonate,
   });
   return google.calendar({ version: "v3", auth });
 }

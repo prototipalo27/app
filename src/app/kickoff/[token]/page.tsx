@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getDefaultDesignerName } from "@/lib/google-calendar/kickoff";
 import { SlotButtons } from "./slot-buttons";
+import { confirmKickoffSlot } from "./actions";
 
 export const metadata: Metadata = {
   title: "Reserva tu reunión — Prototipalo",
@@ -12,22 +13,36 @@ export const metadata: Metadata = {
 
 export default async function KickoffPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ slot?: string }>;
 }) {
   return (
     <Suspense fallback={<Shell><div className="h-40" /></Shell>}>
-      <KickoffContent params={params} />
+      <KickoffContent params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
 async function KickoffContent({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ slot?: string }>;
 }) {
   const { token } = await params;
+  const { slot: slotFromUrl } = await searchParams;
+
+  // Si el cliente vino desde un botón del email (?slot=<iso>), confirmamos
+  // directamente sin mostrarle los 3 botones otra vez. La acción ya valida
+  // que el slot esté en kickoff_proposed_slots y redirige a /kickoff/<token>
+  // (sin query) al terminar, que renderiza la página de "gracias".
+  if (slotFromUrl) {
+    await confirmKickoffSlot(token, slotFromUrl);
+    // Si la acción no redirige (por error), seguimos al render normal.
+  }
 
   const supabase = createServiceClient();
   const { data: project } = await supabase

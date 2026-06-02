@@ -62,7 +62,7 @@ export async function getDesignerAvailability(
 ): Promise<string[]> {
   const count = options.count ?? SLOTS_TO_PROPOSE;
   const from = options.from ?? new Date();
-  const calendar = getCalendarClient();
+  const calendar = getCalendarClient({ impersonate: calendarId });
 
   const timeMin = startOfNextWorkingDay(from);
   const timeMax = new Date(timeMin);
@@ -139,7 +139,7 @@ export async function createKickoffEvent(input: {
   clientEmail: string;
   projectId: string;
 }): Promise<{ eventId: string; meetingLink: string | null }> {
-  const calendar = getCalendarClient();
+  const calendar = getCalendarClient({ impersonate: input.calendarId });
   const start = new Date(input.startISO);
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + (input.durationMinutes ?? SLOT_MINUTES));
