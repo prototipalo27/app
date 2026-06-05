@@ -1,4 +1,18 @@
-export default async function PaymentSuccessPage({
+import { Suspense } from "react";
+
+export default function PaymentSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ session_id?: string }>;
+}) {
+  return (
+    <Suspense fallback={<PaymentStatusFallback />}>
+      <PaymentStatus searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function PaymentStatus({
   searchParams,
 }: {
   searchParams: Promise<{ session_id?: string }>;
@@ -69,6 +83,25 @@ export default async function PaymentSuccessPage({
         >
           Contactar con Prototipalo
         </a>
+      </div>
+    </div>
+  );
+}
+
+function PaymentStatusFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+      <div className="mx-4 max-w-md rounded-2xl border bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <svg className="h-8 w-8 animate-spin text-zinc-400" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+        <h1 className="mb-2 text-xl font-bold text-zinc-900 dark:text-white">Verificando el pago…</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Estamos confirmando el estado de tu pago. Esto solo tardara un momento.
+        </p>
       </div>
     </div>
   );
