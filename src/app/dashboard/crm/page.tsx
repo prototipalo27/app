@@ -79,15 +79,36 @@ export default async function CrmPage() {
 
   // Fallback: any paid lead without a shipping_address from quote_requests
   // (either filtered out by payment_status or never written) should still
-  // resolve via client_addresses — otherwise the kanban "falta dirección"
-  // alert stays red even when the address is set from the project page.
-  const leadsMissingAddress = leads
-    .filter((l) => l.status === "paid")
-    .map((l) => l.id)
-    .filter((id) => {
-      const v = shippingAddressMap[id];
-      return !v || !String(v).trim();
-    });
+  // resolve its address — otherwise the kanban "falta dirección" alert stays
+  // red even when the address is set.
+  const missingAddress = (id: string) => {
+    const v = shippingAddressMap[id];
+    return !v || !String(v).trim();
+  };
+  const paidLeadIds = leads.filter((l) => l.status === "paid").map((l) => l.id);
+
+  // First fallback: read shipping_address straight from quote_requests, ignoring
+  // the paid filter above. A lead can sit in the "Pagados" column (lead.status =
+  // 'paid') while its quote_request still has payment_status 'pending' — in that
+  // case the address was written but the paid filter dropped it from the map.
+  const stillMissingFromQuotes = paidLeadIds.filter(missingAddress);
+  if (stillMissingFromQuotes.length > 0) {
+    const { data: anyQuotes } = await supabase
+      .from("quote_requests")
+      .select("lead_id, shipping_address, pickup_in_person")
+      .in("lead_id", stillMissingFromQuotes)
+      .order("created_at", { ascending: false });
+    for (const q of anyQuotes || []) {
+      if (!q.lead_id || !missingAddress(q.lead_id)) continue;
+      if (q.shipping_address && String(q.shipping_address).trim()) {
+        shippingAddressMap[q.lead_id] = q.shipping_address;
+      }
+      if (q.pickup_in_person) pickupMap[q.lead_id] = true;
+    }
+  }
+
+  // Second fallback: resolve via client_addresses for any lead still missing.
+  const leadsMissingAddress = paidLeadIds.filter(missingAddress);
   if (leadsMissingAddress.length > 0) {
     const { data: projectsForLeads } = await supabase
       .from("projects")
