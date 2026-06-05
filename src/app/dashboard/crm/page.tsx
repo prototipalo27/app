@@ -155,7 +155,9 @@ export default async function CrmPage() {
     pending_second_half: pendingSecondHalfMap[l.id] ?? false,
   }));
 
-  const activeLeadsCount = leads.filter((l) => l.status !== "lost").length;
+  const activeLeadsCount = leads.filter(
+    (l) => l.status !== "lost" && l.status !== "finished"
+  ).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -164,7 +166,7 @@ export default async function CrmPage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Leads</h1>
           <span
             className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-sm font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-            title="Total de leads sin contar los perdidos"
+            title="Total de leads sin contar los perdidos ni terminados"
           >
             {activeLeadsCount}
           </span>

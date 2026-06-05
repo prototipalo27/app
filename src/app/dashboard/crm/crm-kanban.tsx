@@ -118,7 +118,7 @@ function CrmColumn({
   );
 }
 
-function LostSection({
+function HiddenSection({
   column,
   leads,
 }: {
@@ -552,8 +552,11 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAt
   const newLeads = filteredLeads
     .filter((l) => l.status === "new")
     .sort(sortFn);
-  const kanbanColumns = LEAD_COLUMNS.filter((col) => col.id !== "new" && col.id !== "lost");
+  const kanbanColumns = LEAD_COLUMNS.filter(
+    (col) => col.id !== "new" && col.id !== "lost" && col.id !== "finished"
+  );
   const lostColumn = LEAD_COLUMNS.find((col) => col.id === "lost")!;
+  const finishedColumn = LEAD_COLUMNS.find((col) => col.id === "finished")!;
 
   return (
     <>
@@ -579,7 +582,7 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAt
       {/* Pipeline summary */}
       {(() => {
         const phases = LEAD_COLUMNS
-          .filter((col) => col.id !== "lost")
+          .filter((col) => col.id !== "lost" && col.id !== "finished")
           .map((col) => {
             const phaseLeads = filteredLeads.filter((l) => l.status === col.id && passesClosedMonth(l));
             const total = phaseLeads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
@@ -975,11 +978,17 @@ export function CrmKanban({ initialLeads, managers, owners, myCommission, paidAt
           ))}
         </div>
 
-        {/* Perdidos — separate section below kanban */}
+        {/* Terminados y Perdidos — secciones ocultas debajo del kanban */}
+        {(() => {
+          const finishedLeads = filteredLeads.filter((l) => l.status === "finished").sort(sortFn);
+          return (
+            <HiddenSection column={finishedColumn} leads={finishedLeads} />
+          );
+        })()}
         {(() => {
           const lostLeads = filteredLeads.filter((l) => l.status === "lost").sort(sortFn);
           return (
-            <LostSection column={lostColumn} leads={lostLeads} />
+            <HiddenSection column={lostColumn} leads={lostLeads} />
           );
         })()}
       </DragDropProvider>

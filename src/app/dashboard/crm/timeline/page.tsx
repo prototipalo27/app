@@ -17,7 +17,7 @@ export default async function TimelinePage() {
   const { data: leads } = await supabase
     .from("leads")
     .select("id, full_name, company, email, phone, status, estimated_value, assigned_to, created_at, project_type_tag")
-    .not("status", "in", "(won,paid,lost)")
+    .not("status", "in", "(won,paid,finished,lost)")
     .order("created_at", { ascending: false });
 
   // Fetch assignee emails

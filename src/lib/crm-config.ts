@@ -1,4 +1,4 @@
-export type LeadStatus = "new" | "contacted" | "quoted" | "won" | "paid" | "lost";
+export type LeadStatus = "new" | "contacted" | "quoted" | "won" | "paid" | "finished" | "lost";
 
 export type ActivityType = "note" | "email_sent" | "email_received" | "status_change" | "call";
 
@@ -42,6 +42,13 @@ export const LEAD_COLUMNS: {
       "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   },
   {
+    id: "finished",
+    label: "Terminados",
+    accent: "bg-violet-500",
+    badge:
+      "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  },
+  {
     id: "lost",
     label: "Perdidos",
     accent: "bg-red-500",
@@ -56,6 +63,7 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   quoted: "Presupuestado",
   won: "Ganado",
   paid: "Pagado",
+  finished: "Terminado",
   lost: "Perdido",
 };
 
