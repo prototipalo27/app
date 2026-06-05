@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewButton } from "./pdf-viewer";
+import LeadBillingEditor from "./lead-billing-editor";
 import { formatDate, formatDateMedium } from "@/lib/dates";
 
 interface LeadActionsProps {
@@ -700,6 +701,24 @@ export default function LeadActions({
 
           return null;
         })()}
+
+        {/* Datos de facturación — editables a mano para leads sin formulario web */}
+        {quoteRequest && (
+          <div className="border-t pt-3 mt-3">
+            <LeadBillingEditor
+              leadId={leadId}
+              billing={{
+                billing_name: quoteRequest.billing_name ?? null,
+                tax_id: quoteRequest.tax_id ?? null,
+                billing_address: quoteRequest.billing_address ?? null,
+                billing_city: quoteRequest.billing_city ?? null,
+                billing_postal_code: quoteRequest.billing_postal_code ?? null,
+                billing_province: quoteRequest.billing_province ?? null,
+                billing_country: quoteRequest.billing_country ?? null,
+              }}
+            />
+          </div>
+        )}
 
         {/* CC Emails — emails adicionales para envíos */}
         {quoteRequest && (

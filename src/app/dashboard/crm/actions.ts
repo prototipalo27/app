@@ -8,7 +8,7 @@ import { requireRole, getUserProfile, hasRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, createEstimate, createInvoice, createContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice } from "@/lib/holded/api";
+import { createProforma, createEstimate, createInvoice, createContact, updateContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
@@ -2038,6 +2038,137 @@ export async function getQuoteRequest(leadId: string) {
   return data;
 }
 
+// ── Datos de facturación (manuales, para leads sin formulario web) ────────
+
+export type LeadBillingInput = {
+  billing_name: string;
+  tax_id: string;
+  billing_address: string;
+  billing_city: string;
+  billing_postal_code: string;
+  billing_province: string;
+  billing_country: string;
+};
+
+/** Una factura solo puede emitirse si el cliente tiene, como mínimo, razón
+ *  social y NIF. En España no es válida sin el identificador fiscal. */
+function isBillingComplete(qr: {
+  tax_id?: string | null;
+  billing_name?: string | null;
+} | null | undefined): boolean {
+  return Boolean(qr?.tax_id?.trim() && qr?.billing_name?.trim());
+}
+
+const MISSING_BILLING_ERROR =
+  "Faltan los datos de facturación del cliente (razón social y NIF). " +
+  "Complétalos en la ficha del lead o envía el formulario al cliente antes de emitir la factura.";
+
+/** Empuja los datos fiscales de un quote_request a su contacto de Holded:
+ *  busca el contacto (por id guardado, email o nombre) y lo crea/actualiza con
+ *  NIF (code) + dirección de facturación. Devuelve el holded_contact_id.
+ *  Misma lógica que el formulario web (submitBillingData). */
+async function pushBillingToHolded(
+  holdedContactId: string | null,
+  lead: { email: string | null; full_name: string; company: string | null },
+  data: LeadBillingInput,
+): Promise<string | null> {
+  let contactId = holdedContactId;
+  const billAddress = {
+    address: data.billing_address.trim(),
+    city: data.billing_city.trim(),
+    postalCode: data.billing_postal_code.trim(),
+    province: data.billing_province.trim(),
+    country: data.billing_country.trim(),
+    countryCode:
+      data.billing_country.trim().toLowerCase() === "españa" ? "ES" : undefined,
+  };
+
+  try {
+    if (!contactId && lead.email) {
+      const byEmail = await searchContacts(lead.email);
+      if (byEmail.length > 0) contactId = byEmail[0].id;
+    }
+    if (!contactId) {
+      const term = lead.company || lead.full_name || data.billing_name;
+      const byName = await searchContacts(term);
+      if (byName.length > 0) contactId = byName[0].id;
+    }
+
+    if (contactId) {
+      await updateContact(contactId, {
+        name: data.billing_name.trim(),
+        code: data.tax_id.trim(),
+        billAddress,
+      });
+    } else {
+      const created = await createContact({
+        name: data.billing_name.trim(),
+        code: data.tax_id.trim(),
+        email: lead.email || undefined,
+        billAddress,
+      });
+      contactId = created.id;
+    }
+  } catch (e) {
+    console.error("[pushBillingToHolded] Holded contact error:", e);
+  }
+
+  return contactId;
+}
+
+/** Guarda los datos de facturación de un lead a mano y los sincroniza con
+ *  Holded, para que la factura salga con NIF y dirección correctos. */
+export async function saveLeadBillingData(
+  leadId: string,
+  data: LeadBillingInput,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  if (!data.billing_name?.trim() || !data.tax_id?.trim()) {
+    return { success: false, error: "Razón social y NIF son obligatorios" };
+  }
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("email, full_name, company")
+    .eq("id", leadId)
+    .single();
+  if (!lead) return { success: false, error: "Lead no encontrado" };
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_contact_id")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!qr) {
+    return { success: false, error: "No hay presupuesto guardado para este lead" };
+  }
+
+  const contactId = await pushBillingToHolded(qr.holded_contact_id, lead, data);
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({
+      billing_name: data.billing_name.trim(),
+      tax_id: data.tax_id.trim(),
+      billing_address: data.billing_address.trim() || null,
+      billing_city: data.billing_city.trim() || null,
+      billing_postal_code: data.billing_postal_code.trim() || null,
+      billing_province: data.billing_province.trim() || null,
+      billing_country: data.billing_country.trim() || null,
+      ...(contactId ? { holded_contact_id: contactId } : {}),
+    })
+    .eq("id", qr.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true };
+}
+
 // ── Get Lead Emails (for contact modal) ─────────────────
 
 export async function getLeadEmails(leadId: string) {
@@ -2671,7 +2802,7 @@ export async function sendInvoiceToClient(
 
   const { data: qr } = await supabase
     .from("quote_requests")
-    .select("id, holded_contact_id, holded_invoice_id, items, notes, payment_option")
+    .select("id, holded_contact_id, holded_invoice_id, items, notes, payment_option, tax_id, billing_name")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -2679,6 +2810,12 @@ export async function sendInvoiceToClient(
 
   if (!qr) {
     return { success: false, error: "No hay presupuesto guardado" };
+  }
+
+  // Sin NIF/razón social no se puede emitir una factura numerada válida.
+  // (Si la factura ya existe en Holded solo la reenviamos, no la creamos.)
+  if (!qr.holded_invoice_id && !isBillingComplete(qr)) {
+    return { success: false, error: MISSING_BILLING_ERROR };
   }
 
   const items = (qr.items || []) as unknown as ProformaLineItem[];
@@ -2714,11 +2851,26 @@ export async function sendInvoiceToClient(
           ...(applyDiscount ? { discount: 5 } : {}),
         })),
         notes: qr.notes || undefined,
+        // Toda factura enviada al cliente nace numerada (no borrador): debe
+        // llevar número definitivo y datos fiscales, igual que en el flujo de
+        // pago automático (onPaymentConfirmed).
+        approveDoc: true,
       });
       invoiceId = invoice.id;
+
+      // Persistimos también el docNumber para vistas/conciliación, igual que
+      // hace onPaymentConfirmed.
+      let docNumber: string | null = null;
+      try {
+        const doc = await getDocument("invoice", invoiceId);
+        docNumber = doc.docNumber || null;
+      } catch (e) {
+        console.error("[sendInvoiceToClient] getDocument for docNumber failed:", e);
+      }
+
       await supabase
         .from("quote_requests")
-        .update({ holded_invoice_id: invoiceId })
+        .update({ holded_invoice_id: invoiceId, invoice_doc_number: docNumber })
         .eq("id", qr.id);
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : "Error al crear la factura" };
@@ -4298,7 +4450,7 @@ export async function markAsPaid(
   const { data: qr } = await supabase
     .from("quote_requests")
     .select(
-      "id, items, payment_option, first_paid_amount, second_paid_amount, paid_amount, first_paid_at",
+      "id, items, payment_option, first_paid_amount, second_paid_amount, paid_amount, first_paid_at, holded_invoice_id, tax_id, billing_name",
     )
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false })
@@ -4306,6 +4458,12 @@ export async function markAsPaid(
     .maybeSingle();
 
   if (!qr) return { success: false, error: "No hay presupuesto" };
+
+  // Marcar como pagado emite la factura en Holded (onPaymentConfirmed). No la
+  // emitimos sin datos fiscales del cliente: la factura sería inválida.
+  if (!qr.holded_invoice_id && !isBillingComplete(qr)) {
+    return { success: false, error: MISSING_BILLING_ERROR };
+  }
 
   const items = (qr.items || []) as unknown as ProformaLineItem[];
   const isFull = qr.payment_option === "full";
