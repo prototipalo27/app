@@ -302,8 +302,8 @@ export async function submitBillingData(
     try {
       const pdfBuffer = await getDocumentPdf("proform", holdedProformaId);
 
-      const isSplit = data.payment_option === "split";
-      const discountFactor = isFullPayment ? 0.95 : 1;
+      const isSplit = !isFullPayment;
+      const discountFactor = applyDiscount ? 0.95 : 1;
       const total = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
       const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
       const grandTotal = total + taxTotal;

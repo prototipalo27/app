@@ -3622,9 +3622,11 @@ export async function createStripeCheckout(
   const discountFactor = isFull ? 0.95 : 1;
   const isSplit = qr.payment_option === "split";
 
-  // Calculate total in cents
+  // Calculate total in cents (IVA incluido)
   const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
-  const chargeAmount = Math.round((isSplit ? subtotal * 0.5 : subtotal) * 100);
+  const taxTotal = items.reduce((s, i) => s + i.price * i.units * discountFactor * (i.tax / 100), 0);
+  const total = subtotal + taxTotal;
+  const chargeAmount = Math.round((isSplit ? total * 0.5 : total) * 100);
 
   const label = isSplit
     ? "Primer pago (50%) — Proyecto Prototipalo"
