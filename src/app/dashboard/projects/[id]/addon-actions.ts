@@ -156,46 +156,25 @@ export async function addProjectAddon(
     // FULL: crear Stripe Checkout y mandar link
     scenario = "full_payment_link";
     try {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-
-      const existing = project.client_email
-        ? await stripe.customers.list({ email: project.client_email, limit: 1 })
-        : { data: [] };
-      const customer = existing.data.length > 0
-        ? existing.data[0]
-        : await stripe.customers.create({
-            email: project.client_email,
-            name: project.client_name || undefined,
-          });
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        customer: customer.id,
-        line_items: [{
-          price_data: {
-            currency: "eur",
-            product_data: { name: `Ampliación — ${project.name}` },
-            unit_amount: totalCents,
-          },
-          quantity: 1,
-        }],
+      // Payment Link (no caduca) — se envía por email y sigue válido pasados
+      // varios días.
+      const { createOneTimePaymentLink } = await import("@/lib/stripe/payment-links");
+      const link = await createOneTimePaymentLink({
+        label: `Ampliación — ${project.name}`,
+        amountCents: totalCents,
         metadata: {
           project_id: projectId,
           payment_type: "addon_full",
           item_ids: insertedItems.map((i) => i.id).join(","),
         },
-        success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/payment/cancel`,
       });
 
-      paymentUrl = session.url;
+      paymentUrl = link.url;
 
-      // Guardar session_id en cada item insertado
+      // Guardar el id del Payment Link en cada item insertado
       await supabase
         .from("project_items")
-        .update({ addon_stripe_session_id: session.id })
+        .update({ addon_stripe_session_id: link.id })
         .in("id", insertedItems.map((i) => i.id));
     } catch (e) {
       console.error("[addon] Stripe checkout failed", e);

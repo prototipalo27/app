@@ -235,12 +235,11 @@ export async function submitBillingData(
     });
   }
 
-  // 6. Create Stripe Checkout session for payment
+  // 6. Create a Stripe Payment Link for payment. Usamos Payment Links (en vez
+  // de Checkout Sessions) porque no caducan: el cliente recibe el enlace por
+  // email y puede pagar días después.
   let stripeCheckoutUrl: string | null = null;
   try {
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
     const isSplit = !isFullPayment;
     const discountFactor = applyDiscount ? 0.95 : 1;
     const subtotal = items.reduce((s, i) => s + i.price * i.units * discountFactor, 0);
@@ -248,46 +247,23 @@ export async function submitBillingData(
     const total = subtotal + taxTotal;
     const chargeAmount = Math.round((isSplit ? total * 0.5 : total) * 100); // cents, IVA incluido
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-    const productName = isSplit
-      ? "Primer pago (50%) — Proyecto Prototipalo"
-      : "Pago completo — Proyecto Prototipalo";
-
-    const checkoutParams: Record<string, unknown> = {
-      mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "eur",
-          product_data: { name: productName },
-          unit_amount: chargeAmount,
-        },
-        quantity: 1,
-      }],
+    const { createOneTimePaymentLink } = await import("@/lib/stripe/payment-links");
+    const link = await createOneTimePaymentLink({
+      label: isSplit
+        ? "Primer pago (50%) — Proyecto Prototipalo"
+        : "Pago completo — Proyecto Prototipalo",
+      amountCents: chargeAmount,
       metadata: {
         lead_id: qr.lead_id,
         quote_request_id: qr.id,
         payment_type: isSplit ? "split_50_first" : "full",
       },
-      success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/payment/cancel`,
-    };
+    });
 
-    const existingCust = lead?.email
-      ? await stripe.customers.list({ email: lead.email, limit: 1 })
-      : { data: [] };
-    const stripeCust = existingCust.data.length > 0
-      ? existingCust.data[0]
-      : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
-
-    const session = await stripe.checkout.sessions.create({
-      ...checkoutParams,
-      customer: stripeCust.id,
-    } as Parameters<typeof stripe.checkout.sessions.create>[0]);
-
-    stripeCheckoutUrl = session.url;
-    await supabase.from("quote_requests").update({ stripe_checkout_session_id: session.id }).eq("id", qr.id);
+    stripeCheckoutUrl = link.url;
+    await supabase.from("quote_requests").update({ stripe_checkout_session_id: link.id }).eq("id", qr.id);
   } catch (e) {
-    console.error("[submitBillingData] Stripe checkout creation failed:", e);
+    console.error("[submitBillingData] Stripe payment link creation failed:", e);
   }
 
   await supabase.from("lead_activities").insert({

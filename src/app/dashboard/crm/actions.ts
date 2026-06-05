@@ -3609,15 +3609,6 @@ export async function createStripeCheckout(
   const items = (qr.items || []) as unknown as ProformaLineItem[];
   if (items.length === 0) return { success: false, error: "Sin líneas de presupuesto" };
 
-  const { data: lead } = await supabase
-    .from("leads")
-    .select("email, full_name")
-    .eq("id", leadId)
-    .single();
-
-  const Stripe = (await import("stripe")).default;
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
   const isFull = qr.payment_option === "full";
   const discountFactor = isFull ? 0.95 : 1;
   const isSplit = qr.payment_option === "split";
@@ -3632,38 +3623,22 @@ export async function createStripeCheckout(
     ? "Primer pago (50%) — Proyecto Prototipalo"
     : "Pago — Proyecto Prototipalo";
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-
-  const baseParams = {
-    mode: "payment" as const,
-    line_items: [{
-      price_data: { currency: "eur", product_data: { name: label }, unit_amount: chargeAmount },
-      quantity: 1,
-    }],
+  // Payment Link (no caduca) en vez de Checkout Session — el manager lo envía
+  // al cliente y sigue siendo válido pasados varios días.
+  const { createOneTimePaymentLink } = await import("@/lib/stripe/payment-links");
+  const link = await createOneTimePaymentLink({
+    label,
+    amountCents: chargeAmount,
     metadata: { lead_id: leadId, quote_request_id: qr.id, payment_type: isSplit ? "split_50_first" : "full" },
-    success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/payment/cancel`,
-  };
-
-  const existingCustomers = lead?.email
-    ? await stripe.customers.list({ email: lead.email, limit: 1 })
-    : { data: [] };
-  const stripeCustomer = existingCustomers.data.length > 0
-    ? existingCustomers.data[0]
-    : await stripe.customers.create({ email: lead?.email || undefined, name: lead?.full_name || undefined });
-
-  const session = await stripe.checkout.sessions.create({
-    ...baseParams,
-    customer: stripeCustomer.id,
   });
 
   await supabase
     .from("quote_requests")
-    .update({ stripe_checkout_session_id: session.id })
+    .update({ stripe_checkout_session_id: link.id })
     .eq("id", qr.id);
 
   revalidatePath(`/dashboard/crm/${leadId}`);
-  return { success: true, url: session.url! };
+  return { success: true, url: link.url };
 }
 
 // ── Shipping address (quick-edit from kanban) ───────────
@@ -3850,58 +3825,42 @@ export async function requestSecondPayment(
     }
   }
 
-  // 2. Stripe Checkout Session — payment_type='split_50_second'.
+  // 2. Stripe Payment Link — payment_type='split_50_second'. No caduca, así que
+  // si ya existe uno de un intento anterior y sigue activo, lo reutilizamos.
   let stripeCheckoutUrl: string | null = null;
   let stripeSessionId: string | null = qr.second_stripe_session_id ?? null;
   try {
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const { createOneTimePaymentLink } = await import("@/lib/stripe/payment-links");
 
-    // Si ya hay una sesión guardada de un intento anterior, intentamos
-    // recuperarla en vez de crear otra (evita múltiples links activos).
-    if (stripeSessionId) {
+    if (stripeSessionId?.startsWith("plink_")) {
       try {
-        const existing = await stripe.checkout.sessions.retrieve(stripeSessionId);
-        if (existing.status === "open" && existing.url) {
+        const Stripe = (await import("stripe")).default;
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+        const existing = await stripe.paymentLinks.retrieve(stripeSessionId);
+        if (existing.active && existing.url) {
           stripeCheckoutUrl = existing.url;
         }
       } catch {
-        // Sesión expirada o inexistente — creamos una nueva.
+        // Link inexistente — creamos uno nuevo.
         stripeSessionId = null;
       }
     }
 
     if (!stripeCheckoutUrl) {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://app.prototipalo.es";
-      const existingCust = await stripe.customers.list({ email: lead.email, limit: 1 });
-      const stripeCust = existingCust.data.length > 0
-        ? existingCust.data[0]
-        : await stripe.customers.create({ email: lead.email, name: lead.full_name });
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        customer: stripeCust.id,
-        line_items: [{
-          price_data: {
-            currency: "eur",
-            product_data: { name: "Segundo pago (50%) — Proyecto Prototipalo" },
-            unit_amount: chargeAmountCents,
-          },
-          quantity: 1,
-        }],
+      const link = await createOneTimePaymentLink({
+        label: "Segundo pago (50%) — Proyecto Prototipalo",
+        amountCents: chargeAmountCents,
         metadata: {
           lead_id: leadId,
           quote_request_id: qr.id,
           payment_type: "split_50_second",
         },
-        success_url: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/payment/cancel`,
       });
-      stripeCheckoutUrl = session.url;
-      stripeSessionId = session.id;
+      stripeCheckoutUrl = link.url;
+      stripeSessionId = link.id;
     }
   } catch (e) {
-    console.error("[requestSecondPayment] Stripe checkout failed:", e);
+    console.error("[requestSecondPayment] Stripe payment link failed:", e);
   }
 
   // 3. Persistir IDs antes de mandar email (si el email falla podemos
