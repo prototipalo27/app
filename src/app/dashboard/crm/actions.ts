@@ -8,7 +8,7 @@ import { requireRole, getUserProfile, hasRole } from "@/lib/rbac";
 import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment } from "@/lib/email";
 import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
-import { createProforma, createEstimate, createInvoice, createContact, updateContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice } from "@/lib/holded/api";
+import { createProforma, createEstimate, createInvoice, createContact, updateContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice, approveInvoice } from "@/lib/holded/api";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
@@ -2868,6 +2868,18 @@ export async function sendInvoiceToClient(
         console.error("[sendInvoiceToClient] getDocument for docNumber failed:", e);
       }
 
+      // Salvaguarda: si nació en borrador (cuenta con "modo borrador"), la
+      // emitimos antes de mandar el PDF para que el cliente reciba la factura
+      // definitiva, nunca un borrador.
+      if (!docNumber) {
+        const approved = await approveInvoice(invoiceId);
+        if (approved.docNumber) {
+          docNumber = approved.docNumber;
+        } else {
+          console.error("[sendInvoiceToClient] No se pudo emitir la factura (sigue en borrador):", approved.error);
+        }
+      }
+
       await supabase
         .from("quote_requests")
         .update({ holded_invoice_id: invoiceId, invoice_doc_number: docNumber })
@@ -2924,6 +2936,41 @@ export async function sendInvoiceToClient(
 
   revalidatePath(`/dashboard/crm/${leadId}`);
   return { success: true };
+}
+
+// Emite (numera) la factura de un lead que quedó en borrador en Holded. Útil
+// para regularizar facturas creadas antes de la salvaguarda automática, o si la
+// emisión automática falló. Idempotente: si ya está numerada, devuelve su número.
+export async function approveInvoiceForLead(
+  leadId: string,
+): Promise<{ success: boolean; error?: string; docNumber?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: qr } = await supabase
+    .from("quote_requests")
+    .select("id, holded_invoice_id, invoice_doc_number")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!qr?.holded_invoice_id) {
+    return { success: false, error: "No hay factura en Holded para este lead" };
+  }
+
+  const approved = await approveInvoice(qr.holded_invoice_id);
+  if (!approved.ok || !approved.docNumber) {
+    return { success: false, error: approved.error || "No se pudo emitir la factura en Holded" };
+  }
+
+  await supabase
+    .from("quote_requests")
+    .update({ invoice_doc_number: approved.docNumber })
+    .eq("id", qr.id);
+
+  revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true, docNumber: approved.docNumber };
 }
 
 export async function sendLeadProforma(
@@ -4207,6 +4254,19 @@ export async function onPaymentConfirmed(
         docNumber = doc.docNumber || null;
       } catch (e) {
         console.error("[onPaymentConfirmed] getDocument for docNumber failed:", e);
+      }
+
+      // Salvaguarda: si la cuenta tiene "modo borrador" activo, la factura nace
+      // sin número pese a pedir approveDoc al crearla. La emitimos explícitamente
+      // para que el cliente reciba SIEMPRE una factura definitiva (el PDF se
+      // descarga más abajo, ya numerado).
+      if (!docNumber) {
+        const approved = await approveInvoice(invoiceId);
+        if (approved.docNumber) {
+          docNumber = approved.docNumber;
+        } else {
+          console.error("[onPaymentConfirmed] No se pudo emitir la factura (sigue en borrador):", approved.error);
+        }
       }
 
       await supabase

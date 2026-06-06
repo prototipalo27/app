@@ -405,6 +405,34 @@ export async function payInvoice(
   return { ok: true };
 }
 
+// Emite (numera) una factura que está en borrador. Las cuentas de Holded con
+// "modo borrador" activado ignoran `approveDoc` al CREAR (la factura nace sin
+// número), pero este PUT sí la aprueba: le asigna docNumber, la bloquea y
+// conserva las líneas. Es la garantía de que el cliente reciba una factura
+// definitiva y no un borrador. Devuelve el docNumber emitido (null si falló).
+export async function approveInvoice(
+  invoiceId: string,
+): Promise<{ ok: boolean; docNumber: string | null; error?: string }> {
+  const res = await fetch(`${HOLDED_API_BASE}/documents/invoice/${invoiceId}`, {
+    method: "PUT",
+    headers: { key: getApiKey(), "Content-Type": "application/json" },
+    body: JSON.stringify({ approveDoc: true }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, docNumber: null, error: `Holded approve error: ${res.status} ${res.statusText} ${text}` };
+  }
+
+  // Confirmamos que quedó numerada releyendo el documento.
+  try {
+    const doc = await getDocument("invoice", invoiceId);
+    return { ok: Boolean(doc.docNumber), docNumber: doc.docNumber || null };
+  } catch {
+    return { ok: true, docNumber: null };
+  }
+}
+
 /** Update a proforma with line items and optional notes */
 export async function updateProforma(
   documentId: string,

@@ -15,6 +15,7 @@ import {
   createLeadProforma,
   sendProformaToClient,
   sendInvoiceToClient,
+  approveInvoiceForLead,
   createStripeCheckout,
   markAsPaid,
   requestSecondPayment,
@@ -126,6 +127,7 @@ export default function LeadActions({
   const [copied, setCopied] = useState(false);
   const [sendingProforma, setSendingProforma] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
+  const [approvingInvoice, setApprovingInvoice] = useState(false);
   const [docSent, setDocSent] = useState<string | null>(null);
   const [generatingPayLink, setGeneratingPayLink] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<null | "first_half" | "second_half" | "full">(null);
@@ -807,6 +809,33 @@ export default function LeadActions({
                     Ver factura en Holded
                   </a>
                   <PdfPreviewButton leadId={leadId} docType="invoice" />
+                  {!quoteRequest.invoice_doc_number && (
+                    <div className="rounded-md bg-amber-50 p-2 dark:bg-amber-900/20">
+                      <p className="mb-1.5 text-xs text-amber-700 dark:text-amber-400">
+                        ⚠ Esta factura está en <strong>borrador</strong> (sin número fiscal).
+                      </p>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          setApprovingInvoice(true);
+                          setQuoteError(null);
+                          setDocSent(null);
+                          const result = await approveInvoiceForLead(leadId);
+                          setApprovingInvoice(false);
+                          if (result.success) {
+                            setDocSent("factura-aprobada");
+                            router.refresh();
+                          } else {
+                            setQuoteError(result.error || "Error al aprobar la factura");
+                          }
+                        }}
+                        disabled={approvingInvoice}
+                        className="bg-amber-600 text-white hover:bg-amber-700"
+                      >
+                        {approvingInvoice ? "Aprobando..." : "Aprobar factura (emitir definitiva)"}
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -839,7 +868,12 @@ export default function LeadActions({
 
             {docSent && (
               <p className="text-xs text-green-600 dark:text-green-400">
-                {docSent === "proforma" ? "Proforma enviada" : "Factura enviada"} correctamente
+                {docSent === "proforma"
+                  ? "Proforma enviada"
+                  : docSent === "factura-aprobada"
+                    ? "Factura emitida (definitiva)"
+                    : "Factura enviada"}{" "}
+                correctamente
               </p>
             )}
 
