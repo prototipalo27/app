@@ -1670,6 +1670,17 @@ export async function sendQuoteToClient(
   const taxTotal = items.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
   const total = subtotal + taxTotal;
 
+  // Sincroniza el valor estimado del lead con el total del presupuesto enviado
+  // (base imponible, sin IVA — misma convención que saveQuoteItems y
+  // linkInvoiceToLead). Garantiza que el kanban refleje el importe real aunque
+  // el manager envíe sin volver a pulsar "Guardar" tras editar las líneas.
+  if (subtotal > 0) {
+    await supabase
+      .from("leads")
+      .update({ estimated_value: subtotal })
+      .eq("id", leadId);
+  }
+
   const itemsHtml = `
     <table style="width:100%;border-collapse:collapse;margin:16px 0;">
       <thead>
