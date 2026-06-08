@@ -219,6 +219,7 @@ export async function createShipment(
           <mrw:Direccion>
             <mrw:Via>${escapeXml(entregaVia)}</mrw:Via>
             ${entregaNumero ? `<mrw:Numero>${escapeXml(entregaNumero)}</mrw:Numero>` : ""}
+            ${params.addressExtra ? `<mrw:Resto>${escapeXml(params.addressExtra)}</mrw:Resto>` : ""}
             <mrw:CodigoPostal>${escapeXml(params.recipientPostalCode)}</mrw:CodigoPostal>
             <mrw:Poblacion>${escapeXml(params.recipientCity)}</mrw:Poblacion>
           </mrw:Direccion>

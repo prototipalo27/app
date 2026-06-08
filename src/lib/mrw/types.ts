@@ -6,6 +6,8 @@ export interface MrwShipmentParams {
   recipientCountry?: string; // ISO 2-letter, defaults to "ES"
   recipientPhone?: string;
   recipientEmail?: string;
+  /** Resto de la dirección: portal, piso, puerta, escalera… → <Resto> de MRW. */
+  addressExtra?: string;
   packages: number;
   weight: number; // kg (integers recommended)
   reference?: string;

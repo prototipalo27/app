@@ -363,7 +363,10 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
   });
   const [recipientEmail, setRecipientEmail] = useState(defaultRecipientEmail);
   const [recipientPhone, setRecipientPhone] = useState(defaultRecipientPhone);
-  // Observaciones para el repartidor (portal, piso, horario, telefonillo…).
+  // Resto de la dirección (portal, piso, puerta, escalera) → <Resto> de MRW,
+  // que forma parte de la dirección impresa, distinto de las observaciones.
+  const [addressExtra, setAddressExtra] = useState("");
+  // Observaciones para el repartidor (telefonillo, horario, "llamar antes"…).
   // MRW las imprime en la etiqueta (<Observaciones>).
   const [observations, setObservations] = useState("");
   const [street, setStreet] = useState(holdedContact?.billAddress?.address ?? "");
@@ -495,6 +498,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
           packages: packages.length, weight: totalWeight,
           packageWidth: Number(firstPkg.width), packageHeight: Number(firstPkg.height), packageLength: Number(firstPkg.length),
           service: mrwServiceId,
+          addressExtra: addressExtra.trim() || undefined,
           observations: observations.trim() || undefined,
           addressId: addrId,
         }),
@@ -714,6 +718,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
                 <input type="text" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
                 <input type="text" placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} />
                 <input type="text" placeholder="Country code (ES, FR…)" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={2} className={inputClass} />
+                <input type="text" placeholder="Portal / piso / puerta" value={addressExtra} onChange={(e) => setAddressExtra(e.target.value)} className={`${inputClass} sm:col-span-2`} />
               </div>
             </div>
 

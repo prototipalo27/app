@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     weight,
     reference,
     observations,
+    addressExtra,
     title,
     contentDescription,
     declaredValue,
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
     weight: number;
     reference?: string;
     observations?: string;
+    addressExtra?: string;
     title?: string;
     contentDescription?: string;
     declaredValue?: number;
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
     weight: weight || 1,
     reference,
     observations,
+    addressExtra,
     service: service || "0110",
   };
 
