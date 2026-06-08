@@ -221,6 +221,41 @@ export async function updateProjectDeadline(projectId: string, deadline: string 
   revalidatePath("/dashboard/entregas");
 }
 
+/** Fecha de pre-entrega / muestra (la entrega final sigue en `deadline`). */
+export async function updateProjectPreDeliveryDate(
+  projectId: string,
+  date: string | null,
+) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("Unauthorized");
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ pre_delivery_date: date })
+    .eq("id", projectId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+}
+
+/** Marca la entrega final como compromiso firme / evento (se resalta en el tablero). */
+export async function updateProjectDeadlineHard(projectId: string, isHard: boolean) {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("Unauthorized");
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ deadline_is_hard: isHard })
+    .eq("id", projectId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  revalidatePath("/dashboard");
+}
+
 export async function triggerHoldedSync(): Promise<SyncResult> {
   await requireRole("manager");
   const result = await syncHoldedDocuments();

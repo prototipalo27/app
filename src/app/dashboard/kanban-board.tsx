@@ -219,10 +219,19 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
     return haystack.includes(normalizedSearch);
   }
 
+  /** Próximo hito del proyecto: la más próxima de sus dos fechas (pre-entrega
+   *  o entrega final). Sin fechas → Infinity (van al final). */
+  function nextMilestone(p: ProjectWithItems): number {
+    const times = [p.pre_delivery_date, p.deadline]
+      .filter(Boolean)
+      .map((d) => new Date(d + "T00:00:00").getTime());
+    return times.length ? Math.min(...times) : Infinity;
+  }
+
   /** Get projects for a column.
    *  - Entregados: los más recientes primero, con tope FIFO.
-   *  - Resto de columnas: ordenadas por fecha de entrega (deadline) ascendente,
-   *    para que lo que se entrega antes quede arriba (prioridad por tiempo).
+   *  - Resto de columnas: ordenadas por el próximo hito (pre-entrega o entrega
+   *    final, lo que venga antes), para que lo más urgente quede arriba.
    *    Los proyectos sin fecha van al final. */
   function getColumnProjects(columnId: ProjectStatus) {
     const columnProjects = projects.filter((p) => p.status === columnId && matchesSearch(p));
@@ -236,15 +245,7 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
         : byRecency;
     }
 
-    return [...columnProjects].sort((a, b) => {
-      if (!a.deadline && !b.deadline) return 0;
-      if (!a.deadline) return 1;
-      if (!b.deadline) return -1;
-      return (
-        new Date(a.deadline + "T00:00:00").getTime() -
-        new Date(b.deadline + "T00:00:00").getTime()
-      );
-    });
+    return [...columnProjects].sort((a, b) => nextMilestone(a) - nextMilestone(b));
   }
 
   return (

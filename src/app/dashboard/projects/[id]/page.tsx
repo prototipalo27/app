@@ -349,7 +349,12 @@ export default async function ProjectDetailPage({
         )}
         <div className="flex flex-wrap items-center gap-3">
           <PrioritySelector projectId={project.id} currentPriority={project.queue_priority} />
-          <DeadlinePicker projectId={project.id} currentDeadline={project.deadline} />
+          <DeadlinePicker
+            projectId={project.id}
+            currentDeadline={project.deadline}
+            currentPreDeliveryDate={project.pre_delivery_date}
+            currentDeadlineIsHard={project.deadline_is_hard}
+          />
           <CopyTrackingLink trackingToken={project.tracking_token} />
           <PmSelector
             projectId={project.id}

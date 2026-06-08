@@ -46,7 +46,13 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city
   });
 
   const items = project.project_items ?? [];
-  const deadline = getDeadlineInfo(project.deadline);
+  const preInfo = getDeadlineInfo(project.pre_delivery_date);
+  const finalInfo = getDeadlineInfo(project.deadline);
+  // El color de urgencia lo marca el hito más próximo (pre-entrega o final).
+  const nearest = [preInfo, finalInfo]
+    .filter((i) => i.days !== null)
+    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))[0];
+  const cardColor = nearest?.colorClass ?? "";
 
   return (
     <div
@@ -57,21 +63,29 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       className={`relative cursor-grab rounded-lg border p-2.5 shadow-sm transition select-none ${
-        deadline.colorClass
-          ? `border-transparent ${deadline.colorClass}`
+        cardColor
+          ? `border-transparent ${cardColor}`
           : "border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800"
       } ${isDragging ? "z-50 cursor-grabbing scale-[1.02] opacity-75 shadow-lg" : ""}`}
     >
-      {/* Compact view: name + deadline */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Compact view: name + fechas (pre-entrega / entrega final) */}
+      <div className="flex items-start justify-between gap-2">
         <h4 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
           {project.client_name || project.name}
         </h4>
-        {deadline.label && (
-          <span className="shrink-0 text-[11px] font-medium">
-            {deadline.label}
-          </span>
-        )}
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-[11px] font-medium leading-tight">
+          {preInfo.label && (
+            <span className="text-zinc-500 dark:text-zinc-400">Pre {preInfo.label}</span>
+          )}
+          {finalInfo.label && (
+            <span
+              className={project.deadline_is_hard ? "font-bold text-red-500 dark:text-red-400" : ""}
+              title={project.deadline_is_hard ? "Entrega final — compromiso firme / evento" : "Entrega final"}
+            >
+              {project.deadline_is_hard ? "★ " : ""}{finalInfo.label}
+            </span>
+          )}
+        </div>
       </div>
       {pickup ? (
         <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
@@ -123,13 +137,13 @@ export function KanbanCard({ project, invoiceDocNumber, projectManagerName, city
                 {Number(project.price).toFixed(2)} €
               </span>
             )}
-            {deadline.days !== null && (
+            {nearest?.days != null && (
               <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
-                {deadline.days < 0
-                  ? `${Math.abs(deadline.days)}d atrasado`
-                  : deadline.days === 0
+                {nearest.days < 0
+                  ? `${Math.abs(nearest.days)}d atrasado`
+                  : nearest.days === 0
                     ? "Hoy"
-                    : `${deadline.days}d restantes`}
+                    : `${nearest.days}d restantes`}
               </span>
             )}
           </div>

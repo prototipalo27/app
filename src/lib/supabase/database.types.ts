@@ -2024,6 +2024,8 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           deadline: string | null;
+          deadline_is_hard: boolean;
+          pre_delivery_date: string | null;
           deliverable_approved_at: string | null;
           deliverable_visible: boolean;
           description: string | null;
@@ -2068,6 +2070,8 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           deadline?: string | null;
+          deadline_is_hard?: boolean;
+          pre_delivery_date?: string | null;
           deliverable_approved_at?: string | null;
           deliverable_visible?: boolean;
           description?: string | null;
@@ -2112,6 +2116,8 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           deadline?: string | null;
+          deadline_is_hard?: boolean;
+          pre_delivery_date?: string | null;
           deliverable_approved_at?: string | null;
           deliverable_visible?: boolean;
           description?: string | null;
