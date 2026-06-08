@@ -203,16 +203,32 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
     return haystack.includes(normalizedSearch);
   }
 
-  /** Get projects for a column, with FIFO limit for delivered */
+  /** Get projects for a column.
+   *  - Entregados: los más recientes primero, con tope FIFO.
+   *  - Resto de columnas: ordenadas por fecha de entrega (deadline) ascendente,
+   *    para que lo que se entrega antes quede arriba (prioridad por tiempo).
+   *    Los proyectos sin fecha van al final. */
   function getColumnProjects(columnId: ProjectStatus) {
     const columnProjects = projects.filter((p) => p.status === columnId && matchesSearch(p));
-    if (columnId === "delivered" && columnProjects.length > MAX_DELIVERED) {
-      // Sort by created_at descending, keep only the newest
-      return [...columnProjects]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, MAX_DELIVERED);
+
+    if (columnId === "delivered") {
+      const byRecency = [...columnProjects].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      return columnProjects.length > MAX_DELIVERED
+        ? byRecency.slice(0, MAX_DELIVERED)
+        : byRecency;
     }
-    return columnProjects;
+
+    return [...columnProjects].sort((a, b) => {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return (
+        new Date(a.deadline + "T00:00:00").getTime() -
+        new Date(b.deadline + "T00:00:00").getTime()
+      );
+    });
   }
 
   return (
