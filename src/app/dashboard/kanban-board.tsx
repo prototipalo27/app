@@ -135,24 +135,40 @@ export function KanbanBoard({ initialProjects, zoneResponsibles = {}, invoiceDoc
         return;
       }
 
-      // Handle studio drop — copia el proyecto a studio_projects sin tocar el original
+      // Handle studio drop — mueve el proyecto a studio_projects (Studio es otra
+      // línea) y lo saca del board de Proyectos.
       if (targetId === "studio") {
         const project = projects.find((p) => p.id === projectId);
         if (!project) return;
-        setStudioPending(true);
-        setStudioFeedback(null);
-        sendProjectToStudio(projectId).then((result) => {
+
+        const onStudioResult = (
+          result: Awaited<ReturnType<typeof sendProjectToStudio>>,
+        ) => {
           setStudioPending(false);
           if (result.success) {
+            // Sale de la línea normal → lo quitamos del board.
+            setProjects((prev) => prev.filter((p) => p.id !== projectId));
             setStudioFeedback({
               type: "success",
               studioProjectId: result.studioProjectId,
               name: project.name,
             });
+          } else if (result.recurring) {
+            const ok = window.confirm(
+              `⚠ Cliente recurrente: "${result.clientName || project.client_name || "este cliente"}" ya tiene ${result.existingCount} proyecto(s) en Studio.\n\n¿Crear el proyecto de Studio igualmente?`,
+            );
+            if (ok) {
+              setStudioPending(true);
+              sendProjectToStudio(projectId, true).then(onStudioResult);
+            }
           } else {
-            setStudioFeedback({ type: "error", message: result.error });
+            setStudioFeedback({ type: "error", message: result.error ?? "Error al crear Studio" });
           }
-        });
+        };
+
+        setStudioPending(true);
+        setStudioFeedback(null);
+        sendProjectToStudio(projectId).then(onStudioResult);
         return;
       }
 

@@ -58,7 +58,7 @@ export default async function TareasPage({
         .select("id, name, client_name, status, deadline")
         .eq("project_manager_id", userId)
         .not("status", "in", "(delivered)")
-        .neq("project_type", "discarded")
+        .not("project_type", "in", "(discarded,studio)")
         .order("deadline", { ascending: true, nullsFirst: false })
     : { data: null };
 

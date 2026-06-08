@@ -193,10 +193,16 @@ export async function deleteStudioPayment(formData: FormData) {
 }
 
 // Convierte un proyecto de producción en un proyecto Studio copiando los
-// campos relevantes. No modifica el proyecto original.
+// campos relevantes y sacando el original de la línea de producción normal
+// (Studio es otra línea). El original se marca con project_type="studio" para
+// que desaparezca del board de Proyectos sin perder su histórico.
 export async function sendProjectToStudio(
   projectId: string,
-): Promise<{ success: true; studioProjectId: string } | { success: false; error: string }> {
+  force = false,
+): Promise<
+  | { success: true; studioProjectId: string }
+  | { success: false; error?: string; recurring?: boolean; existingCount?: number; clientName?: string }
+> {
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) return { success: false, error: "No autorizado" };
@@ -211,6 +217,23 @@ export async function sendProjectToStudio(
 
   if (projectError || !project) {
     return { success: false, error: projectError?.message ?? "Proyecto no encontrado" };
+  }
+
+  // Aviso de cliente recurrente: si este cliente ya tiene proyectos en Studio,
+  // pedimos confirmación (force) antes de crear otro, para no duplicar por error.
+  if (!force && (project.holded_contact_id || project.client_email)) {
+    const existingQuery = supabase.from("studio_projects").select("id");
+    const { data: existingStudio } = project.holded_contact_id
+      ? await existingQuery.eq("holded_contact_id", project.holded_contact_id)
+      : await existingQuery.ilike("client_email", project.client_email!);
+    if (existingStudio && existingStudio.length > 0) {
+      return {
+        success: false,
+        recurring: true,
+        existingCount: existingStudio.length,
+        clientName: project.client_name ?? "",
+      };
+    }
   }
 
   const { data: studioProject, error: insertError } = await supabase
@@ -235,6 +258,19 @@ export async function sendProjectToStudio(
     return { success: false, error: insertError?.message ?? "Error al crear Studio" };
   }
 
+  // Saca el proyecto de la línea de producción normal: al pasar a "studio" deja
+  // de aparecer en el board de Proyectos (y resto de vistas que filtran por
+  // confirmed/upcoming o excluyen discarded/studio).
+  const { error: moveError } = await supabase
+    .from("projects")
+    .update({ project_type: "studio", updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+
+  if (moveError) {
+    return { success: false, error: moveError.message };
+  }
+
   revalidatePath("/dashboard/studio");
+  revalidatePath("/dashboard");
   return { success: true, studioProjectId: studioProject.id };
 }

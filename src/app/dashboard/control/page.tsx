@@ -100,7 +100,7 @@ export default async function ControlPage() {
     supabase
       .from("projects")
       .select("id, name, status, project_type, price, deadline, client_name, created_at, invoice_date")
-      .neq("project_type", "discarded"),
+      .not("project_type", "in", "(discarded,studio)"),
     supabase.from("project_items").select("id, project_id, quantity, completed, print_time_minutes"),
     supabase.from("print_jobs").select("id, status, estimated_minutes, printer_id, started_at, completed_at"),
     supabase.from("printers").select("id, name, online, gcode_state, print_percent, remaining_minutes, current_file").order("name"),
