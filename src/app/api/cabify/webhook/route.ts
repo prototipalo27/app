@@ -49,18 +49,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  // If delivered and linked to a project, check if ALL shipments are delivered
+  // Si se entrega y está ligado a un proyecto, el proyecto pasa a "delivered"
+  // solo cuando TODAS las ENTREGAS FINALES están entregadas. Las pre-entregas
+  // (muestras/parciales) no cuentan para cerrar el proyecto.
   if (status === "delivered" && shipment?.project_id) {
     const { data: allShipments } = await supabase
       .from("shipping_info")
-      .select("id, shipment_status")
+      .select("id, shipment_status, shipment_kind")
       .eq("project_id", shipment.project_id);
 
-    const allDelivered = (allShipments ?? []).every(
-      (s) => s.shipment_status === "delivered",
-    );
+    const finals = (allShipments ?? []).filter((s) => s.shipment_kind === "final");
+    const finalsDelivered =
+      finals.length > 0 && finals.every((s) => s.shipment_status === "delivered");
 
-    if (allDelivered) {
+    if (finalsDelivered) {
       await supabase
         .from("projects")
         .update({ status: "delivered" })

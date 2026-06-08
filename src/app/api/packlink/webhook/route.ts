@@ -41,18 +41,22 @@ export async function POST(request: NextRequest) {
 
   if (status === "DELIVERED") {
     updates.delivered_at = new Date().toISOString();
-    // Only update project status if ALL shipments for this project are delivered
+    // El proyecto pasa a "delivered" solo cuando todas las ENTREGAS FINALES
+    // están entregadas. Las pre-entregas (muestras/parciales) no cuentan.
     if (shipping.project_id) {
       const { data: allShipments } = await supabase
         .from("shipping_info")
-        .select("id, shipment_status")
+        .select("id, shipment_status, shipment_kind")
         .eq("project_id", shipping.project_id);
 
-      const allDelivered = (allShipments ?? []).every(
-        (s) => s.id === shipping.id || s.shipment_status === "delivered" || s.shipment_status === "DELIVERED",
-      );
+      const finals = (allShipments ?? []).filter((s) => s.shipment_kind === "final");
+      const finalsDelivered =
+        finals.length > 0 &&
+        finals.every(
+          (s) => s.id === shipping.id || s.shipment_status === "delivered" || s.shipment_status === "DELIVERED",
+        );
 
-      if (allDelivered) {
+      if (finalsDelivered) {
         await supabase
           .from("projects")
           .update({ status: "delivered" })

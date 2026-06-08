@@ -2844,6 +2844,7 @@ export type Database = {
           recipient_phone: string | null;
           service_id: number | null;
           service_name: string | null;
+          shipment_kind: string;
           shipment_status: string | null;
           shipped_at: string | null;
           title: string | null;
@@ -2880,6 +2881,7 @@ export type Database = {
           recipient_phone?: string | null;
           service_id?: number | null;
           service_name?: string | null;
+          shipment_kind?: string;
           shipment_status?: string | null;
           shipped_at?: string | null;
           title?: string | null;
@@ -2916,6 +2918,7 @@ export type Database = {
           recipient_phone?: string | null;
           service_id?: number | null;
           service_name?: string | null;
+          shipment_kind?: string;
           shipment_status?: string | null;
           shipped_at?: string | null;
           title?: string | null;

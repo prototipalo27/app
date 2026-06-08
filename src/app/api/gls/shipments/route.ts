@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     packageLength,
     horario,
     addressId,
+    kind,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -81,7 +82,12 @@ export async function POST(request: NextRequest) {
     packageLength?: number;
     horario?: string;
     addressId?: string;
+    kind?: "sample" | "partial" | "final";
   };
+
+  // Solo la entrega final mueve el estado del proyecto.
+  const shipmentKind = kind === "sample" || kind === "partial" ? kind : "final";
+  const isFinalDelivery = shipmentKind === "final";
 
   if (!recipientName || !recipientAddress || !recipientCity || !recipientPostalCode || !recipientCountry) {
     return NextResponse.json({ error: "Missing required recipient fields" }, { status: 400 });
@@ -146,6 +152,7 @@ export async function POST(request: NextRequest) {
       package_weight: weight ?? null,
       label_url: labelUrl,
       shipped_at: new Date().toISOString(),
+      shipment_kind: shipmentKind,
       created_by: userData.user.id,
     };
 
@@ -156,15 +163,13 @@ export async function POST(request: NextRequest) {
 
     if (projectId) row.project_id = projectId;
 
-    const { error: dbError } = projectId
-      ? await supabase
-          .from("shipping_info")
-          .upsert(row, { onConflict: "project_id" })
-      : await supabase.from("shipping_info").insert(row);
+    // Insert (ya no upsert por project_id): varios envíos por proyecto.
+    const { error: dbError } = await supabase.from("shipping_info").insert(row);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
-    if (projectId) {
+    // Solo la entrega final mueve el proyecto a "shipping" y notifica.
+    if (projectId && isFinalDelivery) {
       await supabase
         .from("projects")
         .update({ status: "shipping" })

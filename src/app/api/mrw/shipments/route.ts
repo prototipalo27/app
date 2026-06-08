@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     packageLength,
     service,
     addressId,
+    kind,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -62,11 +63,16 @@ export async function POST(request: NextRequest) {
     packageLength?: number;
     service?: string;
     addressId?: string;
+    kind?: "sample" | "partial" | "final";
   };
 
   if (!recipientName || !recipientAddress || !recipientCity || !recipientPostalCode) {
     return NextResponse.json({ error: "Missing required recipient fields" }, { status: 400 });
   }
+
+  // Tipo de envío: solo la entrega final mueve el estado del proyecto.
+  const shipmentKind = kind === "sample" || kind === "partial" ? kind : "final";
+  const isFinalDelivery = shipmentKind === "final";
 
   const mrwParams: MrwShipmentParams = {
     recipientName,
@@ -138,6 +144,7 @@ export async function POST(request: NextRequest) {
       label_url: labelUrl,
       service_name: SERVICE_LABELS[serviceCode] ?? `MRW ${serviceCode}`,
       shipped_at: new Date().toISOString(),
+      shipment_kind: shipmentKind,
       created_by: userData.user.id,
     };
 
@@ -147,15 +154,14 @@ export async function POST(request: NextRequest) {
     if (addressId) row.address_id = addressId;
     if (projectId) row.project_id = projectId;
 
-    const { error: dbError } = projectId
-      ? await supabase
-          .from("shipping_info")
-          .upsert(row, { onConflict: "project_id" })
-      : await supabase.from("shipping_info").insert(row);
+    // Insert (ya no upsert por project_id): un proyecto puede tener varias
+    // pre-entregas/muestras además de la entrega final.
+    const { error: dbError } = await supabase.from("shipping_info").insert(row);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
-    if (projectId) {
+    // Solo la entrega final mueve el proyecto a "shipping" y notifica al cliente.
+    if (projectId && isFinalDelivery) {
       await supabase
         .from("projects")
         .update({ status: "shipping" })

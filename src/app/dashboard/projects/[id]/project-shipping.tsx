@@ -173,14 +173,21 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
           }`}>
             {isMrw ? "MRW" : isGls ? "GLS" : isCabify ? "Cabify" : "Packlink"}
           </span>
-          {(shipment.project_id == null || shipment.title) && (
+          {shipment.shipment_kind === "sample" ? (
             <span
-              className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-              title="Envío standalone — sin proyecto asociado (típicamente una muestra previa)"
+              className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+              title="Muestra / pre-entrega — no mueve el estado del proyecto"
             >
               Muestra
             </span>
-          )}
+          ) : shipment.shipment_kind === "partial" ? (
+            <span
+              className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              title="Entrega parcial — no cierra el proyecto"
+            >
+              Parcial
+            </span>
+          ) : null}
           <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">{dest || "—"}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -336,6 +343,10 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
   const [addresses, setAddresses] = useState<ClientAddress[]>(initialAddresses);
   const [showForm, setShowForm] = useState(false);
 
+  // Tipo de envío: la entrega final mueve el estado del proyecto; las
+  // pre-entregas (muestra / parcial) son neutras al estado.
+  const [shipmentKind, setShipmentKind] = useState<"sample" | "partial" | "final">("final");
+
   // Form state
   const [carrier, setCarrier] = useState<"packlink" | "mrw" | "cabify">("mrw");
   const [services, setServices] = useState<PacklinkService[]>([]);
@@ -470,6 +481,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
           recipientPhone: recipientPhone || undefined,
           recipientEmail: recipientEmail || undefined,
           street, city, postalCode,
+          kind: shipmentKind,
           addressId: addrId,
         }),
       });
@@ -500,6 +512,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
           service: mrwServiceId,
           addressExtra: addressExtra.trim() || undefined,
           observations: observations.trim() || undefined,
+          kind: shipmentKind,
           addressId: addrId,
         }),
       });
@@ -532,6 +545,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
             length: Number(p.length), weight: Number(p.weight),
           })),
           content: "3D printed parts", contentvalue: 0,
+          kind: shipmentKind,
           addressId: addrId,
         }),
       });
@@ -616,6 +630,36 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
                 </select>
               </div>
             )}
+
+            {/* Tipo de envío — solo la entrega final mueve el estado del proyecto */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">Tipo de envío</p>
+              <div className="flex gap-2">
+                {([
+                  { id: "final", label: "Entrega final" },
+                  { id: "sample", label: "Muestra" },
+                  { id: "partial", label: "Entrega parcial" },
+                ] as const).map((k) => (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => setShipmentKind(k.id)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                      shipmentKind === k.id
+                        ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-900/20 dark:text-cyan-300"
+                        : "border-zinc-300 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
+                    }`}
+                  >
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+              {shipmentKind !== "final" && (
+                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Pre-entrega: no cambia la fase del proyecto ni lo da por entregado.
+                </p>
+              )}
+            </div>
 
             {/* Carrier selector */}
             <div>

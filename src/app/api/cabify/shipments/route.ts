@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     contentDescription,
     declaredValue,
     addressId,
+    kind,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -41,7 +42,12 @@ export async function POST(request: NextRequest) {
     contentDescription?: string;
     declaredValue?: number;
     addressId?: string;
+    kind?: "sample" | "partial" | "final";
   };
+
+  // Solo la entrega final mueve el estado del proyecto.
+  const shipmentKind = kind === "sample" || kind === "partial" ? kind : "final";
+  const isFinalDelivery = shipmentKind === "final";
 
   if (!street || !city || !postalCode) {
     return NextResponse.json({ error: "Missing required address fields" }, { status: 400 });
@@ -76,6 +82,7 @@ export async function POST(request: NextRequest) {
       tracking_number: parcel.tracking_url ?? null,
       price: parcel.price?.amount ?? null,
       shipped_at: new Date().toISOString(),
+      shipment_kind: shipmentKind,
       created_by: userData.user.id,
     };
 
@@ -94,7 +101,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`DB error: ${dbError.message}`);
     }
 
-    if (projectId) {
+    // Solo la entrega final mueve el proyecto a "shipping".
+    if (projectId && isFinalDelivery) {
       await supabase
         .from("projects")
         .update({ status: "shipping" })

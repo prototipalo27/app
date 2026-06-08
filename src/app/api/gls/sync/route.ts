@@ -99,16 +99,19 @@ export async function GET(request: NextRequest) {
         delivered++;
 
         if (shipment.project_id) {
+          // Solo las ENTREGAS FINALES cierran el proyecto; las pre-entregas
+          // (muestras/parciales) no cuentan.
           const { data: allShipments } = await supabase
             .from("shipping_info")
-            .select("id, shipment_status")
+            .select("id, shipment_status, shipment_kind")
             .eq("project_id", shipment.project_id);
 
-          const allDelivered = (allShipments ?? []).every(
-            (s) => s.id === shipment.id || s.shipment_status === "delivered",
-          );
+          const finals = (allShipments ?? []).filter((s) => s.shipment_kind === "final");
+          const finalsDelivered =
+            finals.length > 0 &&
+            finals.every((s) => s.id === shipment.id || s.shipment_status === "delivered");
 
-          if (allDelivered) {
+          if (finalsDelivered) {
             await supabase
               .from("projects")
               .update({ status: "delivered" })
