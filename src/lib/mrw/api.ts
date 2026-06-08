@@ -176,6 +176,22 @@ function extractTag(xml: string, tag: string): string {
 }
 
 /**
+ * Separa el número de portal de la calle para rellenar el campo <Numero> de
+ * MRW (si no, la etiqueta sale con Núm = "S/N"). Reconoce el número final,
+ * opcionalmente tras coma: "Calle del Prado, 4" → { via: "Calle del Prado",
+ * numero: "4" }. Si no hay un número claro, devuelve la dirección intacta en
+ * `via` y `numero` vacío — mismo comportamiento que antes (sin regresión).
+ */
+function splitStreetNumber(address: string): { via: string; numero: string } {
+  const trimmed = (address || "").trim();
+  const m = trimmed.match(/^(.+?)[,\s]+(\d+\s*[a-zA-Z]?)\s*$/);
+  if (m && m[1].trim()) {
+    return { via: m[1].replace(/[,\s]+$/, "").trim(), numero: m[2].replace(/\s+/g, "") };
+  }
+  return { via: trimmed, numero: "" };
+}
+
+/**
  * Creates a shipment via MRW TransmEnvio.
  */
 export async function createShipment(
@@ -183,6 +199,9 @@ export async function createShipment(
 ): Promise<MrwShipmentResult> {
   const today = new Date();
   const fecha = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+
+  // Separamos el número de portal para el campo <Numero> de MRW.
+  const { via: entregaVia, numero: entregaNumero } = splitStreetNumber(params.recipientAddress);
 
   const bodyContent = `<mrw:TransmEnvio>
       <mrw:request>
@@ -198,7 +217,8 @@ export async function createShipment(
         </mrw:DatosRecogida>
         <mrw:DatosEntrega>
           <mrw:Direccion>
-            <mrw:Via>${escapeXml(params.recipientAddress)}</mrw:Via>
+            <mrw:Via>${escapeXml(entregaVia)}</mrw:Via>
+            ${entregaNumero ? `<mrw:Numero>${escapeXml(entregaNumero)}</mrw:Numero>` : ""}
             <mrw:CodigoPostal>${escapeXml(params.recipientPostalCode)}</mrw:CodigoPostal>
             <mrw:Poblacion>${escapeXml(params.recipientCity)}</mrw:Poblacion>
           </mrw:Direccion>
