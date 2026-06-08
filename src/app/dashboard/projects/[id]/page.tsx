@@ -149,6 +149,18 @@ export default async function ProjectDetailPage({
     ? supabase.from("leads").select("id, full_name, email, phone").eq("id", project.lead_id).single()
     : Promise.resolve({ data: null });
 
+  // Datos de envío que indicó el cliente (viven en el presupuesto, no en el
+  // contacto de FACTURACIÓN de Holded). Es el destinatario real para MRW.
+  const quoteShippingPromise = project.lead_id
+    ? supabase
+        .from("quote_requests")
+        .select("shipping_recipient_name, shipping_recipient_phone, shipping_recipient_email")
+        .eq("lead_id", project.lead_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : Promise.resolve({ data: null });
+
   // Envíos huérfanos: muestras enviadas al lead ANTES de que existiera el
   // proyecto se guardan como shipping_info con project_id=null (flujo
   // /dashboard/shipments standalone). Los reasociamos en pantalla por
@@ -177,7 +189,7 @@ export default async function ProjectDetailPage({
         .order("created_at", { ascending: false })
     : Promise.resolve({ data: null });
 
-  const [jobsResult, driveFilesRaw, holdedContact, holdedDoc, leadResult, templateResult, savedAddressesResult, orphanShipmentsResult] = await Promise.all([
+  const [jobsResult, driveFilesRaw, holdedContact, holdedDoc, leadResult, templateResult, savedAddressesResult, orphanShipmentsResult, quoteShippingResult] = await Promise.all([
     printJobsPromise,
     driveFilesPromise,
     holdedContactPromise,
@@ -186,6 +198,7 @@ export default async function ProjectDetailPage({
     templatePromise,
     savedAddressesPromise,
     orphanShipmentsPromise,
+    quoteShippingPromise,
   ]);
 
   // Concatenamos envíos del proyecto + envíos huérfanos del lead (muestras
@@ -479,7 +492,11 @@ export default async function ProjectDetailPage({
           holdedContact={holdedContact}
           holdedContactId={project.holded_contact_id}
           savedAddresses={savedAddressesResult.data ?? []}
-          clientPhone={linkedLead?.phone ?? null}
+          shippingDefaults={{
+            name: quoteShippingResult.data?.shipping_recipient_name ?? linkedLead?.full_name ?? null,
+            phone: quoteShippingResult.data?.shipping_recipient_phone ?? linkedLead?.phone ?? null,
+            email: quoteShippingResult.data?.shipping_recipient_email ?? linkedLead?.email ?? null,
+          }}
         />
       </div>
 

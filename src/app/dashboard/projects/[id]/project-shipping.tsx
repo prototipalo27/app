@@ -48,9 +48,15 @@ interface ProjectShippingProps {
   } | null;
   holdedContactId: string | null;
   savedAddresses: ClientAddress[];
-  /** Teléfono del lead/cliente en el CRM. Último recurso para el destinatario
-   *  cuando ni la dirección guardada ni el contacto de Holded traen móvil. */
-  clientPhone?: string | null;
+  /** Datos del destinatario que indicó el cliente para el envío (del
+   *  presupuesto: shipping_recipient_*, con el lead como respaldo). Tienen
+   *  prioridad sobre el contacto de Holded, que es el de FACTURACIÓN (suele ser
+   *  la empresa y sin teléfono). */
+  shippingDefaults?: {
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -319,9 +325,13 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
 
 // ─── Main component ─────────────────────────────────────────────────
 
-export function ProjectShipping({ projectId, shipments: initialShipments, holdedContact, holdedContactId, savedAddresses: initialAddresses, clientPhone }: ProjectShippingProps) {
-  // Teléfono del destinatario por defecto: contacto de Holded → móvil del lead.
-  const defaultRecipientPhone = holdedContact?.phone || holdedContact?.mobile || clientPhone || "";
+export function ProjectShipping({ projectId, shipments: initialShipments, holdedContact, holdedContactId, savedAddresses: initialAddresses, shippingDefaults }: ProjectShippingProps) {
+  // Destinatario por defecto: priorizamos los datos de ENVÍO que dio el cliente
+  // (persona, su móvil, su email). El contacto de Holded es de facturación —
+  // suele ser la empresa y sin teléfono— así que solo se usa como respaldo.
+  const defaultRecipientName = shippingDefaults?.name || holdedContact?.name || "";
+  const defaultRecipientPhone = shippingDefaults?.phone || holdedContact?.phone || holdedContact?.mobile || "";
+  const defaultRecipientEmail = shippingDefaults?.email || holdedContact?.email || "";
   const [shipmentList, setShipmentList] = useState<ShipmentRow[]>(initialShipments);
   const [addresses, setAddresses] = useState<ClientAddress[]>(initialAddresses);
   const [showForm, setShowForm] = useState(false);
@@ -344,15 +354,18 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
 
   // Recipient / address fields
   const [recipientName, setRecipientName] = useState(() => {
-    const parts = (holdedContact?.name ?? "").split(" ");
+    const parts = defaultRecipientName.split(" ");
     return parts[0] || "";
   });
   const [recipientSurname, setRecipientSurname] = useState(() => {
-    const parts = (holdedContact?.name ?? "").split(" ");
+    const parts = defaultRecipientName.split(" ");
     return parts.slice(1).join(" ") || "";
   });
-  const [recipientEmail, setRecipientEmail] = useState(holdedContact?.email ?? "");
+  const [recipientEmail, setRecipientEmail] = useState(defaultRecipientEmail);
   const [recipientPhone, setRecipientPhone] = useState(defaultRecipientPhone);
+  // Observaciones para el repartidor (portal, piso, horario, telefonillo…).
+  // MRW las imprime en la etiqueta (<Observaciones>).
+  const [observations, setObservations] = useState("");
   const [street, setStreet] = useState(holdedContact?.billAddress?.address ?? "");
   const [city, setCity] = useState(holdedContact?.billAddress?.city ?? "");
   const [postalCode, setPostalCode] = useState(holdedContact?.billAddress?.postalCode ?? "");
@@ -363,11 +376,11 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
   function applyAddress(addrId: string) {
     setSelectedAddressId(addrId);
     if (addrId === "new") {
-      // Reset to Holded contact defaults
-      const parts = (holdedContact?.name ?? "").split(" ");
+      // Reset a los datos de envío del cliente (con respaldo del contacto).
+      const parts = defaultRecipientName.split(" ");
       setRecipientName(parts[0] || "");
       setRecipientSurname(parts.slice(1).join(" ") || "");
-      setRecipientEmail(holdedContact?.email ?? "");
+      setRecipientEmail(defaultRecipientEmail);
       setRecipientPhone(defaultRecipientPhone);
       setStreet(holdedContact?.billAddress?.address ?? "");
       setCity(holdedContact?.billAddress?.city ?? "");
@@ -380,10 +393,10 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
     const parts = (addr.recipient_name ?? "").split(" ");
     setRecipientName(parts[0] || "");
     setRecipientSurname(parts.slice(1).join(" ") || "");
-    setRecipientEmail(addr.recipient_email || holdedContact?.email || "");
+    setRecipientEmail(addr.recipient_email || defaultRecipientEmail);
     // El cliente rara vez rellena su móvil en el formulario de envío, así que
-    // la dirección guardada suele venir sin teléfono. Caemos al teléfono del
-    // contacto / lead para que la etiqueta de MRW no salga sin número.
+    // la dirección guardada suele venir sin teléfono. Caemos al teléfono de
+    // envío / lead para que la etiqueta de MRW no salga sin número.
     setRecipientPhone(addr.recipient_phone || defaultRecipientPhone);
     setStreet(addr.address_line ?? "");
     setCity(addr.city ?? "");
@@ -482,6 +495,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
           packages: packages.length, weight: totalWeight,
           packageWidth: Number(firstPkg.width), packageHeight: Number(firstPkg.height), packageLength: Number(firstPkg.length),
           service: mrwServiceId,
+          observations: observations.trim() || undefined,
           addressId: addrId,
         }),
       });
@@ -702,6 +716,22 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
                 <input type="text" placeholder="Country code (ES, FR…)" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={2} className={inputClass} />
               </div>
             </div>
+
+            {/* Observaciones para el repartidor (MRW las imprime en la etiqueta) */}
+            {carrier === "mrw" && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                  Observaciones para el repartidor
+                </p>
+                <textarea
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                  rows={2}
+                  placeholder="Portal, piso, telefonillo, horario de entrega…"
+                  className={inputClass}
+                />
+              </div>
+            )}
 
             {/* Packages (not needed for Cabify) */}
             {carrier !== "cabify" && (
