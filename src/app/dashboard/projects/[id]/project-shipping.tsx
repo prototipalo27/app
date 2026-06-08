@@ -48,6 +48,9 @@ interface ProjectShippingProps {
   } | null;
   holdedContactId: string | null;
   savedAddresses: ClientAddress[];
+  /** Teléfono del lead/cliente en el CRM. Último recurso para el destinatario
+   *  cuando ni la dirección guardada ni el contacto de Holded traen móvil. */
+  clientPhone?: string | null;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -316,7 +319,9 @@ function ShipmentCard({ shipment }: { shipment: ShipmentRow }) {
 
 // ─── Main component ─────────────────────────────────────────────────
 
-export function ProjectShipping({ projectId, shipments: initialShipments, holdedContact, holdedContactId, savedAddresses: initialAddresses }: ProjectShippingProps) {
+export function ProjectShipping({ projectId, shipments: initialShipments, holdedContact, holdedContactId, savedAddresses: initialAddresses, clientPhone }: ProjectShippingProps) {
+  // Teléfono del destinatario por defecto: contacto de Holded → móvil del lead.
+  const defaultRecipientPhone = holdedContact?.phone || holdedContact?.mobile || clientPhone || "";
   const [shipmentList, setShipmentList] = useState<ShipmentRow[]>(initialShipments);
   const [addresses, setAddresses] = useState<ClientAddress[]>(initialAddresses);
   const [showForm, setShowForm] = useState(false);
@@ -347,7 +352,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
     return parts.slice(1).join(" ") || "";
   });
   const [recipientEmail, setRecipientEmail] = useState(holdedContact?.email ?? "");
-  const [recipientPhone, setRecipientPhone] = useState(holdedContact?.phone || holdedContact?.mobile || "");
+  const [recipientPhone, setRecipientPhone] = useState(defaultRecipientPhone);
   const [street, setStreet] = useState(holdedContact?.billAddress?.address ?? "");
   const [city, setCity] = useState(holdedContact?.billAddress?.city ?? "");
   const [postalCode, setPostalCode] = useState(holdedContact?.billAddress?.postalCode ?? "");
@@ -363,7 +368,7 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
       setRecipientName(parts[0] || "");
       setRecipientSurname(parts.slice(1).join(" ") || "");
       setRecipientEmail(holdedContact?.email ?? "");
-      setRecipientPhone(holdedContact?.phone || holdedContact?.mobile || "");
+      setRecipientPhone(defaultRecipientPhone);
       setStreet(holdedContact?.billAddress?.address ?? "");
       setCity(holdedContact?.billAddress?.city ?? "");
       setPostalCode(holdedContact?.billAddress?.postalCode ?? "");
@@ -375,8 +380,11 @@ export function ProjectShipping({ projectId, shipments: initialShipments, holded
     const parts = (addr.recipient_name ?? "").split(" ");
     setRecipientName(parts[0] || "");
     setRecipientSurname(parts.slice(1).join(" ") || "");
-    setRecipientEmail(addr.recipient_email ?? "");
-    setRecipientPhone(addr.recipient_phone ?? "");
+    setRecipientEmail(addr.recipient_email || holdedContact?.email || "");
+    // El cliente rara vez rellena su móvil en el formulario de envío, así que
+    // la dirección guardada suele venir sin teléfono. Caemos al teléfono del
+    // contacto / lead para que la etiqueta de MRW no salga sin número.
+    setRecipientPhone(addr.recipient_phone || defaultRecipientPhone);
     setStreet(addr.address_line ?? "");
     setCity(addr.city ?? "");
     setPostalCode(addr.postal_code ?? "");

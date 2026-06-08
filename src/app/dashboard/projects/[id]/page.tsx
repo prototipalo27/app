@@ -146,7 +146,7 @@ export default async function ProjectDetailPage({
     : Promise.resolve(null);
 
   const leadPromise = project.lead_id
-    ? supabase.from("leads").select("id, full_name, email").eq("id", project.lead_id).single()
+    ? supabase.from("leads").select("id, full_name, email, phone").eq("id", project.lead_id).single()
     : Promise.resolve({ data: null });
 
   // Envíos huérfanos: muestras enviadas al lead ANTES de que existiera el
@@ -479,6 +479,7 @@ export default async function ProjectDetailPage({
           holdedContact={holdedContact}
           holdedContactId={project.holded_contact_id}
           savedAddresses={savedAddressesResult.data ?? []}
+          clientPhone={linkedLead?.phone ?? null}
         />
       </div>
 
