@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { persistShipmentRow } from "@/lib/shipping/persist-shipment";
 import { createParcel } from "@/lib/cabify/api";
 import { CABIFY_SENDER } from "@/lib/cabify/sender";
 
@@ -93,9 +94,7 @@ export async function POST(request: NextRequest) {
 
     if (projectId) row.project_id = projectId;
 
-    const { error: dbError } = await supabase
-      .from("shipping_info")
-      .insert(row);
+    const dbError = await persistShipmentRow(supabase, row, projectId, isFinalDelivery);
 
     if (dbError) {
       throw new Error(`DB error: ${dbError.message}`);

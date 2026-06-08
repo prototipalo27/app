@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { persistShipmentRow } from "@/lib/shipping/persist-shipment";
 import { createShipment } from "@/lib/mrw/api";
 import type { MrwShipmentParams } from "@/lib/mrw/types";
 import { sendShippingNotification } from "@/lib/shipping-notification";
@@ -154,9 +155,10 @@ export async function POST(request: NextRequest) {
     if (addressId) row.address_id = addressId;
     if (projectId) row.project_id = projectId;
 
-    // Insert (ya no upsert por project_id): un proyecto puede tener varias
-    // pre-entregas/muestras además de la entrega final.
-    const { error: dbError } = await supabase.from("shipping_info").insert(row);
+    // La entrega final reutiliza la fila 'final' del proyecto si ya existe
+    // (p. ej. el placeholder de dirección creado en la proforma); así hay como
+    // mucho UNA final por proyecto. Las pre-entregas siempre insertan fila nueva.
+    const dbError = await persistShipmentRow(supabase, row, projectId, isFinalDelivery);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 

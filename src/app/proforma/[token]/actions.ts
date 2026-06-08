@@ -120,15 +120,20 @@ export async function acceptProforma(
       }
     }
 
-    // 2. Create/update shipping_info
+    // 2. Crea/actualiza la dirección de la ENTREGA FINAL del proyecto. Un
+    //    proyecto puede tener varias filas en shipping_info (pre-entregas), así
+    //    que acotamos a la fila 'final' para no chocar con muestras/parciales.
     const { data: existingShipping } = await supabase
       .from("shipping_info")
       .select("id")
       .eq("project_id", project.id)
+      .eq("shipment_kind", "final")
+      .limit(1)
       .maybeSingle();
 
     const shippingRow = {
       project_id: project.id,
+      shipment_kind: "final",
       recipient_name: shipping.recipient_name.trim(),
       recipient_phone: shipping.recipient_phone.trim(),
       address_line: shipping.address.trim(),
@@ -143,9 +148,7 @@ export async function acceptProforma(
         .update(shippingRow)
         .eq("id", existingShipping.id);
     } else {
-      await supabase.from("shipping_info").upsert(shippingRow, {
-        onConflict: "project_id",
-      });
+      await supabase.from("shipping_info").insert(shippingRow);
     }
 
     // 3. Update quote_request if linked — includes payment_condition
