@@ -223,6 +223,68 @@ async function LinkedProjectsSection({ leadId }: { leadId: string }) {
   );
 }
 
+// Facturas de las ampliaciones (ventas aparte) del lead. La ampliación crece el
+// trato pero tiene su propia factura numerada, atada al proyecto — aquí se
+// muestra en la ficha del lead para tener todas las facturas del cliente juntas.
+async function AddonInvoicesSection({ leadId }: { leadId: string }) {
+  const supabase = await createClient();
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("lead_id", leadId);
+
+  const projectIds = (projects || []).map((p) => p.id);
+  if (projectIds.length === 0) return null;
+
+  const { data: items } = await supabase
+    .from("project_items")
+    .select("name, quantity, unit_price, holded_invoice_id")
+    .eq("is_addon", true)
+    .not("holded_invoice_id", "is", null)
+    .in("project_id", projectIds);
+
+  if (!items || items.length === 0) return null;
+
+  const byInvoice = new Map<string, { lines: string[]; total: number }>();
+  for (const it of items) {
+    const inv = it.holded_invoice_id as string;
+    const entry = byInvoice.get(inv) ?? { lines: [], total: 0 };
+    entry.lines.push(`${it.quantity}× ${it.name}`);
+    entry.total += Number(it.unit_price ?? 0) * Number(it.quantity ?? 0) * 1.21; // IVA 21%
+    byInvoice.set(inv, entry);
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <h3 className="mb-3 text-sm font-semibold text-card-foreground">
+          Facturas de ampliación ({byInvoice.size})
+        </h3>
+        <div className="space-y-2">
+          {[...byInvoice.entries()].map(([invoiceId, { lines, total }]) => (
+            <div key={invoiceId} className="rounded-lg border px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-foreground">{lines.join(", ")}</span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                  {total.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </span>
+              </div>
+              <a
+                href={`https://app.holded.com/sales/revenue#open:invoice-${invoiceId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Ver factura en Holded
+              </a>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 async function ProformaSection({ leadId, lead }: { leadId: string; lead: any }) {
   const supabase = await createClient();
   const [{ data: quoteRequest }, basePrices] = await Promise.all([
@@ -719,6 +781,10 @@ export default async function LeadDetailPage({
           {/* Everything below streams in progressively */}
           <Suspense fallback={null}>
             <LinkedProjectsSection leadId={id} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <AddonInvoicesSection leadId={id} />
           </Suspense>
 
           <Suspense fallback={<CardSkeleton lines={4} />}>

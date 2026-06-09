@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { ProformaLineItem, CommissionTier } from "../actions";
 import { getCommissionConfigs } from "../actions";
+import { getPaidAddonBaseByLead } from "@/lib/crm/addon-commission";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -106,6 +107,14 @@ export default async function ComisionesPage({
       quoteMap.set(q.lead_id, total);
       leadPaidAt.set(q.lead_id, fl.won_at);
     }
+  }
+
+  // Anexos: las ampliaciones pagadas se suman a la base de comisión de su lead
+  // (crecimiento del trato), imputadas al mes del trato original (este mes, que
+  // es donde el lead ya aparece como pagado).
+  const addonBaseByLead = await getPaidAddonBaseByLead(supabase, [...quoteMap.keys()]);
+  for (const [leadId, base] of addonBaseByLead) {
+    if (quoteMap.has(leadId)) quoteMap.set(leadId, (quoteMap.get(leadId) ?? 0) + base);
   }
 
   const leadIds = [...quoteMap.keys()];

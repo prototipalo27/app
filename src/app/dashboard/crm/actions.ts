@@ -9,6 +9,7 @@ import { sendEmail, sendEmailOrSchedule, type SmtpConfig, type EmailAttachment }
 import { getUserEmailSender } from "@/lib/email-sender";
 import { decrypt } from "@/lib/encryption";
 import { createProforma, createEstimate, createInvoice, createContact, updateContact, getContact, searchContacts, listContacts, listDocuments, getDocumentPdf, getDocument, payInvoice, approveInvoice } from "@/lib/holded/api";
+import { getPaidAddonBaseByLead } from "@/lib/crm/addon-commission";
 import type { HoldedDocument, HoldedContact } from "@/lib/holded/types";
 import type { LeadStatus } from "@/lib/crm-config";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
@@ -829,7 +830,11 @@ export async function getCommissionSummary(leadId: string): Promise<{
     .maybeSingle();
 
   const items = (qr?.items || []) as unknown as ProformaLineItem[];
-  const quoteTotal = items.reduce((sum, i) => sum + i.price * i.units, 0);
+  const baseFromItems = items.reduce((sum, i) => sum + i.price * i.units, 0);
+  // Anexos: ampliaciones pagadas suman a la base del trato (crecimiento), al
+  // mismo % e imputadas al mes del trato original.
+  const addonBaseByLead = await getPaidAddonBaseByLead(supabase, [leadId]);
+  const quoteTotal = baseFromItems + (addonBaseByLead.get(leadId) ?? 0);
   if (quoteTotal === 0) return null;
 
   // Check if returning client
@@ -885,6 +890,9 @@ export async function getCommissionSummary(leadId: string): Promise<{
           const qItems = (q.items || []) as unknown as ProformaLineItem[];
           accBefore += qItems.reduce((s, i) => s + i.price * i.units, 0);
         }
+        // Anexos de los otros leads del mes también cuentan para el acumulado.
+        const otherAddons = await getPaidAddonBaseByLead(supabase, otherIds);
+        for (const base of otherAddons.values()) accBefore += base;
       }
 
       const { commission, effectiveRate } = calcTieredCommission(tiers, accBefore, quoteTotal);
@@ -3533,6 +3541,14 @@ export async function getUserMonthlyCommission(
     const total = items.reduce((sum, i) => sum + i.price * i.units, 0);
     quoteMap.set(q.lead_id, (quoteMap.get(q.lead_id) ?? 0) + total);
     if (!leadPaidAt.has(q.lead_id)) leadPaidAt.set(q.lead_id, q.paid_at);
+  }
+
+  // Anexos: ampliaciones pagadas suman a la base del lead (mismo %, imputado al
+  // mes del trato original). Se inyecta antes de aplicar tramos para que el
+  // tier lo tenga en cuenta.
+  const addonBaseByLead = await getPaidAddonBaseByLead(supabase, [...quoteMap.keys()]);
+  for (const [lid, base] of addonBaseByLead) {
+    if (quoteMap.has(lid)) quoteMap.set(lid, (quoteMap.get(lid) ?? 0) + base);
   }
 
   const roleField = config.type === "tiered" ? "assigned_to" : "owned_by";
