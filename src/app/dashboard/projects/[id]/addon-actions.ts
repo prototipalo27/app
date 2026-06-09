@@ -27,11 +27,15 @@ export interface AddProjectAddonResult {
 /**
  * Añade items "extras" (ampliación) a un proyecto ya facturado.
  *
+ * La ampliación es SIEMPRE una venta aparte (también si el proyecto es 50/50):
+ * no se mezcla con el 2º pago del trato original ni se mete en su factura (que
+ * ya está numerada y bloqueada). Tiene su propio link de pago y, al cobrarse,
+ * su propia factura numerada (la emite el webhook de Stripe).
+ *
  * Flow:
  *  1. Inserta los items en project_items con is_addon=true.
  *  2. Crea una proforma en Holded con esos items (importe = qty * unit_price + IVA).
- *  3. Si payment_option = 'full' → crea Stripe Checkout y manda email con link + PDF.
- *  4. Si payment_option = 'split' → manda email "se cobrará en el 2º pago" + PDF.
+ *  3. Crea un Payment Link de Stripe y manda email con link + PDF.
  */
 export async function addProjectAddon(
   projectId: string,
@@ -70,8 +74,6 @@ export async function addProjectAddon(
     return { success: false, error: "El cliente no tiene email — necesario para enviar la proforma" };
   }
 
-  const paymentOption = project.payment_option ?? "full";
-  const isSplit = paymentOption === "split";
 
   // 1. Crear proforma en Holded
   let proformaId: string;
@@ -99,7 +101,7 @@ export async function addProjectAddon(
     batch_size: it.batch_size ?? 1,
     unit_price: it.unit_price,
     is_addon: true,
-    addon_status: isSplit ? "pending_second_invoice" : "pending_payment",
+    addon_status: "pending_payment",
     holded_proforma_id: proformaId,
   }));
 
@@ -141,9 +143,11 @@ export async function addProjectAddon(
     };
   }
 
-  // 6. Branch según payment_option
+  // 6. Ampliación = venta aparte: SIEMPRE su propio link de pago (también en
+  // split — no se mezcla con el 2º pago del trato original). Al pagarse, el
+  // webhook emite su factura numerada propia.
   let paymentUrl: string | null = null;
-  let scenario: AddProjectAddonResult["scenario"];
+  const scenario: AddProjectAddonResult["scenario"] = "full_payment_link";
 
   const itemsListHtml = cleaned
     .map((it) => `<li>${it.quantity} × ${it.name} — ${(it.unit_price * it.quantity).toFixed(2)} €</li>`)
@@ -152,9 +156,7 @@ export async function addProjectAddon(
     .map((it) => `- ${it.quantity} × ${it.name} — ${(it.unit_price * it.quantity).toFixed(2)} €`)
     .join("\n");
 
-  if (!isSplit) {
-    // FULL: crear Stripe Checkout y mandar link
-    scenario = "full_payment_link";
+  {
     try {
       // Payment Link (no caduca) — se envía por email y sigue válido pasados
       // varios días.
@@ -191,20 +193,6 @@ export async function addProjectAddon(
         subject: `Ampliación de tu pedido — ${project.name}`,
         text: `Hola ${project.client_name || ""},\n\nHemos añadido a tu pedido los siguientes items:\n\n${itemsListText}\n\nTotal (IVA incl.): ${total.toFixed(2)} €\n\nAdjuntamos la proforma. Para completar el pago de la ampliación, haz click aquí:\n${paymentUrl}\n\nGracias,\nEl equipo de Prototipalo`,
         html: `<p>Hola ${project.client_name || ""},</p><p>Hemos añadido a tu pedido los siguientes items:</p><ul>${itemsListHtml}</ul><p><strong>Total (IVA incl.): ${total.toFixed(2)} €</strong></p><p>Adjuntamos la proforma. Para completar el pago de la ampliación:</p><p><a href="${paymentUrl}" style="display:inline-block;padding:10px 20px;background:#e9473f;color:white;border-radius:8px;text-decoration:none;font-weight:500;">Pagar ampliación</a></p><p>Gracias,<br>El equipo de Prototipalo</p>`,
-        emailSender,
-        attachments: proformaPdf ? [proformaPdf] : undefined,
-      },
-      { createdBy: profile.id, leadId: project.lead_id ?? undefined },
-    );
-  } else {
-    // SPLIT: solo notificación, se cobrará en el 2º pago
-    scenario = "split_added_to_second";
-    await sendEmailOrSchedule(
-      {
-        to: project.client_email,
-        subject: `Ampliación de tu pedido — ${project.name}`,
-        text: `Hola ${project.client_name || ""},\n\nHemos añadido a tu pedido los siguientes items:\n\n${itemsListText}\n\nTotal de la ampliación (IVA incl.): ${total.toFixed(2)} €\n\nAdjuntamos la proforma. Este importe se sumará al 50% restante que se cobrará en el pago final.\n\nGracias,\nEl equipo de Prototipalo`,
-        html: `<p>Hola ${project.client_name || ""},</p><p>Hemos añadido a tu pedido los siguientes items:</p><ul>${itemsListHtml}</ul><p><strong>Total de la ampliación (IVA incl.): ${total.toFixed(2)} €</strong></p><p>Adjuntamos la proforma. Este importe se sumará al 50% restante que se cobrará en el <strong>pago final</strong>.</p><p>Gracias,<br>El equipo de Prototipalo</p>`,
         emailSender,
         attachments: proformaPdf ? [proformaPdf] : undefined,
       },

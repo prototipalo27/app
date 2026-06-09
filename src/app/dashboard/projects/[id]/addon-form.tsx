@@ -27,8 +27,6 @@ export function AddonForm({ projectId, paymentOption, onClose }: AddonFormProps)
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; message: string; url?: string } | null>(null);
 
-  const isSplit = paymentOption === "split";
-
   const subtotal = drafts.reduce((s, d) => {
     const q = Number(d.quantity);
     const p = Number(d.unit_price);
@@ -70,18 +68,11 @@ export function AddonForm({ projectId, paymentOption, onClose }: AddonFormProps)
         setResult({ ok: false, message: res.error ?? "Error desconocido" });
         return;
       }
-      if (res.scenario === "split_added_to_second") {
-        setResult({
-          ok: true,
-          message: "Proforma enviada al cliente. El importe se cobrará en el segundo pago.",
-        });
-      } else {
-        setResult({
-          ok: true,
-          message: "Proforma enviada con link de pago de Stripe.",
-          url: res.paymentUrl,
-        });
-      }
+      setResult({
+        ok: true,
+        message: "Proforma enviada con link de pago de Stripe.",
+        url: res.paymentUrl,
+      });
     });
   }
 
@@ -96,11 +87,7 @@ export function AddonForm({ projectId, paymentOption, onClose }: AddonFormProps)
             <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Añadir items extra</h3>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Se creará una proforma en Holded y se enviará al cliente.{" "}
-              {isSplit ? (
-                <span className="font-medium">El importe se sumará al 2º pago (50% restante).</span>
-              ) : (
-                <span className="font-medium">Se generará un link de pago Stripe (100% del extra).</span>
-              )}
+              <span className="font-medium">Se genera un link de pago Stripe (100% del extra) y, al pagarse, su factura propia.</span>
             </p>
           </div>
           <button
@@ -224,7 +211,7 @@ export function AddonForm({ projectId, paymentOption, onClose }: AddonFormProps)
                   disabled={pending}
                   className="rounded-lg bg-brand px-4 py-1.5 text-xs font-medium text-white hover:bg-brand-dark disabled:opacity-50"
                 >
-                  {pending ? "Procesando..." : isSplit ? "Crear proforma + enviar" : "Crear proforma + link Stripe"}
+                  {pending ? "Procesando..." : "Crear proforma + link Stripe"}
                 </button>
               </div>
             </div>

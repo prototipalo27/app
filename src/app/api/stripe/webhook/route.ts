@@ -23,13 +23,17 @@ async function handleAddonPayment(session: Stripe.Checkout.Session) {
 
   const supabase = getSupabase();
 
-  // Idempotency: skip if already paid
+  // Idempotency: ya procesado del todo (pagado Y facturado) → salir.
   const { data: existingItems } = await supabase
     .from("project_items")
-    .select("addon_status")
+    .select("addon_status, holded_invoice_id")
     .in("id", itemIds);
 
-  if (existingItems && existingItems.every((i) => i.addon_status === "paid")) {
+  if (
+    existingItems &&
+    existingItems.length > 0 &&
+    existingItems.every((i) => i.addon_status === "paid" && i.holded_invoice_id)
+  ) {
     return;
   }
 
@@ -39,6 +43,59 @@ async function handleAddonPayment(session: Stripe.Checkout.Session) {
     .in("id", itemIds);
 
   const amountTotal = (session.amount_total || 0) / 100;
+
+  // Factura propia de la ampliación (venta aparte): la ampliación NO se puede
+  // añadir a la factura original (ya numerada y bloqueada al primer pago), así
+  // que se emite su propia factura numerada. Solo si aún no la tiene.
+  const needsInvoice = !existingItems || existingItems.some((i) => !i.holded_invoice_id);
+  if (needsInvoice) {
+    try {
+      const { data: addonItems } = await supabase
+        .from("project_items")
+        .select("name, quantity, unit_price")
+        .in("id", itemIds);
+      const { data: project } = await supabase
+        .from("projects")
+        .select("holded_contact_id, name")
+        .eq("id", projectId)
+        .single();
+
+      if (project?.holded_contact_id && addonItems && addonItems.length > 0) {
+        const { createInvoice, approveInvoice, payInvoice, getDocument } = await import("@/lib/holded/api");
+        const invoice = await createInvoice(project.holded_contact_id, {
+          items: addonItems.map((it) => ({
+            name: it.name,
+            units: it.quantity,
+            subtotal: Number(it.unit_price),
+            tax: 21,
+          })),
+          notes: `Ampliación del proyecto ${project.name}`,
+          approveDoc: true,
+        });
+
+        // Garantizar numeración (cuentas con "modo borrador").
+        let docNumber: string | null = null;
+        try {
+          docNumber = (await getDocument("invoice", invoice.id)).docNumber || null;
+        } catch {}
+        if (!docNumber) await approveInvoice(invoice.id);
+
+        // Registrar el pago Stripe contra la factura.
+        await payInvoice(invoice.id, {
+          amount: amountTotal,
+          description: "Pago ampliación Stripe (tarjeta)",
+        });
+
+        await supabase
+          .from("project_items")
+          .update({ holded_invoice_id: invoice.id })
+          .in("id", itemIds);
+      }
+    } catch (e) {
+      console.error("[Stripe Webhook] addon invoice creation failed:", e);
+    }
+  }
+
   const customerEmail = session.customer_details?.email || session.customer_email || "Cliente";
   sendPushForEvent("payment_received", {
     title: "Pago de ampliación recibido",
