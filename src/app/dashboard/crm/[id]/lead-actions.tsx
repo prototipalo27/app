@@ -896,6 +896,10 @@ export default function LeadActions({
         const halfTotal = grandTotal * 0.5;
 
         const firstPaidAmount = quoteRequest.first_paid_amount != null ? Number(quoteRequest.first_paid_amount) : null;
+        // El segundo 50% se ancla al primero ya cobrado: en un 50/50 las dos
+        // mitades son iguales, así que el importe pendiente = lo que se pagó
+        // primero. Evita descuadres si se editan los items tras el primer pago.
+        const secondDue = firstPaidAmount != null ? firstPaidAmount : halfTotal;
         const firstFee = quoteRequest.first_stripe_fee_amount != null ? Number(quoteRequest.first_stripe_fee_amount) : null;
         const secondPaidAmount = quoteRequest.second_paid_amount != null ? Number(quoteRequest.second_paid_amount) : null;
         const secondFee = quoteRequest.second_stripe_fee_amount != null ? Number(quoteRequest.second_stripe_fee_amount) : null;
@@ -936,7 +940,7 @@ export default function LeadActions({
                     </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(halfTotal)} €</span></p>
+                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(secondDue)} €</span></p>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"
@@ -1033,7 +1037,7 @@ export default function LeadActions({
                     </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(halfTotal)} €</span></p>
+                      <p className="text-xs text-muted-foreground">Importe: <span className="font-medium text-card-foreground">{fmt(secondDue)} €</span></p>
                       <div className="flex flex-wrap gap-1.5">
                         <Button
                           size="sm"

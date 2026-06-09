@@ -3991,25 +3991,26 @@ export async function requestSecondPayment(
   const items = (qr.items || []) as unknown as ProformaLineItem[];
   if (items.length === 0) return { success: false, error: "Sin líneas de presupuesto" };
 
-  // Cálculo del segundo 50%. Split no aplica descuento del 5% — el precio es
-  // el de la lista original. Calculamos subtotal + IVA y guardamos en cents.
-  const subtotal = items.reduce((s, i) => s + i.price * i.units, 0);
-  const taxTotal = items.reduce((s, i) => s + i.price * i.units * (i.tax / 100), 0);
-  const grandTotal = subtotal + taxTotal;
-  const secondAmount = grandTotal * 0.5;
+  // El segundo 50% se ancla al primer 50% ya cobrado: en un pago 50/50 las dos
+  // mitades son iguales. Si se editan los items tras el primer pago (p. ej. para
+  // añadir un extra), el segundo tramo NO se recalcula desde esos items —
+  // seguiría siendo lo que falta del trato original. Los extras posteriores se
+  // cobran aparte con el flujo de Ampliación, no editando el presupuesto.
+  const firstHalf = Number(qr.first_paid_amount); // con IVA — ya validado > 0
+  const avgTaxRate = items[0]?.tax ?? 21;
+  const secondAmount = firstHalf; // con IVA, igual al primer pago
   const chargeAmountCents = Math.round(secondAmount * 100);
 
-  // 1. Proforma nueva en Holded para el segundo tramo. Una sola línea con el
-  // 50% del subtotal (sin descuento) y el IVA medio de los items (asumimos
-  // homogéneo — en este negocio prácticamente todo va al 21%).
+  // 1. Proforma nueva en Holded para el segundo tramo. Una sola línea cuyo total
+  // (base + IVA) iguala el primer pago. Derivamos la base desde el IVA medio de
+  // los items (asumimos homogéneo — en este negocio prácticamente todo va al 21%).
   let secondProformaId = qr.second_holded_proforma_id ?? null;
   let secondProformaDocNumber = qr.second_holded_proforma_doc_number ?? null;
   const refToFirst = qr.holded_proforma_doc_number
     ? ` (ref ${qr.holded_proforma_doc_number})`
     : "";
   const proformaConcept = `Segundo pago (50%) — Proyecto Prototipalo${refToFirst}`;
-  const avgTaxRate = items[0]?.tax ?? 21;
-  const proformaSubtotal = Math.round((subtotal * 0.5) * 100) / 100;
+  const proformaSubtotal = Math.round((firstHalf / (1 + avgTaxRate / 100)) * 100) / 100;
 
   if (!secondProformaId && qr.holded_contact_id) {
     try {
