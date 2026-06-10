@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import {
   saveQuoteItems,
   sendQuoteToClient,
@@ -28,8 +30,26 @@ const TAX_OPTIONS = [
   { value: 21, label: "21%" },
 ];
 
-function emptyLine(): ProformaLineItem {
-  return { concept: "", price: 0, units: 1, tax: 21 };
+// Cada línea lleva un id estable solo-cliente (_uid) para keys de React y para
+// el drag-to-reorder. Se quita antes de guardar (cleanLines) para no ensuciar
+// el JSON que persiste en quote_requests.items.
+type EditorLine = ProformaLineItem & { _uid: string };
+
+// Contador determinista: el inicializador de useState corre en server (SSR) y
+// luego en cliente (hidratación); empezar siempre en 0 garantiza los mismos
+// ids en ambos (las keys no salen al DOM, pero así evitamos cualquier desfase).
+let uidCounter = 0;
+const nextUid = () => `line-${uidCounter++}`;
+
+function arrayMove<T>(arr: T[], from: number, to: number): T[] {
+  const next = arr.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function emptyLine(): EditorLine {
+  return { _uid: nextUid(), concept: "", price: 0, units: 1, tax: 21 };
 }
 
 const DEFAULT_BASE_PRICE = 40;
@@ -85,22 +105,27 @@ export default function ProformaEditor({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const initialLines = (): ProformaLineItem[] => {
-    if (existingItems && existingItems.length > 0) return existingItems;
+  const initialLines = (): EditorLine[] => {
+    if (existingItems && existingItems.length > 0) {
+      return existingItems.map((it) => ({ ...it, _uid: nextUid() }));
+    }
     if (estimatedQuantity && estimatedComplexity && estimatedUrgency) {
-      return [estimatedLine(
-        projectTypeTag ?? null,
-        estimatedQuantity as EstimatedQuantity,
-        estimatedComplexity as EstimatedComplexity,
-        estimatedUrgency as EstimatedUrgency,
-        estimatedExactQuantity ?? null,
-        basePrices,
-      )];
+      return [{
+        ...estimatedLine(
+          projectTypeTag ?? null,
+          estimatedQuantity as EstimatedQuantity,
+          estimatedComplexity as EstimatedComplexity,
+          estimatedUrgency as EstimatedUrgency,
+          estimatedExactQuantity ?? null,
+          basePrices,
+        ),
+        _uid: nextUid(),
+      }];
     }
     return [emptyLine()];
   };
 
-  const [lines, setLines] = useState<ProformaLineItem[]>(initialLines);
+  const [lines, setLines] = useState<EditorLine[]>(initialLines);
   const [notes, setNotes] = useState(existingNotes || "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(!!existingItems && existingItems.length > 0);
@@ -128,6 +153,23 @@ export default function ProformaEditor({
     setSaved(false);
   };
 
+  const handleReorder = (event: {
+    operation: {
+      source: { id: string | number } | null;
+      target: { id: string | number } | null;
+    };
+  }) => {
+    const { source, target } = event.operation;
+    if (!source || !target || source.id === target.id) return;
+    setLines((prev) => {
+      const from = prev.findIndex((l) => l._uid === source.id);
+      const to = prev.findIndex((l) => l._uid === target.id);
+      if (from === -1 || to === -1) return prev;
+      return arrayMove(prev, from, to);
+    });
+    setSaved(false);
+  };
+
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.units, 0);
   const taxBreakdown = lines.reduce<Record<number, number>>((acc, l) => {
     const taxAmount = l.price * l.units * (l.tax / 100);
@@ -137,9 +179,15 @@ export default function ProformaEditor({
   const totalTax = Object.values(taxBreakdown).reduce((s, v) => s + v, 0);
   const total = subtotal + totalTax;
 
+  // Líneas válidas, sin el _uid solo-cliente (se persiste como JSON).
+  const cleanLines = (): ProformaLineItem[] =>
+    lines
+      .filter((l) => l.concept.trim() && l.price > 0)
+      .map(({ concept, price, units, tax }) => ({ concept, price, units, tax }));
+
   const handleSave = () => {
     setError(null);
-    const validLines = lines.filter((l) => l.concept.trim() && l.price > 0);
+    const validLines = cleanLines();
     if (validLines.length === 0) {
       setError("Anade al menos una linea con concepto y precio");
       return;
@@ -159,7 +207,7 @@ export default function ProformaEditor({
     setError(null);
     startTransition(async () => {
       if (!saved) {
-        const validLines = lines.filter((l) => l.concept.trim() && l.price > 0);
+        const validLines = cleanLines();
         if (validLines.length === 0) {
           setError("Anade al menos una linea con concepto y precio");
           return;
@@ -224,76 +272,23 @@ export default function ProformaEditor({
       <CardContent>
         <h2 className="mb-4 text-sm font-semibold text-card-foreground">Presupuesto</h2>
 
-        {/* Lines */}
-        <div className="space-y-3">
-          {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-[1fr_80px_60px_80px_32px] gap-2 items-end">
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Concepto</label>
-                )}
-                <Input
-                  type="text"
-                  value={line.concept}
-                  onChange={(e) => updateLine(i, "concept", e.target.value)}
-                  placeholder="Descripcion"
-                />
-              </div>
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Precio</label>
-                )}
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={line.price || ""}
-                  onChange={(e) => updateLine(i, "price", parseFloat(e.target.value) || 0)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Uds</label>
-                )}
-                <Input
-                  type="number"
-                  min="1"
-                  value={line.units}
-                  onChange={(e) => updateLine(i, "units", parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">IVA</label>
-                )}
-                <select
-                  value={line.tax}
-                  onChange={(e) => updateLine(i, "tax", parseInt(e.target.value))}
-                  className={selectClass}
-                >
-                  {TAX_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                {lines.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => removeLine(i)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Lines — arrastrables por el icono de la izquierda para reordenar */}
+        <DragDropProvider onDragEnd={handleReorder}>
+          <div className="space-y-3">
+            {lines.map((line, i) => (
+              <SortableLineRow
+                key={line._uid}
+                line={line}
+                index={i}
+                isFirst={i === 0}
+                canRemove={lines.length > 1}
+                selectClass={selectClass}
+                onUpdate={updateLine}
+                onRemove={removeLine}
+              />
+            ))}
+          </div>
+        </DragDropProvider>
 
         <Button
           variant="link"
@@ -354,5 +349,111 @@ export default function ProformaEditor({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+interface SortableLineRowProps {
+  line: EditorLine;
+  index: number;
+  isFirst: boolean;
+  canRemove: boolean;
+  selectClass: string;
+  onUpdate: (index: number, field: keyof ProformaLineItem, value: string | number) => void;
+  onRemove: (index: number) => void;
+}
+
+function SortableLineRow({
+  line,
+  index,
+  isFirst,
+  canRemove,
+  selectClass,
+  onUpdate,
+  onRemove,
+}: SortableLineRowProps) {
+  const { ref, handleRef, isDragging } = useSortable({ id: line._uid, index });
+
+  return (
+    <div
+      ref={ref}
+      className={`grid grid-cols-[20px_1fr_80px_60px_80px_32px] gap-2 items-end ${
+        isDragging ? "relative z-10 opacity-80" : ""
+      }`}
+    >
+      <button
+        ref={handleRef}
+        type="button"
+        aria-label="Arrastrar para reordenar"
+        title="Arrastrar para reordenar"
+        className="flex h-9 w-5 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+      >
+        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M9 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm9-12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+      </button>
+      <div>
+        {isFirst && (
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Concepto</label>
+        )}
+        <Input
+          type="text"
+          value={line.concept}
+          onChange={(e) => onUpdate(index, "concept", e.target.value)}
+          placeholder="Descripcion"
+        />
+      </div>
+      <div>
+        {isFirst && (
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Precio</label>
+        )}
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={line.price || ""}
+          onChange={(e) => onUpdate(index, "price", parseFloat(e.target.value) || 0)}
+          placeholder="0.00"
+        />
+      </div>
+      <div>
+        {isFirst && (
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Uds</label>
+        )}
+        <Input
+          type="number"
+          min="1"
+          value={line.units}
+          onChange={(e) => onUpdate(index, "units", parseInt(e.target.value) || 1)}
+        />
+      </div>
+      <div>
+        {isFirst && (
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">IVA</label>
+        )}
+        <select
+          value={line.tax}
+          onChange={(e) => onUpdate(index, "tax", parseInt(e.target.value))}
+          className={selectClass}
+        >
+          {TAX_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        {canRemove && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onRemove(index)}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
