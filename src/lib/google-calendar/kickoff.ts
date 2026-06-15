@@ -6,6 +6,9 @@ const WORKDAY_START_HOUR = 11; // 11:00 local
 const WORKDAY_END_HOUR = 18;   // 18:00 local (último slot empieza a las 17:30)
 const SEARCH_DAYS = 7;
 const SLOTS_TO_PROPOSE = 3;
+/** Antelación mínima con la que se puede reservar una reunión. */
+export const MIN_NOTICE_HOURS = 24;
+const MIN_NOTICE_MS = MIN_NOTICE_HOURS * 60 * 60 * 1000;
 
 /** Email/calendarId de la diseñadora por defecto (Isabella). */
 export function getDefaultDesignerCalendarId(): string | null {
@@ -51,6 +54,30 @@ function overlapsBusy(start: Date, end: Date, busy: BusyInterval[]): boolean {
   return false;
 }
 
+/** Clave de día local (sirve para garantizar una sola reunión por día). */
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/**
+ * Conjunto de días (clave local) en los que la diseñadora ya tiene algún
+ * evento. Se usa para no proponer un día en el que ya hay una reunión: como
+ * mucho una reunión por día.
+ */
+function busyDaysOf(busy: BusyInterval[]): Set<string> {
+  const days = new Set<string>();
+  for (const b of busy) {
+    // Un evento puede cruzar medianoche; marcamos cada día que toca.
+    const cur = new Date(b.start);
+    cur.setHours(0, 0, 0, 0);
+    while (cur < b.end) {
+      days.add(localDayKey(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+  return days;
+}
+
 /**
  * Devuelve hasta `count` slots de 30 min disponibles en el calendario del
  * designer en los próximos `SEARCH_DAYS` días laborables. Si no encuentra
@@ -64,7 +91,10 @@ export async function getDesignerAvailability(
   const from = options.from ?? new Date();
   const calendar = getCalendarClient({ impersonate: calendarId });
 
-  const timeMin = startOfNextWorkingDay(from);
+  // No se puede reservar con menos de 24h de antelación: arrancamos la
+  // búsqueda desde ese mínimo.
+  const minBookable = new Date(from.getTime() + MIN_NOTICE_MS);
+  const timeMin = startOfNextWorkingDay(minBookable);
   const timeMax = new Date(timeMin);
   timeMax.setDate(timeMax.getDate() + SEARCH_DAYS);
 
@@ -80,6 +110,10 @@ export async function getDesignerAvailability(
   const busy: BusyInterval[] = rawBusy
     .filter((b) => b.start && b.end)
     .map((b) => ({ start: new Date(b.start!), end: new Date(b.end!) }));
+
+  // Días en los que la diseñadora ya tiene algún evento: no se proponen,
+  // garantizando como mucho una reunión por día.
+  const busyDays = busyDaysOf(busy);
 
   const slots: string[] = [];
   const usedDays = new Set<string>();
@@ -103,12 +137,19 @@ export async function getDesignerAvailability(
     const slotEnd = new Date(cursor);
     slotEnd.setMinutes(slotEnd.getMinutes() + SLOT_MINUTES);
 
-    const dayKey = `${slotStart.getFullYear()}-${slotStart.getMonth()}-${slotStart.getDate()}`;
+    const dayKey = localDayKey(slotStart);
+
+    // Si ya hay algún evento ese día, saltamos el día entero.
+    if (busyDays.has(dayKey)) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(WORKDAY_START_HOUR, 0, 0, 0);
+      continue;
+    }
 
     if (
       !overlapsBusy(slotStart, slotEnd, busy) &&
       !usedDays.has(dayKey) &&
-      slotStart > new Date()
+      slotStart >= minBookable
     ) {
       slots.push(slotStart.toISOString());
       usedDays.add(dayKey);
@@ -122,6 +163,61 @@ export async function getDesignerAvailability(
   }
 
   return slots;
+}
+
+/**
+ * Revalida en el momento de reservar que un slot sigue siendo válido:
+ *  - con al menos 24h de antelación, y
+ *  - en un día en el que la diseñadora no tenga ya ninguna reunión
+ *    (como mucho una reunión por día).
+ *
+ * Necesario porque los slots se proponen con antelación y, entre la propuesta
+ * y la confirmación, el tiempo pasa u otro cliente puede haber reservado ese
+ * mismo día.
+ */
+export async function checkKickoffSlotBookable(
+  calendarId: string,
+  slotIso: string,
+  options: { now?: Date } = {},
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const now = options.now ?? new Date();
+  const slotStart = new Date(slotIso);
+
+  if (Number.isNaN(slotStart.getTime())) {
+    return { ok: false, error: "Ese hueco ya no está disponible" };
+  }
+
+  if (slotStart.getTime() < now.getTime() + MIN_NOTICE_MS) {
+    return {
+      ok: false,
+      error: `Las reuniones deben reservarse con al menos ${MIN_NOTICE_HOURS}h de antelación. Elige otro hueco.`,
+    };
+  }
+
+  // Ventana del día completo del slot (hora local del servidor).
+  const dayStart = new Date(slotStart);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const calendar = getCalendarClient({ impersonate: calendarId });
+  const fb = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: dayStart.toISOString(),
+      timeMax: dayEnd.toISOString(),
+      items: [{ id: calendarId }],
+    },
+  });
+
+  const busy = fb.data.calendars?.[calendarId]?.busy ?? [];
+  if (busy.length > 0) {
+    return {
+      ok: false,
+      error: "Ese día ya está ocupado. Elige otro hueco.",
+    };
+  }
+
+  return { ok: true };
 }
 
 /**

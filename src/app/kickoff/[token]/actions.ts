@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import {
+  checkKickoffSlotBookable,
   createKickoffEvent,
   getDefaultDesignerCalendarId,
   getDefaultDesignerName,
@@ -67,6 +68,19 @@ export async function confirmKickoffSlot(
   const calendarId = getDefaultDesignerCalendarId();
   if (!calendarId) {
     return { ok: false, error: "La agenda no está configurada. Contáctanos." };
+  }
+
+  // Revalidar al confirmar: antelación mínima de 24h y que el día siga libre
+  // (como mucho una reunión por día). Los slots se propusieron con antelación,
+  // así que aquí cerramos la ventana entre propuesta y reserva.
+  try {
+    const bookable = await checkKickoffSlotBookable(calendarId, slotIso);
+    if (!bookable.ok) {
+      return { ok: false, error: bookable.error };
+    }
+  } catch (checkErr) {
+    console.error("[confirmKickoffSlot] availability check failed:", checkErr);
+    return { ok: false, error: "No pudimos verificar la disponibilidad. Intenta de nuevo." };
   }
 
   try {
