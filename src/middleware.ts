@@ -37,6 +37,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/scan") ||
     pathname === "/eventos" ||
     pathname.startsWith("/eventos/") ||
+    pathname === "/campamento" ||
+    pathname.startsWith("/campamento/") ||
     pathname === "/offline";
 
   // Skip Supabase auth check entirely for public routes
