@@ -7,21 +7,18 @@ import { CampForm } from "./CampForm";
 export const metadata: Metadata = {
   title: "Campamento de impresión 3D para niños · 29 jun – 3 jul | Prototipalo",
   description:
-    "Una semana creando con impresoras 3D en el centro de Madrid (Calle Viriato 27, junto al metro Iglesia). Del 29 de junio al 3 de julio, de 10:00 a 14:00. Edades 11–12 años. Solo 4 plazas.",
+    "Una semana creando con impresoras 3D en el centro de Madrid (Calle Viriato 27, junto al metro Iglesia). Del 29 de junio al 3 de julio, de 10:00 a 14:00. Edades 11–12 años. Plazas limitadas.",
   robots: { index: true, follow: true },
 };
 
 // Tope real de inscripciones (control interno de aforo).
 const MAX_SLOTS = 6;
-// Plazas que se anuncian públicamente, para crear urgencia. El contador nunca
-// muestra más que esto, así que la web siempre dice "4 plazas" como mucho.
-const DISPLAY_CAP = 4;
 
 const FACTS = [
   { k: "Fechas", v: "29 jun – 3 jul" },
   { k: "Horario", v: "10:00 – 14:00" },
   { k: "Edades", v: "11 – 12 años" },
-  { k: "Plazas", v: "Solo 4" },
+  { k: "Plazas", v: "Limitadas" },
 ];
 
 const LEARN = [
@@ -35,7 +32,7 @@ const LEARN = [
   },
   {
     title: "Grupo muy reducido",
-    body: "Solo 4 plazas para que cada niño tenga atención directa y su propio proyecto.",
+    body: "Plazas limitadas para que cada niño tenga atención directa y su propio proyecto.",
   },
   {
     title: "Junto al metro Iglesia",
@@ -58,9 +55,10 @@ async function takenSlots(): Promise<number> {
 
 async function Registration() {
   const taken = await takenSlots();
-  const soldOut = Math.max(0, MAX_SLOTS - taken) <= 0;
-  // Nunca anunciamos más de DISPLAY_CAP plazas (urgencia).
-  const remaining = Math.min(Math.max(0, MAX_SLOTS - taken), DISPLAY_CAP);
+  const remaining = Math.max(0, MAX_SLOTS - taken);
+  const soldOut = remaining <= 0;
+  // Mensaje cualitativo de urgencia: sin número de plazas, solo escasez.
+  const urgency = remaining <= 2 ? "¡Última plaza!" : "¡Quedan pocas plazas!";
 
   return (
     <div className="rounded-2xl border border-[#fdc52c]/25 bg-white/[0.03] p-5 shadow-[0_0_40px_-12px_rgba(253,197,44,0.35)] backdrop-blur sm:p-6">
@@ -69,7 +67,7 @@ async function Registration() {
         {!soldOut && (
           <span className="inline-flex shrink-0 animate-pulse items-center gap-1.5 rounded-full border border-[#fdc52c]/40 bg-[#fdc52c]/10 px-2.5 py-1 text-[11px] font-semibold text-[#fdc52c]">
             <span className="size-1.5 rounded-full bg-[#fdc52c]" />
-            {remaining === 1 ? "¡Última plaza!" : `¡Solo quedan ${remaining}!`}
+            {urgency}
           </span>
         )}
       </div>
@@ -121,7 +119,7 @@ export default function CampamentoLanding() {
 
         <p className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg border border-[#fdc52c]/30 bg-[#fdc52c]/10 px-3 py-1.5 text-sm font-medium text-[#fdc52c]">
           <span className="size-1.5 animate-pulse rounded-full bg-[#fdc52c]" />
-          Solo 4 plazas · se llenan rápido
+          Plazas limitadas · quedan pocas
         </p>
 
         <dl className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
