@@ -32,7 +32,7 @@ const LEARN = [
   },
   {
     title: "Grupo muy reducido",
-    body: "Plazas limitadas para que cada niño tenga atención directa y su propio proyecto.",
+    body: "Solo 6 alumnos y cada uno con su propia impresora: atención directa y su propio proyecto.",
   },
   {
     title: "Junto al metro Iglesia",
