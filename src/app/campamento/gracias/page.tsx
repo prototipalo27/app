@@ -81,8 +81,8 @@ async function Status({
       <p className="text-sm leading-relaxed text-white/70">
         No hemos podido confirmar el pago de la señal. Si crees que es un error,
         escríbenos a{" "}
-        <a className="text-[#fdc52c] underline" href="mailto:hola@prototipalo.com">
-          hola@prototipalo.com
+        <a className="text-[#fdc52c] underline" href="mailto:info@prototipalo.com">
+          info@prototipalo.com
         </a>
         .
       </p>

@@ -155,6 +155,21 @@ export default function MobileSidebar({
                   </svg>
                 </Link>
               </div>
+              <Link
+                href="/dashboard/campamento"
+                prefetch={false}
+                onClick={handleNavClick}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                  pathname?.startsWith("/dashboard/campamento")
+                    ? "border-l-2 border-brand bg-brand/5 text-zinc-900 dark:text-white"
+                    : "border-l-2 border-transparent text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21l9-15 9 15M3 21h18M9 21l3-5 3 5" />
+                </svg>
+                Campamento
+              </Link>
             </>
           )}
 

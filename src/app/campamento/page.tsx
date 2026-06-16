@@ -187,8 +187,8 @@ export default function CampamentoLanding() {
 
         <p className="mt-10 text-xs text-white/45">
           ¿Dudas? Escríbenos a{" "}
-          <a className="text-white/70 underline" href="mailto:hola@prototipalo.com">
-            hola@prototipalo.com
+          <a className="text-white/70 underline" href="mailto:info@prototipalo.com">
+            info@prototipalo.com
           </a>
           . Prototipalo · Producción 3D en Madrid.
         </p>

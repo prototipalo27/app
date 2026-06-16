@@ -68,8 +68,8 @@ export function CampForm({ soldOut }: { soldOut: boolean }) {
         <div className="font-semibold text-white">Plazas agotadas</div>
         <p className="mt-1 text-white/70">
           Las plazas están completas. Escríbenos a{" "}
-          <a className="text-[#fdc52c] underline" href="mailto:hola@prototipalo.com">
-            hola@prototipalo.com
+          <a className="text-[#fdc52c] underline" href="mailto:info@prototipalo.com">
+            info@prototipalo.com
           </a>{" "}
           y te avisamos si se libera alguna o abrimos otra semana.
         </p>

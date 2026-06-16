@@ -100,6 +100,15 @@ export default function DesktopNav({ isManager, isSuperAdmin, pendingTaskCount =
               </svg>
             }
           />
+          <NavLink
+            href="/dashboard/campamento"
+            label="Campamento"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21l9-15 9 15M3 21h18M9 21l3-5 3 5" />
+              </svg>
+            }
+          />
         </>
       )}
 
