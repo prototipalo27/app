@@ -423,6 +423,30 @@ export type Database = {
           },
         ];
       };
+      camp_page_views: {
+        Row: {
+          created_at: string;
+          id: string;
+          ip_hash: string | null;
+          referrer: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          ip_hash?: string | null;
+          referrer?: string | null;
+          user_agent?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          ip_hash?: string | null;
+          referrer?: string | null;
+          user_agent?: string | null;
+        };
+        Relationships: [];
+      };
       camp_registrations: {
         Row: {
           child_name: string;

@@ -30,15 +30,35 @@ export default async function DashboardCampamentoPage() {
   if (!profile || !profile.is_active) redirect("/login");
 
   const supabase = await createClient();
-  const { data: rows } = await supabase
-    .from("camp_registrations")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [{ data: rows }, { data: views }] = await Promise.all([
+    supabase
+      .from("camp_registrations")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("camp_page_views")
+      .select("ip_hash, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50000),
+  ]);
 
   const all = rows ?? [];
   const paid = all.filter((r) => r.status === "paid");
   const pending = all.filter((r) => r.status === "pending");
   const remaining = Math.max(0, MAX_SLOTS - paid.length);
+
+  // Estadísticas de visitas (TZ del servidor = Europe/Madrid).
+  const allViews = views ?? [];
+  const totalViews = allViews.length;
+  const uniqueViews = new Set(
+    allViews.map((v) => v.ip_hash).filter(Boolean),
+  ).size;
+  const todayStr = new Date().toLocaleDateString("es-ES");
+  const viewsToday = allViews.filter(
+    (v) => new Date(v.created_at).toLocaleDateString("es-ES") === todayStr,
+  ).length;
+  const conversion =
+    uniqueViews > 0 ? Math.round((paid.length / uniqueViews) * 100) : 0;
 
   return (
     <div>
@@ -61,7 +81,15 @@ export default async function DashboardCampamentoPage() {
         </p>
       </div>
 
-      {/* Resumen */}
+      {/* Visitas a la landing */}
+      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryCard label="Visitas totales" value={String(totalViews)} />
+        <SummaryCard label="Visitantes únicos" value={String(uniqueViews)} />
+        <SummaryCard label="Visitas hoy" value={String(viewsToday)} />
+        <SummaryCard label="Conversión a inscrito" value={`${conversion}%`} />
+      </div>
+
+      {/* Inscripciones */}
       <div className="mb-6 grid grid-cols-3 gap-3">
         <SummaryCard label="Inscritos (pagados)" value={`${paid.length} / ${MAX_SLOTS}`} />
         <SummaryCard label="Plazas libres" value={String(remaining)} />

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { CampForm } from "./CampForm";
+import { ViewBeacon } from "./ViewBeacon";
 
 export const metadata: Metadata = {
   title: "Campamento de impresión 3D para niños · 29 jun – 3 jul | Prototipalo",
@@ -93,6 +94,7 @@ function RegistrationFallback() {
 export default function CampamentoLanding() {
   return (
     <main className="relative min-h-svh bg-neutral-950 text-neutral-100 selection:bg-[#fdc52c] selection:text-neutral-900">
+      <ViewBeacon />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[460px] bg-[radial-gradient(ellipse_at_top,rgba(0,158,220,0.35),transparent_60%)]"
