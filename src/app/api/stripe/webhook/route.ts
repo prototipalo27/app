@@ -143,6 +143,44 @@ async function handleStudioPayment(session: Stripe.Checkout.Session) {
   });
 }
 
+async function handleCampDeposit(session: Stripe.Checkout.Session) {
+  const registrationId = session.metadata?.camp_registration_id;
+  if (!registrationId) {
+    console.error("[Stripe Webhook] camp_deposit without camp_registration_id");
+    return;
+  }
+
+  const supabase = getSupabase();
+
+  // Idempotency: si ya está pagada, salir.
+  const { data: existing } = await supabase
+    .from("camp_registrations")
+    .select("status, payer_name, child_name")
+    .eq("id", registrationId)
+    .single();
+  if (existing?.status === "paid") return;
+
+  await supabase
+    .from("camp_registrations")
+    .update({
+      status: "paid",
+      paid_at: new Date().toISOString(),
+      stripe_session_id: session.id,
+      stripe_payment_intent_id:
+        typeof session.payment_intent === "string" ? session.payment_intent : null,
+    })
+    .eq("id", registrationId);
+
+  const amountTotal = (session.amount_total || 0) / 100;
+  const who = existing?.payer_name || session.customer_details?.email || "Un padre/madre";
+  const child = existing?.child_name ? ` (${existing.child_name})` : "";
+  sendPushForEvent("payment_received", {
+    title: "Inscripción campamento confirmada",
+    body: `${who}${child} ha pagado la señal de ${amountTotal.toFixed(2)} €`,
+    url: "/dashboard",
+  });
+}
+
 async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
   // Branch on payment_type for addon vs original quote
   if (session.metadata?.payment_type === "addon_full") {
@@ -152,6 +190,11 @@ async function handlePaymentSuccess(session: Stripe.Checkout.Session) {
 
   if (session.metadata?.payment_type === "studio_payment") {
     await handleStudioPayment(session);
+    return;
+  }
+
+  if (session.metadata?.payment_type === "camp_deposit") {
+    await handleCampDeposit(session);
     return;
   }
 

@@ -423,6 +423,60 @@ export type Database = {
           },
         ];
       };
+      camp_registrations: {
+        Row: {
+          child_name: string;
+          created_at: string;
+          deposit_amount_cents: number;
+          extended_hours: boolean;
+          id: string;
+          ip_hash: string | null;
+          paid_at: string | null;
+          payer_email: string;
+          payer_name: string;
+          payer_phone: string;
+          status: string;
+          stripe_payment_intent_id: string | null;
+          stripe_payment_link_id: string | null;
+          stripe_session_id: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          child_name: string;
+          created_at?: string;
+          deposit_amount_cents?: number;
+          extended_hours?: boolean;
+          id?: string;
+          ip_hash?: string | null;
+          paid_at?: string | null;
+          payer_email: string;
+          payer_name: string;
+          payer_phone: string;
+          status?: string;
+          stripe_payment_intent_id?: string | null;
+          stripe_payment_link_id?: string | null;
+          stripe_session_id?: string | null;
+          user_agent?: string | null;
+        };
+        Update: {
+          child_name?: string;
+          created_at?: string;
+          deposit_amount_cents?: number;
+          extended_hours?: boolean;
+          id?: string;
+          ip_hash?: string | null;
+          paid_at?: string | null;
+          payer_email?: string;
+          payer_name?: string;
+          payer_phone?: string;
+          status?: string;
+          stripe_payment_intent_id?: string | null;
+          stripe_payment_link_id?: string | null;
+          stripe_session_id?: string | null;
+          user_agent?: string | null;
+        };
+        Relationships: [];
+      };
       event_leads: {
         Row: {
           created_at: string;
