@@ -2,8 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
 const MAX_SLOTS = 6;
 
 const STATUS_LABELS: Record<string, string> = {
