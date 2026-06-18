@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { uploadEntryPhoto, type NameEntry } from "../checklist-actions";
+import {
+  uploadEntryPhoto,
+  saveEntryNote,
+  type NameEntry,
+} from "../checklist-actions";
 
 type Props = {
   itemId: string;
@@ -10,6 +14,7 @@ type Props = {
   entries: NameEntry[];
   onClose: () => void;
   onPhotoUploaded: (entryIndex: number, photoPath: string) => void;
+  onNoteSaved?: (entryIndex: number, note: string) => void;
 };
 
 type Phase = "loading" | "live" | "preview" | "uploading" | "error" | "done";
@@ -21,6 +26,7 @@ export default function EntryCameraMode({
   entries,
   onClose,
   onPhotoUploaded,
+  onNoteSaved,
 }: Props) {
   // Cola: entries sin foto, o con issue (re-foto solicitada por cliente)
   const initialQueueRef = useRef<number[]>(
@@ -38,7 +44,20 @@ export default function EntryCameraMode({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [completedCount, setCompletedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const [fallbackMode, setFallbackMode] = useState(false);
+
+  // Notas por índice de entry (inicializadas desde las entradas existentes)
+  const [notes, setNotes] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      entries
+        .map((e, idx) => [idx, e.note ?? ""] as const)
+        .filter(([, note]) => note),
+    ),
+  );
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -160,6 +179,11 @@ export default function EntryCameraMode({
     setPreviewBlob(null);
     setPreviewUrl(null);
 
+    advanceQueue();
+  }
+
+  // Avanza a la siguiente entrada de la cola, o termina si era la última.
+  function advanceQueue() {
     const nextPos = queuePos + 1;
     if (nextPos >= queue.length) {
       stopStream();
@@ -167,7 +191,48 @@ export default function EntryCameraMode({
       return;
     }
     setQueuePos(nextPos);
-    setPhase(fallbackMode ? "live" : "live");
+    setPhase("live");
+  }
+
+  // Saltar el trofeo actual (no está listo): se queda sin foto y reaparecerá
+  // en la próxima sesión de fotos.
+  function skipCurrent() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewBlob(null);
+    setPreviewUrl(null);
+    setSkippedCount((c) => c + 1);
+    advanceQueue();
+  }
+
+  function openNoteEditor() {
+    if (currentEntryIndex === undefined) return;
+    setNoteDraft(notes[currentEntryIndex] ?? "");
+    setNoteEditorOpen(true);
+  }
+
+  async function saveNote() {
+    if (currentEntryIndex === undefined) return;
+    setSavingNote(true);
+    const text = noteDraft.trim();
+    const result = await saveEntryNote(
+      itemId,
+      currentEntryIndex,
+      projectId,
+      text,
+    );
+    setSavingNote(false);
+    if (!result.success) {
+      setError(result.error ?? "Error al guardar la nota");
+      return;
+    }
+    setNotes((prev) => {
+      const next = { ...prev };
+      if (text) next[currentEntryIndex] = text;
+      else delete next[currentEntryIndex];
+      return next;
+    });
+    onNoteSaved?.(currentEntryIndex, text);
+    setNoteEditorOpen(false);
   }
 
   function handleClose() {
@@ -204,7 +269,9 @@ export default function EntryCameraMode({
           <p className="mb-6 text-sm text-zinc-400">
             {queue.length === 0
               ? "No hay trofeos pendientes de foto."
-              : "Has terminado la sesión de fotos."}
+              : skippedCount > 0
+                ? `Has terminado la sesión. ${skippedCount} trofeo${skippedCount === 1 ? "" : "s"} saltado${skippedCount === 1 ? "" : "s"} quedan pendientes de foto.`
+                : "Has terminado la sesión de fotos."}
           </p>
           <button
             onClick={handleClose}
@@ -232,6 +299,11 @@ export default function EntryCameraMode({
             {currentEntry?.line2 && (
               <p className="truncate text-sm text-zinc-300">
                 {currentEntry.line2}
+              </p>
+            )}
+            {currentEntryIndex !== undefined && notes[currentEntryIndex] && (
+              <p className="mt-1 truncate text-xs text-amber-300">
+                📝 {notes[currentEntryIndex]}
               </p>
             )}
           </div>
@@ -313,25 +385,47 @@ export default function EntryCameraMode({
 
       {/* Controles inferiores */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/90 to-transparent px-4 pb-[max(env(safe-area-inset-bottom,0px),16px)] pt-8">
-        {phase === "live" && !fallbackMode && (
-          <div className="flex items-center justify-center">
+        {phase === "live" && (
+          <div className="flex items-center justify-between">
             <button
-              onClick={capture}
-              className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-white/40 bg-white/10 active:scale-95 active:bg-white/30 transition-transform"
-              aria-label="Capturar"
+              onClick={skipCurrent}
+              className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10"
+              aria-label="Saltar este trofeo"
             >
-              <span className="block h-16 w-16 rounded-full bg-white" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5l7 7-7 7M13 5l7 7-7 7" />
+              </svg>
+              Saltar
             </button>
-          </div>
-        )}
 
-        {phase === "live" && fallbackMode && (
-          <div className="flex items-center justify-center">
+            {fallbackMode ? (
+              <button
+                onClick={triggerFallback}
+                className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black"
+              >
+                Hacer foto
+              </button>
+            ) : (
+              <button
+                onClick={capture}
+                className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-white/40 bg-white/10 active:scale-95 active:bg-white/30 transition-transform"
+                aria-label="Capturar"
+              >
+                <span className="block h-16 w-16 rounded-full bg-white" />
+              </button>
+            )}
+
             <button
-              onClick={triggerFallback}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black"
+              onClick={openNoteEditor}
+              className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-200 hover:bg-white/10"
+              aria-label="Añadir nota"
             >
-              Hacer foto
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              {currentEntryIndex !== undefined && notes[currentEntryIndex]
+                ? "Nota ✓"
+                : "Nota"}
             </button>
           </div>
         )}
@@ -357,6 +451,44 @@ export default function EntryCameraMode({
           <p className="mt-2 text-center text-xs text-red-300">{error}</p>
         )}
       </div>
+
+      {/* Editor de nota */}
+      {noteEditorOpen && (
+        <div className="absolute inset-0 z-20 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+          <div className="w-full max-w-sm rounded-xl bg-zinc-900 p-4 ring-1 ring-white/10">
+            <h3 className="mb-1 text-sm font-semibold text-white">
+              Nota para {currentEntry?.line1 || "este trofeo"}
+            </h3>
+            <p className="mb-3 text-xs text-zinc-400">
+              Ej. &quot;no estaba listo&quot;, &quot;falta pintar&quot;, etc.
+            </p>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="Escribe una nota…"
+              className="w-full resize-none rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-white/40 focus:outline-none"
+            />
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setNoteEditorOpen(false)}
+                disabled={savingNote}
+                className="rounded-lg border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveNote}
+                disabled={savingNote}
+                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+              >
+                {savingNote ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Input fallback (cuando getUserMedia no funciona) */}
       <input

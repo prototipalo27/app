@@ -14,6 +14,8 @@ export type NameEntry = {
   client_status?: ClientReviewStatus;
   client_comment?: string;
   client_reviewed_at?: string;
+  /** Nota interna del equipo sobre esta entrada (p. ej. "no estaba listo"). */
+  note?: string;
 };
 
 export type ChecklistData = {
@@ -253,6 +255,52 @@ export async function uploadEntryPhoto(
   revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath(`/track`, "layout");
   return { success: true, photo_path: path };
+}
+
+export async function saveEntryNote(
+  itemId: string,
+  entryIndex: number,
+  projectId: string,
+  note: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData.user) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const { data: existing } = await supabase
+    .from("project_checklist_items")
+    .select("data, project_id")
+    .eq("id", itemId)
+    .single();
+
+  if (!existing || existing.project_id !== projectId) {
+    return { success: false, error: "Item no válido" };
+  }
+
+  const data = (existing.data as ChecklistData | null) ?? {};
+  const entries = data.entries;
+  if (!entries || entryIndex < 0 || entryIndex >= entries.length) {
+    return { success: false, error: "Entry inválida" };
+  }
+
+  const trimmed = note.trim();
+  entries[entryIndex] = {
+    ...entries[entryIndex],
+    note: trimmed || undefined,
+  };
+
+  const { error: updateError } = await supabase
+    .from("project_checklist_items")
+    .update({ data: { ...data, entries } })
+    .eq("id", itemId);
+
+  if (updateError) return { success: false, error: updateError.message };
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { success: true };
 }
 
 export async function removeEntryPhoto(

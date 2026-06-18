@@ -530,6 +530,11 @@ export default function ProjectChecklist({
                                   💬 {entry.client_comment}
                                 </span>
                               )}
+                              {entry.note && (
+                                <span className="mt-1 block rounded bg-blue-50 px-1.5 py-1 text-[11px] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                                  📝 {entry.note}
+                                </span>
+                              )}
                             </div>
                           </label>
 
@@ -685,6 +690,12 @@ export default function ProjectChecklist({
           onClose={() => setCameraModeItemId(null)}
           onPhotoUploaded={(idx, path) =>
             handleCameraModePhoto(cameraModeItem.id, idx, path)
+          }
+          onNoteSaved={(idx, note) =>
+            applyEntryUpdate(cameraModeItem.id, idx, (entry) => ({
+              ...entry,
+              note: note || undefined,
+            }))
           }
         />
       )}
