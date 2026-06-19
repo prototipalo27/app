@@ -644,6 +644,7 @@ export async function generateNegotiationSummary(
     .from("quote_requests")
     .select("items, notes, status")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

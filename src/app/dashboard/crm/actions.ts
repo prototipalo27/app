@@ -364,13 +364,19 @@ export async function createRepeatOrder(
     leadId = newLead.id;
   }
 
-  // Create quote_request with selected products
+  // Create quote_request with selected products. Si el lead se reutilizó y ya
+  // tenía presupuesto, este pedido recurrente se convierte en una versión nueva
+  // y vigente (preservando las anteriores).
   if (items.length > 0) {
+    const versionNumber = await prepareNewQuoteVersion(supabase, leadId);
     await supabase.from("quote_requests").insert({
       lead_id: leadId,
       items: items as unknown as import("@/lib/supabase/database.types").Json,
       holded_contact_id: client.holdedContactId,
       status: "pending",
+      version_number: versionNumber,
+      is_current: true,
+      version_label: versionNumber > 1 ? "Pedido recurrente" : null,
     });
   }
 
@@ -825,6 +831,7 @@ export async function getCommissionSummary(leadId: string): Promise<{
     .from("quote_requests")
     .select("items")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -982,6 +989,7 @@ export async function linkLeadToHoldedContact(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .limit(1)
     .maybeSingle();
 
@@ -1033,6 +1041,7 @@ export async function linkLeadToClient(
       .from("quote_requests")
       .select("holded_contact_id")
       .eq("lead_id", clientLeadId)
+      .eq("is_current", true)
       .not("holded_contact_id", "is", null)
       .limit(1)
       .maybeSingle();
@@ -1063,6 +1072,7 @@ export async function linkLeadToClient(
         .from("quote_requests")
         .select("id")
         .eq("lead_id", leadId)
+        .eq("is_current", true)
         .limit(1)
         .maybeSingle();
 
@@ -1237,6 +1247,7 @@ export async function sendLeadEmail(
       .from("quote_requests")
       .select("holded_proforma_id")
       .eq("lead_id", id)
+      .eq("is_current", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -1577,44 +1588,86 @@ async function promoteLeadFolderToProject(
 
 // ── Save Quote Items (presupuesto) ──────────────────────
 
+// Versionado de presupuestos: un lead puede tener varias versiones (revisiones
+// en el tiempo); exactamente una es la vigente (is_current). Esta helper calcula
+// el siguiente número de versión y desmarca la vigente anterior para respetar el
+// índice único parcial `quote_requests_one_current_per_lead`. Tras llamarla, el
+// caller DEBE insertar una fila con is_current=true (si no, el lead se queda sin
+// versión vigente).
+async function prepareNewQuoteVersion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  leadId: string,
+): Promise<number> {
+  const { data: maxRow } = await supabase
+    .from("quote_requests")
+    .select("version_number")
+    .eq("lead_id", leadId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextVersion = (maxRow?.version_number ?? 0) + 1;
+  if (nextVersion > 1) {
+    await supabase
+      .from("quote_requests")
+      .update({ is_current: false })
+      .eq("lead_id", leadId)
+      .eq("is_current", true);
+  }
+  return nextVersion;
+}
+
 export async function saveQuoteItems(
   leadId: string,
   items: ProformaLineItem[],
   notes?: string,
-): Promise<{ success: boolean; error?: string }> {
+  options?: { asNewVersion?: boolean; versionLabel?: string },
+): Promise<{ success: boolean; error?: string; quoteId?: string }> {
   await requireRole("manager");
   const supabase = await createClient();
 
-  // Check if a quote_request already exists for this lead
-  const { data: existing } = await supabase
+  const asNewVersion = options?.asNewVersion ?? false;
+  const versionLabel = options?.versionLabel?.trim() || null;
+
+  // Versión vigente actual del lead (si existe)
+  const { data: current } = await supabase
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .eq("is_current", true)
     .maybeSingle();
 
   const itemsJson = JSON.parse(JSON.stringify(items));
+  let quoteId: string | undefined;
 
-  if (existing) {
-    // Update existing
+  if (current && !asNewVersion) {
+    // Sobrescribir la versión vigente (botón "Guardar")
+    const update: Record<string, unknown> = { items: itemsJson, notes: notes || null };
+    if (versionLabel !== null) update.version_label = versionLabel;
     const { error } = await supabase
       .from("quote_requests")
-      .update({ items: itemsJson, notes: notes || null })
-      .eq("id", existing.id);
+      .update(update)
+      .eq("id", current.id);
 
     if (error) return { success: false, error: error.message };
+    quoteId = current.id;
   } else {
-    // Create new
-    const { error } = await supabase
+    // Crear una versión nueva (botón "Guardar como nueva versión", o primera vez)
+    const versionNumber = await prepareNewQuoteVersion(supabase, leadId);
+    const { data: inserted, error } = await supabase
       .from("quote_requests")
       .insert({
         lead_id: leadId,
         items: itemsJson,
         notes: notes || null,
-      });
+        version_number: versionNumber,
+        is_current: true,
+        version_label: versionLabel,
+      })
+      .select("id")
+      .single();
 
     if (error) return { success: false, error: error.message };
+    quoteId = inserted?.id;
   }
 
   // Update lead estimated_value from quote total
@@ -1627,6 +1680,82 @@ export async function saveQuoteItems(
   }
 
   revalidatePath(`/dashboard/crm/${leadId}`);
+  return { success: true, quoteId };
+}
+
+// ── Versiones del presupuesto (historial) ───────────────
+
+export type QuoteVersionSummary = {
+  id: string;
+  versionNumber: number;
+  versionLabel: string | null;
+  isCurrent: boolean;
+  status: string;
+  total: number;
+  paymentStatus: string | null;
+  createdAt: string | null;
+};
+
+/** Lista todas las versiones del presupuesto de un lead (más reciente primero). */
+export async function listQuoteVersions(
+  leadId: string,
+): Promise<QuoteVersionSummary[]> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("quote_requests")
+    .select("id, version_number, version_label, is_current, status, items, payment_status, created_at")
+    .eq("lead_id", leadId)
+    .order("version_number", { ascending: false });
+
+  return (data || []).map((q) => {
+    const items = (q.items || []) as unknown as ProformaLineItem[];
+    const total = items.reduce((sum, i) => sum + i.price * i.units * (1 + i.tax / 100), 0);
+    return {
+      id: q.id,
+      versionNumber: q.version_number,
+      versionLabel: q.version_label,
+      isCurrent: q.is_current,
+      status: q.status,
+      total,
+      paymentStatus: q.payment_status,
+      createdAt: q.created_at,
+    };
+  });
+}
+
+/** Marca una versión concreta como la vigente del lead (las demás dejan de serlo). */
+export async function setCurrentQuoteVersion(
+  quoteId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("manager");
+  const supabase = await createClient();
+
+  const { data: target } = await supabase
+    .from("quote_requests")
+    .select("id, lead_id, is_current")
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (!target) return { success: false, error: "Versión no encontrada" };
+  if (target.is_current) return { success: true };
+
+  // Desmarcar la vigente actual antes de promover (índice único parcial).
+  await supabase
+    .from("quote_requests")
+    .update({ is_current: false })
+    .eq("lead_id", target.lead_id)
+    .eq("is_current", true);
+
+  const { error } = await supabase
+    .from("quote_requests")
+    .update({ is_current: true })
+    .eq("id", quoteId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/dashboard/crm/${target.lead_id}`);
   return { success: true };
 }
 
@@ -1634,6 +1763,7 @@ export async function saveQuoteItems(
 
 export async function sendQuoteToClient(
   leadId: string,
+  quoteId?: string,
 ): Promise<{ success: boolean; error?: string; holdedEstimateId?: string }> {
   const profile = await requireRole("manager");
   const supabase = await createClient();
@@ -1649,16 +1779,21 @@ export async function sendQuoteToClient(
     return { success: false, error: "El lead no tiene email" };
   }
 
-  // Get the quote request with items
-  const { data: qr } = await supabase
+  // Versión a enviar: la indicada explícitamente (quoteId) o, por defecto, la
+  // vigente del lead. Permite reenviar/enviar una versión concreta del historial.
+  const quoteQuery = supabase
     .from("quote_requests")
-    .select("id, token, items, notes, holded_contact_id, holded_proforma_id")
-    .eq("lead_id", leadId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .select("id, token, items, notes, holded_contact_id, holded_proforma_id, lead_id");
+  const { data: qr } = quoteId
+    ? await quoteQuery.eq("id", quoteId).maybeSingle()
+    : await quoteQuery
+        .eq("lead_id", leadId)
+        .eq("is_current", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (!qr) {
+  if (!qr || qr.lead_id !== leadId) {
     return { success: false, error: "No hay presupuesto guardado" };
   }
 
@@ -1989,10 +2124,11 @@ export async function createQuoteRequest(
     return { success: false, error: "El lead no tiene email" };
   }
 
-  // Insert quote request
+  // Insert quote request (legacy). Se convierte en la versión vigente del lead.
+  const versionNumber = await prepareNewQuoteVersion(supabase, leadId);
   const { data: qr, error: insertError } = await supabase
     .from("quote_requests")
-    .insert({ lead_id: leadId })
+    .insert({ lead_id: leadId, version_number: versionNumber, is_current: true })
     .select("token")
     .single();
 
@@ -2050,6 +2186,7 @@ export async function getQuoteRequest(leadId: string) {
     .from("quote_requests")
     .select("*")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2159,6 +2296,7 @@ export async function saveLeadBillingData(
     .from("quote_requests")
     .select("id, holded_contact_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2214,6 +2352,7 @@ export async function getLeadEmails(leadId: string) {
     .from("quote_requests")
     .select("holded_proforma_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2363,6 +2502,7 @@ export async function getProformaDetails(
     .from("quote_requests")
     .select("holded_proforma_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2394,6 +2534,7 @@ export async function getLeadDocumentPdf(
     .from("quote_requests")
     .select("holded_estimate_id, holded_proforma_id, holded_invoice_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2425,6 +2566,7 @@ export async function getInvoiceDetails(
     .from("quote_requests")
     .select("holded_invoice_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2525,6 +2667,7 @@ export async function createLeadProforma(
     .from("quote_requests")
     .select("id, holded_contact_id, items, notes")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2632,6 +2775,7 @@ export async function sendProformaToClient(
     .from("quote_requests")
     .select("id, holded_contact_id, holded_proforma_id, items, notes, payment_option")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2823,6 +2967,7 @@ export async function sendInvoiceToClient(
     .from("quote_requests")
     .select("id, holded_contact_id, holded_invoice_id, items, notes, payment_option, tax_id, billing_name")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -2970,6 +3115,7 @@ export async function approveInvoiceForLead(
     .from("quote_requests")
     .select("id, holded_invoice_id, invoice_doc_number")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3014,6 +3160,7 @@ export async function sendLeadProforma(
     .from("quote_requests")
     .select("id, holded_proforma_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3753,6 +3900,7 @@ export async function linkInvoiceToLead(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3803,6 +3951,7 @@ export async function linkInvoiceToLead(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3826,6 +3975,7 @@ export async function createStripeCheckout(
     .from("quote_requests")
     .select("id, items, notes, payment_option, holded_contact_id, holded_proforma_id, stripe_checkout_session_id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3896,6 +4046,7 @@ export async function updateShippingAddress(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3947,6 +4098,7 @@ export async function setPickupInPerson(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -3986,6 +4138,7 @@ export async function requestSecondPayment(
       "id, items, notes, payment_option, holded_contact_id, holded_proforma_doc_number, first_paid_amount, second_paid_at, second_holded_proforma_id, second_stripe_session_id, second_holded_proforma_doc_number, leads(id, full_name, email, payment_condition)",
     )
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -4541,6 +4694,7 @@ export async function markAsPaid(
       "id, items, payment_option, first_paid_amount, second_paid_amount, paid_amount, first_paid_at, holded_invoice_id, tax_id, billing_name",
     )
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -4605,6 +4759,7 @@ export async function updateLeadPaidAt(
     .from("quote_requests")
     .select("id")
     .eq("lead_id", leadId)
+    .eq("is_current", true)
     .eq("payment_status", "paid")
     .order("paid_at", { ascending: false })
     .limit(1)

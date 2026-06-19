@@ -7,7 +7,9 @@ import { useSortable } from "@dnd-kit/react/sortable";
 import {
   saveQuoteItems,
   sendQuoteToClient,
+  setCurrentQuoteVersion,
   type ProformaLineItem,
+  type QuoteVersionSummary,
 } from "../actions";
 import {
   QUANTITY_RANGES,
@@ -77,6 +79,8 @@ function estimatedLine(
 
 interface ProformaEditorProps {
   leadId: string;
+  quoteId?: string | null;
+  versions?: QuoteVersionSummary[];
   existingItems: ProformaLineItem[] | null;
   existingNotes: string | null;
   quoteStatus: string | null;
@@ -91,6 +95,8 @@ interface ProformaEditorProps {
 
 export default function ProformaEditor({
   leadId,
+  quoteId,
+  versions = [],
   existingItems,
   existingNotes,
   quoteStatus,
@@ -203,6 +209,58 @@ export default function ProformaEditor({
     });
   };
 
+  const handleSaveNewVersion = () => {
+    setError(null);
+    const validLines = cleanLines();
+    if (validLines.length === 0) {
+      setError("Anade al menos una linea con concepto y precio");
+      return;
+    }
+    const label = window.prompt(
+      "Etiqueta para esta versión (opcional). Ej: \"Con descuento\", \"Alcance reducido\"",
+      "",
+    );
+    // null = el usuario canceló el diálogo → no guardamos.
+    if (label === null) return;
+    startTransition(async () => {
+      const result = await saveQuoteItems(leadId, validLines, notes || undefined, {
+        asNewVersion: true,
+        versionLabel: label || undefined,
+      });
+      if (result.success) {
+        setSaved(true);
+        setSent(false);
+        router.refresh();
+      } else {
+        setError(result.error || "Error al guardar la versión");
+      }
+    });
+  };
+
+  const handleSetCurrent = (id: string) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await setCurrentQuoteVersion(id);
+      if (result.success) {
+        router.refresh();
+      } else {
+        setError(result.error || "Error al cambiar la versión vigente");
+      }
+    });
+  };
+
+  const handleSendVersion = (id: string) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await sendQuoteToClient(leadId, id);
+      if (result.success) {
+        router.refresh();
+      } else {
+        setError(result.error || "Error al enviar la versión");
+      }
+    });
+  };
+
   const handleSend = () => {
     setError(null);
     startTransition(async () => {
@@ -230,8 +288,65 @@ export default function ProformaEditor({
     });
   };
 
+  // Panel de historial de versiones (solo si hay más de una).
+  const versionsPanel = versions.length > 1 ? (
+    <Card>
+      <CardContent>
+        <h2 className="mb-3 text-sm font-semibold text-card-foreground">Versiones</h2>
+        <div className="space-y-1.5">
+          {versions.map((v) => (
+            <div
+              key={v.id}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                v.isCurrent ? "border-brand/40 bg-brand/5" : "border-border"
+              }`}
+            >
+              <span className="font-medium text-foreground">v{v.versionNumber}</span>
+              {v.versionLabel && (
+                <span className="text-xs text-muted-foreground">{v.versionLabel}</span>
+              )}
+              <span className="ml-auto tabular-nums text-muted-foreground">
+                {v.total.toFixed(2)} €
+              </span>
+              {v.isCurrent && (
+                <Badge variant="secondary" className="bg-brand/10 text-brand">Vigente</Badge>
+              )}
+              {v.paymentStatus === "paid" ? (
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Pagado</Badge>
+              ) : v.status === "quote_sent" || v.status === "submitted" ? (
+                <Badge variant="secondary">Enviado</Badge>
+              ) : null}
+              {!v.isCurrent && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleSetCurrent(v.id)}
+                  className="h-auto px-0 text-brand hover:text-brand-dark"
+                >
+                  Marcar vigente
+                </Button>
+              )}
+              <Button
+                variant="link"
+                size="sm"
+                disabled={isPending}
+                onClick={() => handleSendVersion(v.id)}
+                className="h-auto px-0 text-brand hover:text-brand-dark"
+              >
+                Enviar
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
+
   if (sent) {
     return (
+      <div className="space-y-3">
+      {versionsPanel}
       <Card>
         <CardContent>
           <h2 className="mb-3 text-sm font-semibold text-card-foreground">Presupuesto</h2>
@@ -264,10 +379,13 @@ export default function ProformaEditor({
           </div>
         </CardContent>
       </Card>
+      </div>
     );
   }
 
   return (
+    <div className="space-y-3">
+    {versionsPanel}
     <Card>
       <CardContent>
         <h2 className="mb-4 text-sm font-semibold text-card-foreground">Presupuesto</h2>
@@ -331,7 +449,7 @@ export default function ProformaEditor({
 
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex flex-wrap gap-3">
           <Button
             variant="outline"
             onClick={handleSave}
@@ -339,6 +457,15 @@ export default function ProformaEditor({
           >
             {isPending ? "Guardando..." : saved ? "Guardado" : "Guardar presupuesto"}
           </Button>
+          {quoteId && (
+            <Button
+              variant="outline"
+              onClick={handleSaveNewVersion}
+              disabled={isPending}
+            >
+              Guardar como nueva versión
+            </Button>
+          )}
           <Button
             onClick={handleSend}
             disabled={isPending}
@@ -349,6 +476,7 @@ export default function ProformaEditor({
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 

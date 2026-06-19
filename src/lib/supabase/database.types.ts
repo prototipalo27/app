@@ -2624,6 +2624,9 @@ export type Database = {
           submitted_at: string | null;
           tax_id: string | null;
           token: string;
+          version_number: number;
+          is_current: boolean;
+          version_label: string | null;
         };
         Insert: {
           billing_address?: string | null;
@@ -2676,6 +2679,9 @@ export type Database = {
           submitted_at?: string | null;
           tax_id?: string | null;
           token?: string;
+          version_number?: number;
+          is_current?: boolean;
+          version_label?: string | null;
         };
         Update: {
           billing_address?: string | null;
@@ -2728,6 +2734,9 @@ export type Database = {
           submitted_at?: string | null;
           tax_id?: string | null;
           token?: string;
+          version_number?: number;
+          is_current?: boolean;
+          version_label?: string | null;
         };
         Relationships: [
           {

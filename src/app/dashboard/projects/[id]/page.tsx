@@ -156,6 +156,7 @@ export default async function ProjectDetailPage({
         .from("quote_requests")
         .select("shipping_recipient_name, shipping_recipient_phone, shipping_recipient_email")
         .eq("lead_id", project.lead_id)
+        .eq("is_current", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
