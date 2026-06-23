@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -101,6 +102,16 @@ export default function CampamentoLanding() {
       />
 
       <section className="relative mx-auto flex max-w-xl flex-col px-5 pt-10 pb-16 sm:max-w-2xl sm:px-8 sm:pt-16">
+        <Image
+          src="/campamento/anuncio.png"
+          alt="Campamento de Diseño e Impresión 3D · del 29 de junio al 3 de julio en Chamberí, para niños de 10 a 13 años. Plazas limitadas."
+          width={1733}
+          height={907}
+          priority
+          sizes="(min-width: 640px) 42rem, 100vw"
+          className="mb-8 h-auto w-full rounded-2xl border border-white/10 shadow-[0_0_50px_-12px_rgba(0,158,220,0.45)]"
+        />
+
         <span className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-medium tracking-wide text-white/80 uppercase backdrop-blur">
           <span className="size-1.5 rounded-full bg-[#fdc52c]" />
           Campamento de verano · Madrid
