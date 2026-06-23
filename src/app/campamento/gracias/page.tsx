@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { ConversionBeacon } from "./ConversionBeacon";
 
 export const metadata = {
   title: "Inscripción confirmada · Campamento 3D | Prototipalo",
@@ -47,6 +48,7 @@ async function Status({
   if (paid) {
     return (
       <div className="relative mx-auto max-w-md rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center backdrop-blur">
+        <ConversionBeacon transactionId={session_id} />
         <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-[#fdc52c]/15">
           <svg
             className="size-8 text-[#fdc52c]"
