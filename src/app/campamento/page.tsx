@@ -13,8 +13,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-// Tope real de inscripciones (control interno de aforo).
-const MAX_SLOTS = 6;
+// Sin tope automático: el aforo se gestiona a mano cortando los anuncios cuando
+// se llena. Mantenemos la maquinaria por si se quiere reactivar un límite.
+// (Mantener en sync con src/app/api/campamento/route.ts.)
+const MAX_SLOTS = 9999;
 
 const FACTS = [
   { k: "Fechas", v: "29 jun – 3 jul" },

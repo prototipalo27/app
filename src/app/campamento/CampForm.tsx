@@ -82,9 +82,14 @@ export function CampForm({ soldOut }: { soldOut: boolean }) {
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+      {/*
+        Honeypot anti-bots. El `name` NO debe parecer un campo real (p. ej.
+        "company"/"organization"), o el autocompletar del navegador / gestor de
+        contraseñas lo rellena y bloquea a padres legítimos como si fueran bots.
+      */}
       <input
         type="text"
-        name="company"
+        name="hp_check"
         value={company}
         onChange={(e) => setCompany(e.target.value)}
         tabIndex={-1}

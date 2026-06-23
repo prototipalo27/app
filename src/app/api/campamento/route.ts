@@ -3,9 +3,10 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createOneTimePaymentLink } from "@/lib/stripe/payment-links";
 
-// Aforo total del campamento y señal que se cobra por Stripe (el resto, 250 €,
-// se abona en efectivo el primer día). Mantener en sync con la landing.
-const MAX_SLOTS = 6;
+// Sin tope automático de aforo: se gestiona a mano cortando los anuncios cuando
+// se llena (mantener en sync con la landing). Señal que se cobra por Stripe (el
+// resto, 250 €, se abona en efectivo el primer día).
+const MAX_SLOTS = 9999;
 const DEPOSIT_CENTS = 5000;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
