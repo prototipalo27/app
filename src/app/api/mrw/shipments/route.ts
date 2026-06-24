@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { persistShipmentRow } from "@/lib/shipping/persist-shipment";
+import { enqueueLabelPrint } from "@/lib/shipping/enqueue-print";
 import { createShipment } from "@/lib/mrw/api";
 import type { MrwShipmentParams } from "@/lib/mrw/types";
 import { sendShippingNotification } from "@/lib/shipping-notification";
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
     service,
     addressId,
     kind,
+    autoPrint,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -65,6 +67,7 @@ export async function POST(request: NextRequest) {
     service?: string;
     addressId?: string;
     kind?: "sample" | "partial" | "final";
+    autoPrint?: boolean;
   };
 
   if (!recipientName || !recipientAddress || !recipientCity || !recipientPostalCode) {
@@ -161,6 +164,22 @@ export async function POST(request: NextRequest) {
     const dbError = await persistShipmentRow(supabase, row, projectId, isFinalDelivery);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
+
+    // Auto-imprimir: encola la etiqueta para que el agente local la imprima.
+    // Activado por defecto; el cliente puede desactivarlo con autoPrint: false.
+    if (labelUrl && autoPrint !== false) {
+      const { data: created } = await supabase
+        .from("shipping_info")
+        .select("id")
+        .eq("mrw_albaran", result.albaran)
+        .limit(1)
+        .maybeSingle();
+      await enqueueLabelPrint(supabase, {
+        labelUrl,
+        shipmentId: created?.id ?? null,
+        createdBy: userData.user.id,
+      });
+    }
 
     // Solo la entrega final mueve el proyecto a "shipping" y notifica al cliente.
     if (projectId && isFinalDelivery) {

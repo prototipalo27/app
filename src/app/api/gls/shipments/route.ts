@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { persistShipmentRow } from "@/lib/shipping/persist-shipment";
+import { enqueueLabelPrint } from "@/lib/shipping/enqueue-print";
 import { createShipment } from "@/lib/gls/api";
 import type { GlsShipmentParams } from "@/lib/gls/types";
 import { sendShippingNotification } from "@/lib/shipping-notification";
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
     horario,
     addressId,
     kind,
+    autoPrint,
   } = body as {
     projectId?: string;
     recipientName: string;
@@ -84,6 +86,7 @@ export async function POST(request: NextRequest) {
     horario?: string;
     addressId?: string;
     kind?: "sample" | "partial" | "final";
+    autoPrint?: boolean;
   };
 
   // Solo la entrega final mueve el estado del proyecto.
@@ -168,6 +171,22 @@ export async function POST(request: NextRequest) {
     const dbError = await persistShipmentRow(supabase, row, projectId, isFinalDelivery);
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
+
+    // Auto-imprimir: encola la etiqueta para que el agente local la imprima.
+    // Activado por defecto; el cliente puede desactivarlo con autoPrint: false.
+    if (labelUrl && autoPrint !== false) {
+      const { data: created } = await supabase
+        .from("shipping_info")
+        .select("id")
+        .eq("gls_barcode", result.barcode)
+        .limit(1)
+        .maybeSingle();
+      await enqueueLabelPrint(supabase, {
+        labelUrl,
+        shipmentId: created?.id ?? null,
+        createdBy: userData.user.id,
+      });
+    }
 
     // Solo la entrega final mueve el proyecto a "shipping" y notifica.
     if (projectId && isFinalDelivery) {
