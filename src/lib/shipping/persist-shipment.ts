@@ -5,9 +5,11 @@ type Supa = Awaited<ReturnType<typeof createClient>>;
 /**
  * Persiste una fila de envío en `shipping_info`.
  *
- * - Entrega final con proyecto: reutiliza (UPDATE) la fila `final` del proyecto
- *   si ya existe (p. ej. el placeholder de dirección creado en la proforma, o
- *   una final anterior). Así hay como mucho UNA entrega final por proyecto.
+ * - Entrega final con proyecto: reutiliza (UPDATE) el placeholder de dirección
+ *   de la proforma —la fila `final` que aún NO tiene transportista (`carrier`
+ *   null)— para rellenarlo con el envío real. Si la final ya está enviada
+ *   (tiene carrier), INSERTA una fila nueva, de modo que un proyecto pueda
+ *   tener varios envíos sin que se pisen unos a otros.
  * - Pre-entregas (muestra/parcial) y envíos sin proyecto: siempre INSERT.
  *
  * Devuelve el error de Postgres (o null si todo fue bien).
@@ -24,6 +26,7 @@ export async function persistShipmentRow(
       .select("id")
       .eq("project_id", projectId)
       .eq("shipment_kind", "final")
+      .is("carrier", null)
       .limit(1)
       .maybeSingle();
 
