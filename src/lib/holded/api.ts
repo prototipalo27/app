@@ -413,11 +413,39 @@ export async function payInvoice(
 export async function approveInvoice(
   invoiceId: string,
 ): Promise<{ ok: boolean; docNumber: string | null; error?: string }> {
-  const res = await fetch(`${HOLDED_API_BASE}/documents/invoice/${invoiceId}`, {
+  // Si ya está numerada, no la re-emitimos ni le tocamos la fecha: las facturas
+  // emitidas van bloqueadas y re-datarlas rompería la correlación nº↔fecha.
+  try {
+    const existing = await getDocument("invoice", invoiceId);
+    if (existing.docNumber) {
+      return { ok: true, docNumber: existing.docNumber };
+    }
+  } catch {
+    // Si la lectura previa falla, intentamos emitir igualmente más abajo.
+  }
+
+  const url = `${HOLDED_API_BASE}/documents/invoice/${invoiceId}`;
+  const headers = { key: getApiKey(), "Content-Type": "application/json" };
+
+  // Al numerar el borrador fijamos la fecha al día de emisión. Holded conservaba
+  // la fecha de creación del borrador, así que una factura numerada hoy podía
+  // quedar con fecha de hace semanas → números altos con fechas anteriores a
+  // números menores (rompe la correlación legal nº de serie ↔ fecha).
+  let res = await fetch(url, {
     method: "PUT",
-    headers: { key: getApiKey(), "Content-Type": "application/json" },
-    body: JSON.stringify({ approveDoc: true }),
+    headers,
+    body: JSON.stringify({ approveDoc: true, date: Math.floor(Date.now() / 1000) }),
   });
+
+  // Salvaguarda: si Holded rechazara fijar la fecha junto a approveDoc, al menos
+  // numeramos (comportamiento anterior) para no bloquear el flujo de cobro.
+  if (!res.ok) {
+    res = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ approveDoc: true }),
+    });
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
