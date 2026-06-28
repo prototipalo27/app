@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendPushForEvent } from "@/lib/push-notifications/server";
 import { generateAndSaveDraft } from "@/lib/ai-draft";
 import { detectProjectTypeTag } from "@/lib/lead-tagger";
+import { coachResponder } from "@/lib/coach/brain";
+import { enviarWhatsApp } from "@/lib/coach/evolution";
 
 // Manu — commercial owner for WhatsApp presu leads (captación via WhatsApp is his)
 const MANU_USER_ID = "1acae8cc-e872-4513-8133-27cbbf05d6ba";
@@ -98,6 +100,19 @@ async function handleMessagesUpsert(
     const messageType = detectMessageType(msg.message);
     const contactPhone = remoteJid?.replace("@s.whatsapp.net", "");
     const contactName = msg.pushName || contactPhone;
+
+    // Coach virtual: si el mensaje viene del número del coach, lo desviamos al
+    // mentor IA y NO lo metemos en el CRM de negocio (ni conversación ni lead).
+    const coachTarget = process.env.COACH_TARGET_NUMBER;
+    if (!fromMe && content && coachTarget && contactPhone === coachTarget) {
+      try {
+        const respuesta = await coachResponder(content.trim());
+        await enviarWhatsApp(coachTarget, respuesta);
+      } catch (err) {
+        console.error("[coach] Error procesando mensaje:", err);
+      }
+      continue;
+    }
     const timestamp = msg.messageTimestamp
       ? new Date(msg.messageTimestamp * 1000).toISOString()
       : new Date().toISOString();
