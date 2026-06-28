@@ -101,10 +101,17 @@ async function handleMessagesUpsert(
     const contactPhone = remoteJid?.replace("@s.whatsapp.net", "");
     const contactName = msg.pushName || contactPhone;
 
-    // Coach virtual: si el mensaje viene del número del coach, lo desviamos al
-    // mentor IA y NO lo metemos en el CRM de negocio (ni conversación ni lead).
+    // Coach virtual: desviamos los mensajes del usuario al mentor IA y NO los
+    // metemos en el CRM de negocio. Excepción: los comandos "presu" siguen al
+    // flujo de leads (el número del coach coincide con el autorizado de presu).
     const coachTarget = process.env.COACH_TARGET_NUMBER;
-    if (!fromMe && content && coachTarget && contactPhone === coachTarget) {
+    if (
+      !fromMe &&
+      content &&
+      coachTarget &&
+      contactPhone === coachTarget &&
+      !/^presu\b/i.test(content.trim())
+    ) {
       try {
         const respuesta = await coachResponder(content.trim());
         await enviarWhatsApp(coachTarget, respuesta);
