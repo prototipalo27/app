@@ -3,7 +3,7 @@ import { getCalendarClient } from "./client";
 
 const SLOT_MINUTES = 30;
 const WORKDAY_START_HOUR = 11; // 11:00 local
-const WORKDAY_END_HOUR = 18;   // 18:00 local (último slot empieza a las 17:30)
+const WORKDAY_END_HOUR = 15;   // 15:00 local (último slot empieza a las 14:30 y termina a las 15:00; ninguna reunión acaba después de las 3pm)
 const SEARCH_DAYS = 7;
 const SLOTS_TO_PROPOSE = 3;
 /** Antelación mínima con la que se puede reservar una reunión. */
