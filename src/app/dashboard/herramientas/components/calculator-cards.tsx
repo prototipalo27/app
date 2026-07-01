@@ -5,6 +5,7 @@ import SheetCalculator from "./calculators/sheet-calculator";
 import MaterialCalculator from "./calculators/material-calculator";
 import MrwCalculator from "./calculators/mrw-calculator";
 import MoldCalculator from "./calculators/mold-calculator";
+import CarcasaCalculator from "./calculators/carcasa-calculator";
 
 const CALCULATORS = [
   {
@@ -51,6 +52,18 @@ const CALCULATORS = [
     ),
     component: MoldCalculator,
   },
+  {
+    id: "carcasa",
+    title: "Carcasas 3D (letras corpóreas)",
+    description: "Genera el STL de la carcasa desde un DXF para frontal de metacrilato",
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+    component: CarcasaCalculator,
+    wide: true,
+  },
 ];
 
 export default function CalculatorCards() {
@@ -86,7 +99,7 @@ export default function CalculatorCards() {
         const Component = calc.component;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
-            <div className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+            <div className={`my-auto w-full ${"wide" in calc && calc.wide ? "max-w-2xl" : "max-w-md"} rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900`}>
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
                   {calc.title}
