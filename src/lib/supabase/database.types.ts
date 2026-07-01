@@ -2905,12 +2905,85 @@ export type Database = {
         };
         Relationships: [];
       };
+      carrier_invoices: {
+        Row: {
+          applied_at: string | null;
+          carrier: string;
+          cost_center: string | null;
+          created_at: string;
+          gross_amount: number | null;
+          id: string;
+          invoice_date: string | null;
+          invoice_number: string;
+          line_count: number;
+          lines_amount: number | null;
+          matched_count: number;
+          parsed: Json | null;
+          period: string | null;
+          surcharge_amount: number | null;
+          tax_amount: number | null;
+          total_amount: number | null;
+          updated_at: string;
+          uploaded_by: string | null;
+        };
+        Insert: {
+          applied_at?: string | null;
+          carrier?: string;
+          cost_center?: string | null;
+          created_at?: string;
+          gross_amount?: number | null;
+          id?: string;
+          invoice_date?: string | null;
+          invoice_number: string;
+          line_count?: number;
+          lines_amount?: number | null;
+          matched_count?: number;
+          parsed?: Json | null;
+          period?: string | null;
+          surcharge_amount?: number | null;
+          tax_amount?: number | null;
+          total_amount?: number | null;
+          updated_at?: string;
+          uploaded_by?: string | null;
+        };
+        Update: {
+          applied_at?: string | null;
+          carrier?: string;
+          cost_center?: string | null;
+          created_at?: string;
+          gross_amount?: number | null;
+          id?: string;
+          invoice_date?: string | null;
+          invoice_number?: string;
+          line_count?: number;
+          lines_amount?: number | null;
+          matched_count?: number;
+          parsed?: Json | null;
+          period?: string | null;
+          surcharge_amount?: number | null;
+          tax_amount?: number | null;
+          total_amount?: number | null;
+          updated_at?: string;
+          uploaded_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "carrier_invoices_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       shipping_info: {
         Row: {
           address_id: string | null;
           address_line: string | null;
           cabify_parcel_id: string | null;
           carrier: string | null;
+          carrier_invoice_id: string | null;
+          cost_source: string | null;
           city: string | null;
           content_description: string | null;
           country: string | null;
@@ -2948,6 +3021,8 @@ export type Database = {
           address_line?: string | null;
           cabify_parcel_id?: string | null;
           carrier?: string | null;
+          carrier_invoice_id?: string | null;
+          cost_source?: string | null;
           city?: string | null;
           content_description?: string | null;
           country?: string | null;
@@ -2985,6 +3060,8 @@ export type Database = {
           address_line?: string | null;
           cabify_parcel_id?: string | null;
           carrier?: string | null;
+          carrier_invoice_id?: string | null;
+          cost_source?: string | null;
           city?: string | null;
           content_description?: string | null;
           country?: string | null;
@@ -3030,6 +3107,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: true;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shipping_info_carrier_invoice_id_fkey";
+            columns: ["carrier_invoice_id"];
+            isOneToOne: false;
+            referencedRelation: "carrier_invoices";
             referencedColumns: ["id"];
           },
         ];

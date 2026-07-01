@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { getFixedExpenses, getTaxPayments, getFinancings, getCashFlowPipeline, getDebts, getMoneyFunnel } from "./actions";
@@ -241,7 +242,15 @@ export default async function FinanzasPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Finanzas</h1>
-        <ReportDownloadButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/finanzas/importar-envios"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Imputar envíos MRW
+          </Link>
+          <ReportDownloadButton />
+        </div>
       </div>
 
       {/* ── Dinero en el aire (embudo facturado → cobrado → producido → entregado) ── */}
