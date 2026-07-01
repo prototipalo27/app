@@ -7,9 +7,13 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import * as THREE from "three";
 import {
   generateCarcasaStl,
+  measureDxf,
   type DxfUnit,
+  type DxfMeasure,
   type GenerateResult,
 } from "@/lib/dxf-carcasa";
+
+const UNIT_MM: Record<Exclude<DxfUnit, "auto">, number> = { mm: 1, cm: 10, m: 1000, in: 25.4 };
 
 // ── Previsualización 3D del STL generado ───────────────
 
@@ -84,9 +88,15 @@ const DEFAULTS = { depth: "35", back: "2", wall: "3", frontLip: "1.5", acrylic: 
 export default function CarcasaCalculator() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [dxfText, setDxfText] = useState<string | null>(null);
+  const [measure, setMeasure] = useState<DxfMeasure | null>(null);
+  const [targetWidth, setTargetWidth] = useState("");
   const [unit, setUnit] = useState<DxfUnit>("auto");
   const [mirror, setMirror] = useState(false);
   const [p, setP] = useState(DEFAULTS);
+
+  const hasOverride = parseFloat(targetWidth) > 0;
+  const unitMmDisplay = unit === "auto" ? measure?.unitMmAuto ?? 1 : UNIT_MM[unit];
+  const detectedMm = measure ? measure.widthRaw * unitMmDisplay : null;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +118,16 @@ export default function CarcasaCalculator() {
     setError(null);
     setResult(null);
     setFileName(f.name);
+    setMeasure(null);
+    setTargetWidth("");
     try {
-      setDxfText(await f.text());
+      const text = await f.text();
+      setDxfText(text);
+      try {
+        setMeasure(measureDxf(text));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo leer el DXF.");
+      }
     } catch {
       setError("No se pudo leer el archivo.");
       setDxfText(null);
@@ -131,6 +149,7 @@ export default function CarcasaCalculator() {
         acrylic: parseFloat(p.acrylic) || 2,
         unit,
         mirror,
+        overrideWidthMm: hasOverride ? parseFloat(targetWidth) : null,
       });
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       urlRef.current = URL.createObjectURL(new Blob([res.stl], { type: "model/stl" }));
@@ -171,6 +190,37 @@ export default function CarcasaCalculator() {
         <input type="file" accept=".dxf" onChange={onFile} className="hidden" />
       </label>
 
+      {/* Dimensiones detectadas + corrección de escala */}
+      {measure && (
+        <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-zinc-500 dark:text-zinc-400">Ancho detectado</span>
+            <span className="font-semibold text-zinc-900 dark:text-white">
+              {detectedMm != null
+                ? `${detectedMm.toFixed(1)} mm${detectedMm >= 1000 ? ` (${(detectedMm / 1000).toFixed(2)} m)` : ""}`
+                : "—"}
+            </span>
+          </div>
+          <label className="block">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+              Ancho real de la letra (mm) — opcional
+            </span>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={targetWidth}
+              onChange={(e) => setTargetWidth(e.target.value)}
+              placeholder={detectedMm != null ? detectedMm.toFixed(0) : "p. ej. 1000"}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            />
+            <span className="mt-0.5 block text-[10px] text-zinc-400">
+              Si el ancho detectado no es correcto, indica el real y se reescalará todo el DXF a esa medida.
+            </span>
+          </label>
+        </div>
+      )}
+
       {/* Parámetros */}
       <div className="grid grid-cols-2 gap-3">
         <NumField label="Profundidad total (mm)" value={p.depth} onChange={set("depth")} hint="Ajustable: más gruesa o fina" />
@@ -183,7 +233,9 @@ export default function CarcasaCalculator() {
           <select
             value={unit}
             onChange={(e) => setUnit(e.target.value as DxfUnit)}
-            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            disabled={hasOverride}
+            title={hasOverride ? "Ignorado: se usa el ancho real indicado" : undefined}
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-400 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
           >
             <option value="auto">Auto (según el archivo)</option>
             <option value="mm">Milímetros</option>

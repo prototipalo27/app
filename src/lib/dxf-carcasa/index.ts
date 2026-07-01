@@ -27,6 +27,51 @@ const UNIT_TO_MM: Record<Exclude<DxfUnit, "auto">, number> = {
 export interface GenerateOptions extends CarcasaParams {
   unit: DxfUnit;
   mirror: boolean;
+  /** Si se indica (>0), se reescala el DXF para que su ancho sea este valor en mm. */
+  overrideWidthMm?: number | null;
+}
+
+export interface DxfMeasure {
+  widthRaw: number; // ancho del bounding box en unidades del DXF
+  heightRaw: number;
+  insUnits: number | null;
+  unitMmAuto: number; // mm por unidad según $INSUNITS
+  loopCount: number;
+  skipped: string[];
+}
+
+function bboxOf(loops: Pt[][]) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const loop of loops)
+    for (const p of loop) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  return { width: maxX - minX, height: maxY - minY };
+}
+
+/** Lee el DXF y devuelve sus dimensiones para que el usuario compruebe/corrija la escala. */
+export function measureDxf(dxfText: string): DxfMeasure {
+  const { loops, insUnits, skipped } = extractContours(dxfText);
+  if (!loops.length) {
+    throw new Error(
+      "No se encontraron contornos cerrados en el DXF. Asegúrate de exportar la letra como polilíneas/curvas cerradas.",
+    );
+  }
+  const { width, height } = bboxOf(loops);
+  return {
+    widthRaw: width,
+    heightRaw: height,
+    insUnits,
+    unitMmAuto: (insUnits != null && INSUNITS_TO_MM[insUnits]) || 1,
+    loopCount: loops.length,
+    skipped,
+  };
 }
 
 export interface GenerateResult extends BuildResult {
@@ -46,7 +91,12 @@ export function generateCarcasaStl(dxfText: string, opts: GenerateOptions): Gene
 
   // Factor de unidades → mm
   let unitMm: number;
-  if (opts.unit === "auto") {
+  if (opts.overrideWidthMm && opts.overrideWidthMm > 0) {
+    // El usuario fija el ancho real: reescalamos el DXF a ese ancho.
+    const { width } = bboxOf(loops);
+    if (width <= 0) throw new Error("El DXF tiene ancho nulo; no se puede escalar.");
+    unitMm = opts.overrideWidthMm / width;
+  } else if (opts.unit === "auto") {
     unitMm = (insUnits != null && INSUNITS_TO_MM[insUnits]) || 1;
   } else {
     unitMm = UNIT_TO_MM[opts.unit];
